@@ -50,3 +50,8 @@ desktop.ini
 
 # Vercel / otros
 .vercel/
+
+# === Datos del negocio (D-017) ===
+*.xls
+*.xlsx
+*.csv
