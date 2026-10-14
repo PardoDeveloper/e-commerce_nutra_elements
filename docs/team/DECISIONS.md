@@ -49,9 +49,10 @@ Estado: **vigente** (decidida) · **propuesta** (espera la aprobación de Carlos
 - **Por qué:** Carlos creó el proyecto de dev. El aislamiento es total y mucho más simple que D-019.
 - **Riesgo:** en Spark no se pueden desplegar Cloud Functions ni App Hosting, no hay Secret Manager y, en proyectos nuevos, probablemente tampoco Storage. Dev queda limitado a Auth y Firestore en la nube, o al Emulator Suite local. Ver D-021.
 
-## D-010 · 2026-10-14 · Región — propuesta
-- **Decisión:** usar `southamerica-west1` (Santiago) para Firestore, Functions y Storage, **solo si se confirma** que App Hosting funciona en esa región o en una cercana con latencia aceptable. Si App Hosting no está en Santiago, se elegirá con evidencia entre ubicar todo junto a la región de App Hosting o separar las regiones usando caché o ISR.
-- **Por qué:** la región de Firestore no se puede cambiar después de crear la base, así que se verifica primero (tarea 0.9).
+## D-010 · 2026-10-14 · Región `us-east4` para todo — vigente (aprobada por Carlos el 2026-10-14)
+- **Decisión:** App Hosting, Firestore, Functions y Storage en `us-east4`, tanto en prod como en dev. Las fichas y categorías se sirven estáticas o con ISR desde el CDN, para compensar la distancia a Chile.
+- **Alternativas:** Firestore en `southamerica-west1` con App Hosting en EE. UU. (cada render SSR haría un viaje de ida y vuelta entre continentes) o `us-central1`.
+- **Por qué:** según la documentación oficial, revisada por firebase-architect, App Hosting **no** soporta `southamerica-west1`. Colocar todo junto evita latencia entre servicios. Sin verificar: latencias y precios por región.
 
 ## D-011 · 2026-10-14 · Admin con un solo rol — vigente
 - **Decisión:** custom claim `admin: true` en Firebase Auth. Las reglas y las Functions lo verifican.
@@ -120,12 +121,76 @@ Estado: **vigente** (decidida) · **propuesta** (espera la aprobación de Carlos
 - **Alternativas:** privado (lo recomendaba el tech-lead).
 - **Por qué:** decisión del dueño. Mitigaciones obligatorias: nada de secretos ni datos del negocio en git (D-013, D-017); qa-reviewer y devops revisan que no haya secretos antes de cada push. La seguridad no puede depender de que el código sea secreto: debe sostenerse en las reglas y en el servidor.
 
-## D-021 · 2026-10-14 · Limitaciones de dev en Spark — pendiente de resolver
-- **Problema:** el flujo de pago con Flow sandbox necesita Cloud Functions desplegadas o un túnel hacia el emulador, porque Flow llama a una URL de confirmación pública. En Spark no hay Functions ni App Hosting.
-- **Opciones:** (a) pasar `nutraelementsdev` a Blaze, con una alerta de presupuesto baja; el costo esperado es casi 0, sin verificar. (b) Mantenerlo en Spark: el trabajo diario se hace en el Emulator Suite y el pago end-to-end se prueba con un túnel temporal; no habría URL de dev publicada.
-- **Recomendación del tech-lead:** (a), porque permite probar en la nube exactamente lo que irá a prod. Lo decide Carlos, porque implica costo.
+## D-021 · 2026-10-14 · Dev en Spark: el desarrollo se hace en el Emulator Suite — vigente (decisión de Carlos)
+- **Decisión:** `nutraelementsdev` sigue en Spark.
+  - **Todo el desarrollo y las pruebas se hacen en el Emulator Suite local**: Auth, Firestore, Storage y Functions. En el emulador funcionan todos, sin importar el plan.
+  - El pago con Flow sandbox de punta a punta se prueba con un **túnel temporal** hacia el emulador de Functions, porque Flow necesita una URL pública de confirmación. La herramienta del túnel (por ejemplo, cloudflared) se elegirá en la tarea de Flow, con aprobación de Carlos, porque es una herramienta nueva.
+  - **No hay URL de dev publicada.** Las auditorías de SEO y QA se hacen sobre `next build && next start` en local, contra los emuladores.
+- **Mitigación (prod como staging antes del lanzamiento):** como todavía no hay clientes, la primera publicación en `nutraelements` se hace con `noindex`, Flow sandbox y sin apuntar el dominio. Solo después de una prueba de humo y de la confirmación de Carlos se cambia a Flow de producción, se quita el noindex y se apunta nutraelements.cl.
+- **Alternativas:** dev en Blaze (recomendado por el tech-lead; Carlos lo descartó).
+- **Riesgo aceptado:** la primera vez que el código corre en la nube real es en el proyecto de prod, antes del lanzamiento público.
 
 ## Datos de negocio confirmados el 2026-10-14
 - Envío gratis: monto configurable en el admin, sin valor por defecto (desactivado hasta que se configure).
 - Retiro en tienda: Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00.
-- Reserva de 48 horas para transferencias (D-006): pendiente de confirmar con el jefe. Formato NE-000123: Carlos confirma que DispatchTrack lo acepta.
+- Reserva de 48 horas para transferencias (D-006): PENDIENTE. Mientras tanto, 48 h configurable en settings. Formato NE-000123: Carlos confirma que DispatchTrack lo acepta.
+
+## D-022 · 2026-10-14 · Renderizado: catálogo estático con ISR, cerca del cliente — vigente (aprobada por Carlos)
+- **Decisión:**
+  - /, /productos, /categorias/[slug], /productos/[slug], /nosotros, /contacto y /preguntas-frecuentes se generan como **páginas estáticas con ISR**, y el CDN de App Hosting las sirve cerca de Chile.
+  - Cuando el admin cambia un producto, un precio, el stock o un descuento, se **revalida bajo demanda** la ficha afectada y su categoría, sin esperar al vencimiento.
+  - El precio y el stock **mostrados** pueden tener unos segundos de retraso. El precio y el stock **cobrados** siempre los recalcula el servidor al crear el pedido (D-005).
+  - Carrito, checkout y admin se renderizan dinámicamente y llevan noindex.
+- **Alternativas:** SSR en cada visita, que suma la latencia desde `us-east4` y más costo por bots.
+- **Por qué:** compensa que App Hosting no esté en Santiago, mejora los Core Web Vitals (SEO) y reduce lecturas y costo.
+
+## D-023 · 2026-10-14 · Categorías y estrategia SEO del catálogo — vigente (tech-lead, sobre la propuesta de seo-specialist)
+- **Decisión:**
+  - Seis categorías: `vitaminas`, `magnesio`, `minerales`, `omega-3`, `belleza` y `bienestar`. La línea Ultra va en `bienestar`.
+  - **Una ficha por SKU**, con canonical a sí misma. Los tamaños se diferencian en title, H1 y slug, y se enlazan entre sí.
+  - No se crean páginas por comuna ni `/retiro-en-tienda`: lo local se trabaja en `/contacto`, la home y las preguntas frecuentes.
+  - El catálogo no se pagina en el MVP.
+  - `revalidate` de 3600 s como respaldo del ISR.
+  - Variables `SITE_URL` y `SITE_INDEXABLE`; esta última es false por defecto y es el interruptor único del noindex de prelanzamiento (D-021).
+  - Teléfono, correo, redes y logo: PENDIENTE, y se omiten del JSON-LD hasta que existan.
+- **Alternativas:** una ficha por familia con selector de tamaño (no calza con un SKU por producto) o canonical al tamaño principal (plan B, solo si Search Console muestra duplicados).
+- **Por qué:** es lo más simple que evita contenido duplicado con 33 SKU, y es coherente con D-016.
+- **Riesgo regulatorio a revisar por Carlos:** Ultra Light, Ultra Relax, Ultra Lax, cranberry, melena de león y cúrcuma. Ultra Lax puede ser un tema sanitario, no solo de redacción. Los textos pasan por un profesional antes de publicarse.
+
+## D-024 · 2026-10-14 · Contratos de datos y funciones: resoluciones del tech-lead — vigente
+Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con estas resoluciones a las preguntas abiertas:
+- **P1 Categorías:** las de D-023. El ejemplo de 2.1 debe corregirse: el SKU 2427844 es la Vitamina B12, y el Citrato de Magnesio va en `magnesio`.
+- **P3 Número inicial:** NE-000001. DispatchTrack acepta el formato.
+- **P8 Imágenes:** máximo 2 MiB, comprimidas en el navegador a WebP (lado largo ≤ 1600 px).
+- **P9 Retroceder un estado logístico:** **sí**, solo admin y solo un paso atrás, registrado en `statusHistory` con un motivo obligatorio. **Por qué:** un clic errado en "Entregado" no puede quedar sin corrección; la operación real lo necesita (correctitud > simplicidad).
+- **P10 Ofertas con fechas:** no en el MVP.
+- **P11 Envío gratis:** se combina con descuentos; se compara el subtotal con descuentos con `>=`.
+- **P12 Login del admin:** correo y contraseña, con el auto-registro desactivado. MFA queda para después del lanzamiento.
+- **P13 Reimportar la planilla:** pisa precio y stock (Control Farma es la fuente de verdad) y nunca toca contenido ni descuentos.
+- **Excel de stock con una celda vacía:** se trata como **fila inválida**, no como 0. **Por qué:** una celda vacía no debe dejar un producto sin stock por accidente.
+- **Límites anti-abuso** (5 pedidos cada 10 min por IP y 3 pendientes por correo): se aceptan como valores iniciales configurables.
+- **P5 Pedidos pagados que se cancelan o reembolsan (respuesta de Carlos):** el reembolso se hace **a mano** en Flow o por transferencia, fuera del sistema. El admin lo **registra en el pedido** con una función `recordManualRefund`:
+  - Transición `paid → refunded`, con monto, medio (flow o transferencia), fecha, nota obligatoria y quién lo hizo, todo en `statusHistory`.
+  - Es terminal.
+  - El stock **no** se repone solo: hay una opción explícita "reponer stock", porque el producto puede haber salido ya.
+  - Las métricas restan el pedido reembolsado.
+- **P6 RUT (respuesta de Carlos):** **obligatorio** en el checkout, en `customer.rut`. Se valida en el cliente y en el servidor con dígito verificador (módulo 11) y se normaliza a `12345678-K`. Es un dato personal: no se expone en `getOrderStatus`. **No hay factura:** solo boleta manual en Control Farma, sin razón social ni giro.
+- **Aún abierta:** P2, reservas de 30 min y 48 h (pendiente del jefe; quedan como valores configurables). P7 (retención de datos personales) queda para después del lanzamiento, con revisión legal según la Ley 21.719.
+- **Por verificar en la implementación:** la API de Flow (parámetros, firma y retorno), las opciones de firebase-functions v2, el emulador con secretos y la librería para leer .xls.
+
+## D-025 · 2026-10-14 · Confirmaciones sobre los contratos v1 — vigente
+- **Confirmado:**
+  - (1) D-018 (vacío o negativo → 0) aplica **solo al crear** un producto en `importCatalog`. Si el producto ya existe, una celda vacía da `EMPTY_STOCK`.
+  - (3) Con `restock: true`, `stockState` pasa a `released`; con `false`, queda `committed`.
+- **Corregido (2), reembolso parcial:** **no** se resta el pedido completo de las métricas.
+  - Los **ingresos** se reducen solo en `refund.amount`, en el día de `paidAt`.
+  - Las **unidades vendidas** se restan solo si `restock: true`.
+  - `ordersCount` no cambia. El ticket promedio se calcula con los ingresos netos.
+  - **Por qué:** restar el pedido completo por un reembolso parcial falsea las ventas (correctitud).
+  - firebase-architect debe ajustar `functions.md` (sección 4.6, línea "Un reembolso parcial…") y la sección de métricas de `data-model.md` al empezar la Fase 2B. Es la primera tarea de la próxima sesión.
+  - **Detalle (tech-lead, 2026-10-14), para que el contrato no quede ambiguo:**
+    - `metrics/daily`: `revenue -= refund.amount`; se agregan `refundsCount += 1` y `refundedAmount += refund.amount`; `ordersCount` y `merchandise` no cambian (`merchandise` es la mercadería bruta antes de reembolsos); `unitsSold -= Σqty` solo si `refund.restocked == true`.
+    - `metrics/products/items/{sku}`: `unitsSold -= qty` y `revenue -= lineTotal` solo si `refund.restocked == true`. Sin reposición no cambian.
+    - Se usa `restocked` (lo que de verdad pasó), no `restock` (lo pedido).
+    - Ticket promedio = `revenue / ordersCount` (neto).
+    - Aplica igual a reembolsos totales y parciales: una sola regla.

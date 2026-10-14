@@ -1,0 +1,606 @@
+# Contrato de Cloud Functions — Nutra Elements
+
+Tarea 2A.2. Autor: firebase-architect. Estado: **v1.1 — D-025 aplicada (2026-10-14)** (v1 aprobada por tech-lead el 2026-10-14, D-024). Contrato con nextjs-frontend: no se cambia sin aprobación.
+Depende de [data-model.md](data-model.md) (rutas, campos, estados, fórmulas). Decisiones: D-004 a D-012, D-016, D-018, D-020 a D-024.
+
+Lo que **no** he podido verificar (debe leerse en la documentación oficial antes de implementar; está marcado "VERIFICAR"): la API de Flow (nombres de parámetros, firma, estados, forma del retorno, reintentos), las opciones exactas de `firebase-functions` v2 (`onCall`, `onRequest`, `onSchedule`, `onDocumentWritten`) en la versión instalada, y el comportamiento de secretos y `.env` en el emulador.
+
+---
+
+## 1. Reglas comunes
+
+- Cloud Functions de **2ª generación**, **TypeScript estricto**, Node en la versión LTS que soporte `firebase-functions` instalado. Todas con `region: "us-east4"`. Los triggers de Firestore deben estar en la misma región que la base (`us-east4`). Región fijada una vez con `setGlobalOptions({ region: "us-east4", maxInstances: 10 })`; cada función ajusta lo suyo.
+- El Admin SDK se usa **solo** aquí. Nada de secretos en el código (repo público, D-020).
+- Autorización:
+  - `public`: sin sesión. Callables con `enforceAppCheck: true` en producción (en el emulador, App Check desactivado o con token de depuración).
+  - `admin`: `request.auth` presente **y** `request.auth.token.admin === true`. Sin sesión → `unauthenticated`; con sesión sin claim → `permission-denied`. También con `enforceAppCheck: true`.
+  - `system`: lo invoca Cloud Scheduler o Firestore, nunca un cliente.
+  - `flow`: endpoint HTTP que Flow llama; sin sesión, protegido con la firma de `getStatus` (no se confía en el cuerpo).
+- Entrada: cada callable valida con un esquema (zod u otro; se elige al implementar) **antes** de tocar datos. Cadenas con `trim`, sin caracteres de control, con largo máximo. Los números deben ser enteros seguros. Campos desconocidos se rechazan (`strict`).
+- Errores: se lanzan `HttpsError(code, message, details)`. `code` es uno de los códigos estándar (`invalid-argument`, `unauthenticated`, `permission-denied`, `not-found`, `failed-precondition`, `resource-exhausted`, `aborted`, `internal`). `details.code` es el **código de aplicación** (mayúsculas) que usa el frontend para decidir qué mostrar. `message` está en español, es apto para mostrar al usuario y **nunca** contiene datos internos, SQL, rutas ni secretos.
+- Toda la lógica de dinero y stock se hace en **transacciones de Firestore** (lecturas antes que escrituras). El tiempo es el del servidor.
+- Idempotencia: cada función indica abajo cómo se logra. En general: el estado actual del documento decide; repetir una llamada no repite efectos.
+- Costos: `maxInstances` bajos, `timeoutSeconds` cortos, `minInstances: 0`. Ningún trigger escribe el documento que escucha (sin bucles).
+- Fechas en requests y responses: string ISO 8601 UTC. Dinero: `number` entero CLP.
+- Registro: `logger` de Functions con `orderNumber`, `sku` y códigos. **Nunca** se registran emails, teléfonos, direcciones, **RUT**, tokens de acceso, `token` de Flow completos ni secretos.
+
+Tipos comunes
+```ts
+type Clp = number;
+type Sku = string;
+type PaymentMethod = 'flow' | 'transfer';
+type PaymentStatus = 'pending_payment' | 'paid' | 'payment_review' | 'expired' | 'cancelled' | 'refunded';   // 'refunded' es terminal; etiqueta "Reembolsado"
+type RefundMethod = 'flow' | 'transfer';
+type FulfillmentStatus = 'preparing' | 'ready_for_pickup' | 'on_route' | 'delivered';
+
+interface AppErrorDetails {
+  code: string;                       // código de aplicación, ver tabla de cada función
+  sku?: Sku;
+  available?: number;
+  fields?: { path: string; message: string }[];   // para INVALID_INPUT
+}
+```
+Errores comunes a todas las callables
+| `HttpsError` | `details.code` | Cuándo |
+|---|---|---|
+| `invalid-argument` | `INVALID_INPUT` | falla el esquema (con `fields`) |
+| `unauthenticated` | `UNAUTHENTICATED` | admin sin sesión |
+| `permission-denied` | `NOT_ADMIN` | sesión sin claim `admin` |
+| `failed-precondition` | `APP_CHECK_FAILED` | token de App Check ausente o inválido |
+| `resource-exhausted` | `RATE_LIMITED` | demasiados intentos |
+| `internal` | `INTERNAL` | error no previsto (mensaje genérico) |
+
+---
+
+## 2. Catálogo de funciones
+
+| # | Nombre | Tipo | Autorización | Memoria / timeout / maxInstances (propuesto) |
+|---|---|---|---|---|
+| 1 | `createOrder` | callable | public + App Check | 256 MiB / 30 s / 10 |
+| 2 | `createFlowPayment` | callable | public (número + token) + App Check | 256 MiB / 30 s / 10 |
+| 3 | `flowConfirm` | HTTP (`onRequest`) | flow (firma vía `getStatus`) | 256 MiB / 30 s / 10 |
+| 4 | `getOrderStatus` | callable | public (número + token) + App Check | 256 MiB / 20 s / 10 |
+| 5 | `confirmTransferPayment` | callable | admin | 256 MiB / 30 s / 5 |
+| 6 | `resolvePaymentReview` | callable | admin | 256 MiB / 30 s / 5 |
+| 7 | `cancelOrder` | callable | admin | 256 MiB / 30 s / 5 |
+| 8 | `updateFulfillment` | callable | admin | 256 MiB / 15 s / 5 |
+| 9 | `recordManualRefund` | callable | admin | 256 MiB / 30 s / 5 |
+| 10 | `releaseExpiredReservations` | scheduled, cada 5 min | system | 256 MiB / 120 s / 1 |
+| 11 | `importCatalog` | callable | admin | 512 MiB / 120 s / 2 |
+| 12 | `importPrices` | callable | admin | 256 MiB / 60 s / 2 |
+| 13 | `importStock` | callable | admin | 256 MiB / 60 s / 2 |
+| 14 | `applyDiscount` | callable | admin | 256 MiB / 60 s / 2 |
+| 15 | `setProductsPublished` | callable | admin | 256 MiB / 60 s / 2 |
+| 16 | `createProduct` | callable | admin | 256 MiB / 30 s / 2 |
+| 17 | `updateProductCommerce` | callable | admin | 256 MiB / 30 s / 2 |
+| 18 | `grantAdmin` / `revokeAdmin` | callable | admin | 256 MiB / 15 s / 2 |
+| 19 | `onProductWritten` | trigger Firestore `products/{sku}` | system | 256 MiB / 30 s / 5 |
+| 20 | `onCategoryWritten` | trigger `categories/{id}` | system | 256 MiB / 30 s / 3 |
+| 21 | `onSettingsPublicWritten` | trigger `settings/public` | system | 256 MiB / 30 s / 2 |
+
+Los nombres son los que el frontend usa con `httpsCallable(functions, "createOrder")`. El cliente se configura con la región `us-east4`. `flowConfirm` no lo llama el frontend.
+
+---
+
+## 3. Funciones públicas (checkout)
+
+### 3.1 `createOrder`
+
+- Tipo: callable. Región `us-east4`. Autorización: público + App Check.
+- Qué hace: valida, calcula precios, descuentos, envío y total **en el servidor**, y en **una sola transacción** reserva el stock, toma el número del contador y crea el pedido. Nada del precio viene del cliente (D-005).
+
+```ts
+interface CreateOrderRequest {
+  clientRequestId: string;            // UUID v4 generado por el navegador al abrir el checkout; clave de idempotencia
+  items: { sku: Sku; qty: number }[]; // 1..20 líneas, SKUs distintos, qty 1..settings.maxQtyPerItem (por defecto 10)
+  paymentMethod: PaymentMethod;
+  customer: {
+    firstName: string;                // 1..60
+    lastName: string;                 // 1..60
+    email: string;                    // formato válido, <= 254 (Flow lo exige)
+    phone: string;                    // 8..15 dígitos, admite +, se normaliza
+    rut: string;                      // OBLIGATORIO (D-024). Admite puntos, guion y k minúscula; el servidor valida el dígito verificador (módulo 11) y lo guarda normalizado `12345678-K`
+  };
+  delivery:
+    | { type: 'shipping'; communeCode: string; address: string; notes?: string } // address 5..200, notes <= 300
+    | { type: 'pickup' };
+}
+
+interface CreateOrderResponse {
+  orderNumber: string;                // "NE-000123"
+  accessToken: string;                // token de acceso en claro; SE ENTREGA UNA SOLA VEZ
+  paymentMethod: PaymentMethod;
+  paymentStatus: 'pending_payment';
+  subtotal: Clp;
+  shipping: Clp;
+  total: Clp;
+  freeShippingApplied: boolean;
+  items: { sku: Sku; name: string; unitFinalPrice: Clp; qty: number; lineTotal: Clp }[];
+  reservedUntil: string;              // ISO
+  next: 'pay_with_flow' | 'show_transfer_instructions';
+}
+```
+- Los precios del `response` son informativos para pintar la confirmación; lo que vale es el pedido en el servidor. El cliente **no** envía nunca precios, descuentos, envío ni total.
+- Token de acceso: 32 bytes aleatorios (`crypto.randomBytes`), `base64url` (43 caracteres). En el pedido solo se guarda `accessTokenHash = sha256(token)`. Quien conozca solo el número `NE-xxxxxx` no puede ver nada.
+- Pasos
+  1. `enforceAppCheck`. Validar esquema. Límite por IP: `rateLimits` clave `createOrder:<sha256(ip)>`, máx. **5 pedidos por 10 minutos** y, por correo, máx. **3 pedidos `pending_payment` abiertos** (se consulta fuera de la transacción) → `RATE_LIMITED`. Son los valores iniciales aceptados en D-024 y son **configurables** en `settings/private.limits` (`createOrderPerIpPer10Min`, `pendingOrdersPerEmail`); evitan bloquear stock con pedidos basura. Validar el RUT (módulo 11) y normalizarlo también en este paso, antes de tocar datos → `INVALID_RUT`.
+  2. Transacción: leer `idempotencyKeys/{sha256(clientRequestId)}`; si existe, devolver el **mismo** pedido (ver "Idempotencia"). Leer `settings/public`, `settings/private`, `counters/orders` y los `products/{sku}` del carrito (todas las lecturas primero).
+  3. Verificar por producto: existe, `published && active` (`PRODUCT_UNAVAILABLE`), `stock >= qty` (`OUT_OF_STOCK`, con `sku` y `available`). Si es despacho: `communeCode` ∈ `settings.communes` (`INVALID_COMMUNE`); si es retiro: `pickup.enabled` (`PICKUP_DISABLED`).
+  4. Calcular con las fórmulas de data-model.md 7.3 y 7.4: `unitFinalPrice = computeFinalPrice(price, discount)` (se recalcula, no se confía en el `finalPrice` guardado), `subtotal`, `shipping`, `total`. `total > 0` y `<= 50.000.000` (`ZERO_TOTAL`, `ORDER_TOO_LARGE`).
+  5. Escribir: `counters/orders.last += 1` (o iniciar en `orderNumberStart - 1`), el pedido `orders/NE-xxxxxx` con snapshot, `reservedUntil = now + settings.reservationMinutes[paymentMethod]`, `stockState = "reserved"`, y por cada producto `stock -= qty`, `reserved += qty`, `inStock = (stock - qty) > 0`; escribir `idempotencyKeys/...`. El pedido nace con `refund: null` y `statusHistory` con su primera entrada. `customer.rut` se guarda normalizado y no vuelve a salir del servidor salvo para el admin.
+- Errores (`HttpsError` / `details.code`)
+  | `HttpsError` | `details.code` | Mensaje |
+  |---|---|---|
+  | `invalid-argument` | `INVALID_INPUT` | "Revisa los datos del formulario." |
+  | `invalid-argument` | `INVALID_RUT` | "Revisa tu RUT." (falta, formato o dígito verificador incorrectos; el mensaje nunca repite el RUT) |
+  | `invalid-argument` | `INVALID_COMMUNE` | "Solo despachamos a comunas de la Región Metropolitana." |
+  | `failed-precondition` | `PICKUP_DISABLED` | "El retiro en tienda no está disponible." |
+  | `failed-precondition` | `PRODUCT_UNAVAILABLE` | "Un producto ya no está disponible." (con `sku`) |
+  | `failed-precondition` | `OUT_OF_STOCK` | "No hay stock suficiente de un producto." (con `sku`, `available`) |
+  | `failed-precondition` | `ZERO_TOTAL` / `ORDER_TOO_LARGE` | "No se puede procesar este pedido." |
+  | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos. Intenta de nuevo en unos minutos." |
+  | `aborted` | `CONTENTION` | "El sistema está ocupado, intenta de nuevo." (la transacción agotó los reintentos) |
+- Idempotencia: el cliente genera `clientRequestId` una vez por intento de compra y lo reutiliza si hay un fallo de red o un reintento. Si `idempotencyKeys/...` ya existe, se devuelve el pedido ya creado (sin descontar de nuevo ni consumir otro número). **Como el token en claro nunca se guarda, un reintento idempotente genera un token nuevo y reemplaza `accessTokenHash`** (el token anterior queda invalidado; el primero nunca llegó al cliente). Para cualquier otra llamada con ese `clientRequestId` pero con carrito distinto (o con otro RUT) → `INVALID_INPUT`.
+- Efectos y revalidación: cambia `stock` de los productos → el trigger `onProductWritten` revalida las fichas solo si cambió `inStock` (ver 8).
+- Concurrencia: dos compradores del último producto → uno obtiene el pedido y el otro `OUT_OF_STOCK`, nunca ambos (sección 9, test 1).
+
+### 3.2 `createFlowPayment` (inicio de pago con Flow)
+
+- Callable, público (número + token) + App Check.
+
+```ts
+interface CreateFlowPaymentRequest {
+  orderNumber: string;       // "NE-000123"
+  accessToken: string;
+}
+interface CreateFlowPaymentResponse {
+  redirectUrl: string;       // URL de Flow a la que el navegador debe ir (url + "?token=" + token)
+  reservedUntil: string;     // ISO
+}
+```
+- Pasos: buscar el pedido; comparar `sha256(accessToken)` con `accessTokenHash` en tiempo constante (si no coincide o no existe → mismo error `ORDER_NOT_FOUND`, sin distinguir). Exigir `paymentMethod == "flow"`, `paymentStatus == "pending_payment"` y `reservedUntil > now`. El **monto sale de `order.total`**, no del cliente. Firmar y llamar `payment/create` de Flow con: `commerceOrder` (= `orderNumber`), `subject` ("Pedido NE-000123 - Nutra Elements"), `currency` "CLP", `amount` (= `total`), `email` (= `customer.email`), `urlConfirmation`, `urlReturn` (sección 3.3.1). Guardar en `order.flow` `{commerceOrder, token, flowOrder, paymentUrl, attempt, createdAt}`.
+- Idempotencia: si el pedido ya tiene `flow.token` y `flow.lastStatus` es pendiente (o desconocido y el último `getStatus` dice pendiente), se devuelve la **misma** `paymentUrl` sin crear otra orden en Flow. Si Flow ya informó rechazo o anulación, se crea un nuevo intento (`attempt + 1`). VERIFICAR en la documentación de Flow si repetir `commerceOrder` está permitido; si no, el intento nuevo usa `NE-000123-2` y `flowConfirm` interpreta el sufijo (el pedido se resuelve quitando el sufijo `-\d+`).
+- Errores
+  | `HttpsError` | `details.code` | Cuándo |
+  |---|---|---|
+  | `not-found` | `ORDER_NOT_FOUND` | número o token incorrectos |
+  | `failed-precondition` | `ORDER_NOT_PAYABLE` | método no es Flow, o el estado no es `pending_payment` (incluye pagado) |
+  | `failed-precondition` | `ORDER_EXPIRED` | `reservedUntil` vencido: el cliente debe crear un pedido nuevo |
+  | `unavailable` | `FLOW_UNAVAILABLE` | Flow no responde o devuelve error (el pedido sigue pendiente; el cliente puede reintentar) |
+- Efectos: escribe solo `order.flow` y `updatedAt`. No toca stock.
+
+### 3.3 `flowConfirm` (confirmación de Flow)
+
+- Tipo: **HTTP** (`onRequest`), `POST`, `Content-Type: application/x-www-form-urlencoded` con el campo `token` (VERIFICAR). Autorización: sin sesión; invocable públicamente (Cloud Run `invoker: public`) y protegido porque **no se confía en nada del cuerpo salvo el `token`**, que se valida contra Flow con `getStatus` firmado. Sin App Check (lo llama Flow).
+- Respuestas HTTP
+  | Situación | Respuesta |
+  |---|---|
+  | Método distinto de POST | 405 |
+  | `token` ausente, vacío, >100 caracteres o con caracteres no esperados | 400 |
+  | Flow no reconoce el token (`getStatus` devuelve error de cliente) | 400 (no se reintenta) |
+  | Falla interna o de red hacia Flow/Firestore | 500 (Flow reintenta; VERIFICAR política de reintentos) |
+  | Procesado (pagado, en revisión, pendiente, rechazado, duplicado) | **200** cuerpo vacío |
+- Pasos
+  1. Llamar `GET payment/getStatus` con `apiKey`, `token` y la firma `s` calculada con `FLOW_SECRET_KEY` (HMAC-SHA256 de los parámetros ordenados por nombre y concatenados nombre+valor; VERIFICAR el esquema exacto). Se obtienen `flowOrder`, `commerceOrder`, `status`, `amount`, `currency`.
+  2. Resolver el pedido por `commerceOrder` (quitando sufijo de reintento si aplica). Si no existe → registrar y responder 400.
+  3. Transacción sobre `orders/{n}`, `paymentEvents/{token}` y los `products` del pedido (lecturas primero):
+     - `status` pagado (2): validar **monto == `order.total`**, moneda == `CLP` y que `commerceOrder` coincida. Si falla, el pedido pasa a `payment_review` (`AMOUNT_MISMATCH` o `CURRENCY_MISMATCH`), la reserva se mantiene y no se marca pagado.
+       - `pending_payment` con `stockState == reserved` → `paid` (confirmar venta: `reserved -= qty`, `stockState = committed`, `fulfillmentStatus = preparing`, `paidAt`, `statusHistory`, **métricas** con `increment`).
+       - `expired` (`stockState == released`) → intentar **re-reservar** todo en la misma transacción; si alcanza → `paid`; si no → `payment_review` (`NO_STOCK_AFTER_EXPIRY`) y sin tocar stock.
+       - `cancelled` → `payment_review` (`PAID_AFTER_CANCEL`).
+       - `paid`, `payment_review` o `refunded` → no hay cambios (duplicado; un pedido reembolsado no vuelve a `paid`).
+     - `status` pendiente (1) → solo registrar `flow.lastStatus`; el pedido sigue `pending_payment`.
+     - `status` rechazado o anulado (3, 4) → registrar; el pedido sigue `pending_payment` y el cliente puede reintentar mientras dure la reserva.
+     - Escribir `paymentEvents/{token}` con `outcome` y `receivedCount += 1`.
+  4. Responder 200.
+- **Idempotencia**: Flow puede llamar varias veces (reintentos, o la reconciliación de `getOrderStatus`). Es seguro porque (a) el `getStatus` es la fuente de verdad, no el cuerpo; (b) la transición `pending_payment → paid` solo ocurre dentro de la transacción si el estado leído es `pending_payment`/`expired`; una segunda ejecución lee `paid` y no cambia nada, ni stock ni métricas; (c) `paymentEvents/{token}` registra el resultado y cuenta las llegadas. Un mismo pedido con dos tokens distintos pagados (dos intentos) deja el segundo como `duplicate` y queda **anotado para revisión manual** (reembolso a mano): se agrega `warnings` en `paymentEvents` y una entrada en `statusHistory`. PREGUNTA ABIERTA F3 (cómo avisar al admin sin correos: se muestra en el panel de pedidos "en revisión").
+- Efectos: escribe `orders/{n}`, `paymentEvents/{token}`, `products/*` (solo `reserved`/`stock`/`inStock`), `metrics/*` (solo al pasar a `paid`).
+- Revalidación: el cambio de `inStock` en productos lo cubre `onProductWritten`.
+
+#### 3.3.1 URLs de confirmación y de retorno por ambiente
+
+Las dos URLs las **arma el servidor** al llamar a `payment/create`; el cliente nunca las envía.
+
+| Ambiente | `urlConfirmation` (Flow llama al servidor) | `urlReturn` (Flow redirige al navegador) | Flow |
+|---|---|---|---|
+| **local** (emuladores) | `FLOW_CONFIRMATION_URL` = `https://<host-del-túnel>/nutraelementsdev/us-east4/flowConfirm`. Flow necesita una URL pública: el túnel (herramienta por elegir en la tarea de Flow, con aprobación de Carlos, D-021) apunta al puerto del emulador de Functions | `SITE_URL` + `/checkout/retorno?o=<orderNumber>&t=<accessToken>` con `SITE_URL=http://localhost:3000` | sandbox |
+| **staging** (proyecto `nutraelements`, antes del lanzamiento; noindex) | `FLOW_CONFIRMATION_URL` = URL de `flowConfirm` desplegada, que entrega devops tras el primer despliegue | `SITE_URL` = URL de App Hosting (aún sin dominio) | sandbox |
+| **production** (tras el lanzamiento) | igual que staging (la URL de la función no cambia) | `SITE_URL=https://nutraelements.cl` | producción de Flow |
+
+- El host del túnel cambia en cada sesión: se pasa por variable (`FLOW_CONFIRMATION_URL`) en el `.env` local, sin versionar.
+- El `token` de acceso viaja en la query de `urlReturn`. Riesgo bajo: solo da la vista mínima de `getOrderStatus`. La página de retorno debe tener `noindex`, `Referrer-Policy: no-referrer` y no cargar recursos de terceros.
+- Ruta de retorno: **`/checkout/retorno`** debe ser un *route handler* de Next.js que acepte **GET y POST** (Flow redirige al navegador con `POST` y el `token` de Flow en el cuerpo; VERIFICAR), ignore el cuerpo y responda `303` hacia la página de confirmación del pedido (por ejemplo `/pedido?o=...&t=...`, nombre final a cargo de nextjs-frontend). La página de confirmación hace polling de `getOrderStatus` (3.4) cada 3–5 s hasta 90 s, porque la confirmación de Flow puede llegar después que el navegador.
+- Guardas: `assertEnv()` al iniciar. `APP_ENV` ∈ `local | staging | production`. En `local` y `staging`, `FLOW_API_BASE` debe ser el sandbox; en `production`, el de producción; si no coinciden, la función falla al arrancar. Así no se cobra de verdad por un error de configuración. Hosts: sandbox `https://sandbox.flow.cl/api`, producción `https://www.flow.cl/api` (VERIFICAR).
+
+### 3.4 `getOrderStatus` (consulta pública del estado)
+
+- Callable, público + App Check. Se usa en la página de retorno/confirmación.
+- Pensada para que **quien adivine un número no obtenga datos**: exige número **y** token.
+
+```ts
+interface GetOrderStatusRequest {
+  orderNumber: string;
+  accessToken: string;
+}
+interface GetOrderStatusResponse {
+  orderNumber: string;
+  createdAt: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  fulfillmentStatus: FulfillmentStatus | null;
+  reservedUntil: string | null;        // solo mientras paymentStatus == 'pending_payment'
+  delivery: { type: 'shipping'; communeName: string } | { type: 'pickup'; storeAddress: string; storeHours: string };
+  items: { name: string; qty: number; lineTotal: Clp }[];
+  subtotal: Clp;
+  shipping: Clp;
+  total: Clp;
+  transferInstructions?: {             // solo si paymentMethod == 'transfer' y paymentStatus == 'pending_payment'
+    bankName: string; accountType: string; accountNumber: string; holderName: string; holderRut: string; contactEmail?: string;
+    amount: Clp; reference: string;    // reference = orderNumber
+  };
+  trackingNote: string;                // texto fijo: "Guarda tu número de pedido; con él puedes seguir tu despacho en DispatchTrack."
+}
+```
+- **No se devuelve**: email, teléfono, dirección, notas, **RUT** (dato personal, D-024), `accessTokenHash`, datos de Flow, `refund` ni `statusHistory`. Un pedido reembolsado se ve solo como `paymentStatus: 'refunded'`. Del domicilio solo `communeName`.
+- Errores: `not-found` / `ORDER_NOT_FOUND` tanto si el número no existe como si el token es incorrecto (misma respuesta y mismo tiempo aproximado; comparación en tiempo constante, y se hace el hash aunque el pedido no exista). `RATE_LIMITED`: máx. **30 consultas por 10 min por IP** (clave `getOrderStatus:<sha256(ip)>`) y **10 fallos por número**; ambos son valores iniciales aceptados (D-024), configurables en `settings/private.limits` (`orderStatusPerIpPer10Min`, `orderStatusFailuresPerOrder`).
+- **Reconciliación**: si `paymentMethod == "flow"`, `paymentStatus == "pending_payment"`, hay `flow.token` y `flow.lastCheckedAt` tiene más de 15 s, la función consulta `getStatus` y aplica **la misma rutina transaccional de `flowConfirm`** (es idempotente). Sirve si la confirmación de Flow se retrasa o si el túnel local no está activo. El resultado ya actualizado se devuelve en la misma respuesta.
+- Costo: 1 lectura del pedido (más ≤1 llamada a Flow cada 15 s) por consulta.
+- Pérdida del número o del token: sin correos (D-008) no hay recuperación; el número lo ve el cliente en pantalla. PREGUNTA ABIERTA F4.
+
+---
+
+## 4. Funciones de gestión de pedidos (admin)
+
+Todas: callable, `admin`, `enforceAppCheck`. Quien ejecuta se anota en `statusHistory.by` (uid). Todas comparten un error propio de estado:
+
+| `HttpsError` | `details.code` | Cuándo |
+|---|---|---|
+| `not-found` | `ORDER_NOT_FOUND` | el pedido no existe |
+| `failed-precondition` | `INVALID_TRANSITION` | la transición no está en la tabla de data-model.md 6 (el mensaje indica el estado actual) |
+
+### 4.1 `confirmTransferPayment`
+```ts
+interface ConfirmTransferRequest { orderNumber: string; reference?: string /* <=100 */; note?: string /* <=300 */ }
+interface ConfirmTransferResponse { orderNumber: string; paymentStatus: 'paid' | 'payment_review'; alreadyPaid: boolean; fulfillmentStatus: FulfillmentStatus | null }
+```
+- Solo `paymentMethod == "transfer"` (`ORDER_NOT_TRANSFER`).
+- `pending_payment → paid` (confirma la venta como en `flowConfirm`, con métricas). `expired` → re-reserva; si no hay stock, resultado `payment_review` (`NO_STOCK_AFTER_EXPIRY`) y respuesta 200 con ese estado (el dinero ya se recibió). `paid` → `alreadyPaid: true`, sin efectos. `cancelled` y `payment_review` → `INVALID_TRANSITION`.
+- Idempotente: se apoya en el estado dentro de la transacción. Escribe `transfer {confirmedBy, confirmedAt, reference, note}`.
+
+### 4.2 `resolvePaymentReview`
+```ts
+interface ResolvePaymentReviewRequest { orderNumber: string; action: 'accept' | 'cancel'; note: string /* 1..300, obligatoria */ }
+interface ResolvePaymentReviewResponse { orderNumber: string; paymentStatus: 'paid' | 'cancelled' }
+```
+- Solo desde `payment_review`. `accept`: si `stockState == released` re-reserva (si falta stock → `failed-precondition` / `OUT_OF_STOCK` con `sku`; el pedido sigue en revisión), luego `paid`. `cancel`: `cancelled` y libera si estaba `reserved`. El reembolso en Flow se hace a mano fuera del sistema (MVP). Anota `review.resolution`.
+- Idempotente por estado: si ya está resuelto, `INVALID_TRANSITION`.
+
+### 4.3 `cancelOrder`
+```ts
+interface CancelOrderRequest { orderNumber: string; reason: string /* 1..300 */ }
+interface CancelOrderResponse { orderNumber: string; paymentStatus: 'cancelled'; stockReleased: boolean }
+```
+- Solo desde `pending_payment`. Un pedido `paid` **no se cancela**: se reembolsa con `recordManualRefund` (4.6); llamar a `cancelOrder` sobre uno `paid` o `refunded` devuelve `INVALID_TRANSITION`. Libera el stock si `stockState == reserved`. Si Flow ya cobró después, `flowConfirm` lo manda a `payment_review`.
+- Si el pedido ya está `cancelled`: responde OK con `stockReleased: false` (idempotente).
+
+### 4.4 `updateFulfillment` (estado logístico)
+```ts
+interface UpdateFulfillmentRequest {
+  orderNumber: string;
+  to: FulfillmentStatus;
+  note?: string;       // <= 300
+  reason?: string;     // 1..300. OBLIGATORIO si `to` es un retroceso (D-024)
+}
+interface UpdateFulfillmentResponse {
+  orderNumber: string;
+  fulfillmentStatus: FulfillmentStatus;
+  changed: boolean;
+  direction: 'forward' | 'backward' | 'none';
+}
+```
+- Exige `paymentStatus == "paid"` (`ORDER_NOT_PAID`; un pedido `refunded` tampoco se puede mover). Transiciones permitidas: ver data-model.md 6.2. Hacia adelante: `ready_for_pickup` solo en retiro, `on_route` solo en despacho. **Hacia atrás: solo el admin y solo de a un paso** (`delivered` a `ready_for_pickup` u `on_route` según el tipo de entrega; `ready_for_pickup` u `on_route` a `preparing`), siempre con `reason`: sin él, `invalid-argument` / `REASON_REQUIRED`. Retroceder dos o más pasos, o a `null`: `INVALID_TRANSITION`.
+- Cada cambio agrega a `statusHistory` `{kind: "fulfillment", from, to, by: <uid>, note?, reason?, direction?: "backward"}`.
+- Pedir el estado actual devuelve `changed: false`, `direction: "none"` (idempotente, sin entrada nueva). No envía correos (D-008).
+
+### 4.5 `releaseExpiredReservations`
+- Tipo: scheduled, `every 5 minutes`, zona `America/Santiago`, `maxInstances: 1`, `timeoutSeconds: 120`, reintentos desactivados. Autorización: system (Cloud Scheduler). Cloud Scheduler existe solo en Blaze: en dev se prueba llamando a la función de lógica pura desde tests y en el emulador.
+- Consulta `orders where paymentStatus == "pending_payment" and reservedUntil <= now` (índice en data-model.md 5), `limit(100)` por ciclo.
+- Por cada pedido, **transacción propia**: releer; solo si sigue `pending_payment`, `stockState == "reserved"` y `reservedUntil <= now`: `stock += qty`, `reserved -= qty`, `inStock` recalculado, `stockState = released`, `paymentStatus = expired`, `statusHistory`. Antes de expirar un pedido de Flow que tenga `flow.token`, consulta `getStatus`: si ya está pagado, aplica la rutina de pago en lugar de expirar.
+- Idempotente: reejecutar no repone dos veces (lo impide `stockState`). Un fallo en un pedido no impide procesar los demás. No toca `payment_review`.
+- Costo: 8.640 invocaciones por mes, con una consulta barata cada una (0 documentos casi siempre). El número de jobs de Cloud Scheduler es 1 (cuota gratuita por VERIFICAR).
+
+---
+
+### 4.6 `recordManualRefund` (registrar un reembolso hecho a mano, D-024 / P5)
+
+El dinero se devuelve **fuera del sistema** (panel de Flow o transferencia bancaria). Esta función solo lo **registra** en el pedido; no llama a Flow ni mueve dinero.
+
+```ts
+interface RecordManualRefundRequest {
+  orderNumber: string;
+  amount: Clp;                     // entero, 1..order.total
+  method: RefundMethod;            // "flow" | "transfer": por dónde se devolvió el dinero
+  refundedAt: string;              // ISO 8601 UTC: cuándo se hizo el reembolso; no puede ser futura (tolerancia 5 min) ni anterior a order.paidAt
+  note: string;                    // 1..300, OBLIGATORIA
+  restock: boolean;                // true = reponer el stock de los ítems. Obligatorio, sin valor por defecto
+}
+interface RecordManualRefundResponse {
+  orderNumber: string;
+  paymentStatus: 'refunded';
+  alreadyRefunded: boolean;        // true si ya estaba reembolsado (no se cambió nada)
+  restocked: boolean;              // refleja lo guardado en order.refund.restocked
+}
+```
+- Transición única: `paid → refunded` (data-model.md 6.1). Cualquier otro estado de partida: `failed-precondition` / `INVALID_TRANSITION` (con el estado actual en el mensaje). Se puede reembolsar con cualquier estado logístico, incluso `delivered`.
+- Una sola transacción (lecturas primero: pedido, productos de los ítems si `restock`, documentos de métricas):
+  1. Si el pedido ya es `refunded` → devuelve `alreadyRefunded: true` con lo guardado y **no escribe nada** (ni stock ni métricas), aunque los parámetros de la segunda llamada difieran.
+  2. Escribe `paymentStatus = "refunded"`, `refund {amount, method, refundedAt, note, restock, restocked, recordedBy: uid, recordedAt}` y agrega a `statusHistory` `{kind: "payment", from: "paid", to: "refunded", by: <uid>, note, refund: {amount, method, restock}}`.
+  3. **Stock**: solo si `restock == true` **y** `stockState == "committed"`: por cada ítem `stock += qty`, `inStock = true`, y `stockState = "released"`, `refund.restocked = true`, más una entrada `kind: "stock"` en `statusHistory`. Con `restock == false`, el stock y `stockState` no cambian (el producto puede haber salido ya). Como `stockState` pasa a `released` en la misma transacción, **no puede reponerse dos veces**, ni siquiera con llamadas concurrentes (la segunda lee `refunded`).
+  4. **Métricas** (D-025; una sola regla para reembolsos totales y parciales; usa `refund.restocked`, lo que realmente pasó, no `restock`), con `FieldValue.increment` en la misma transacción:
+     - `metrics/daily/days/{fecha de paidAt en America/Santiago}`: `revenue -= refund.amount`, `refundsCount += 1`, `refundedAmount += refund.amount`. `ordersCount` y `merchandise` (mercadería bruta antes de reembolsos) **no cambian**. `unitsSold -= Σqty` solo si `refund.restocked == true`.
+     - `metrics/products/items/{sku}` de cada ítem: `unitsSold -= qty` y `revenue -= lineTotal` solo si `refund.restocked == true`; si no, no cambian.
+     - Ticket promedio = `revenue / ordersCount` (neto).
+- Efectos y revalidación: si repone stock, `onProductWritten` revalida solo si cambió `inStock`. No toca `fulfillmentStatus`. No envía correos (D-008).
+- Errores
+  | `HttpsError` | `details.code` | Cuándo |
+  |---|---|---|
+  | `not-found` | `ORDER_NOT_FOUND` | el pedido no existe |
+  | `failed-precondition` | `INVALID_TRANSITION` | el pedido no está `paid` (y no es ya `refunded`) |
+  | `invalid-argument` | `INVALID_REFUND_AMOUNT` | `amount` no entero, menor que 1 o mayor que `total` |
+  | `invalid-argument` | `INVALID_REFUND_DATE` | `refundedAt` futura o anterior a `paidAt` |
+  | `invalid-argument` | `INVALID_INPUT` | falta `note`, `restock` o `method`, o están fuera de rango (con `fields`) |
+- Un reembolso parcial (`amount < total`) igual deja el pedido `refunded` (terminal), pero las métricas solo bajan según el paso 4 (ingresos en `refund.amount`; unidades solo si se repuso stock); el monto real queda en `refund.amount`.
+
+---
+
+## 5. Funciones del catálogo (admin)
+
+Todas: callable, `admin`, `enforceAppCheck`. **Parte del trabajo se hace en el navegador**: el admin elige el archivo Excel, el navegador lo lee con una librería de planillas (se elige al implementar; el formato `.xls` antiguo exige soporte; VERIFICAR la seguridad y licencia de la librería) y envía las **filas crudas** como JSON. Así el archivo no pasa por Storage, el payload es pequeño (decenas a cientos de filas) y el servidor sigue siendo la autoridad de la validación. Las filas se envían como `string | number | null` sin interpretar.
+
+Tipos comunes
+```ts
+type Cell = string | number | null;
+interface BatchOptions { dryRun?: boolean; fileName?: string }   // dryRun: valida y devuelve el reporte sin escribir ni crear documento en imports
+interface InvalidRow { row: number; sku?: string; code: string; message: string }  // row = número de fila de la hoja (1 = encabezado)
+interface CorrectedCell { row: number; sku: string; field: string; from: Cell; to: Cell }
+interface Warning { sku?: string; code: string; message: string }
+interface BatchReport {
+  importId: string | null;            // null en dryRun
+  dryRun: boolean;
+  rows: number;
+  created: number; updated: number; unchanged: number; skipped: number;
+  corrected: CorrectedCell[];
+  invalid: InvalidRow[];
+  warnings: Warning[];
+  truncated: boolean;                 // listas recortadas a 500 entradas
+}
+```
+Reglas comunes de los lotes
+- Máx. **1000 filas** por llamada (`TOO_MANY_ROWS`). Si el archivo tiene más, el cliente lo parte.
+- **Aplicación parcial**: las filas válidas se aplican, las inválidas se informan y se omiten. Con `dryRun: true` el admin ve el reporte antes de confirmar.
+- Escritura por transacciones de hasta **200 productos** (`stock` y `reserved` se leen y escriben juntos). Un error inesperado en un lote deja los lotes ya aplicados (es seguro repetir: son idempotentes por SKU).
+- Cada fila se identifica por SKU **string** `^[A-Za-z0-9_-]{1,32}$`. Un número de Excel como `2427844` o `2427844.0` se convierte a `"2427844"`; uno con decimales reales es inválido (`INVALID_SKU`). SKU repetido en el archivo: la segunda aparición es inválida (`DUPLICATE_SKU`).
+- Precios: enteros CLP 1–10.000.000; acepta `"12.990"` o `"$12.990"` con separador de miles chileno; decimales distintos de cero son inválidos (`INVALID_PRICE`).
+- Se guarda un reporte en `imports/{id}` (salvo `dryRun`). Errores del lote completo: `TOO_MANY_ROWS`, `EMPTY_BATCH`.
+- Cambio de `price`: recalcula `finalPrice`; si un descuento fijo existente deja de ser válido se elimina con advertencia `DISCOUNT_REMOVED`. Es la **única** vez que un lote toca un descuento.
+- **Stock vacío, dos casos distintos** (D-024 y D-018): (a) *importación inicial de la planilla* (`importCatalog` creando el producto): stock vacío o negativo pasa a 0 y se informa en `corrected`; (b) **cualquier otro caso** (`importStock`, `updateProductCommerce`, o una fila de `importCatalog` cuyo producto ya existe): una celda **vacía** es fila inválida `EMPTY_STOCK` (no se toca el producto; una celda en blanco no debe dejarlo sin stock por accidente), un texto no numérico es `INVALID_STOCK` y un negativo se corrige a 0 y consta en `corrected`.
+- Revalidación: cada producto modificado dispara `onProductWritten` (sección 8). Un lote de 150 productos genera ≤150 revalidaciones agrupables; costo despreciable.
+
+### 5.1 `importCatalog` (planilla de Control Farma, D-016, D-018)
+```ts
+interface CatalogRow {
+  ID: Cell;                      // SKU
+  NOMBRE: Cell;
+  CODIGO_BARRA: Cell;
+  STOCK_ACTUAL: Cell;
+  PRECIO_VENTA_PUBLICO: Cell;
+  ACTIVO: Cell;                  // "SI" | "NO"
+  LABORATORIO: Cell;
+}
+interface ImportCatalogRequest extends BatchOptions { rows: CatalogRow[] }   // hoja ARTICULO
+type ImportCatalogResponse = BatchReport;
+```
+- Fila nueva: crea el producto con `published = false`, `source = "controlfarma-xls"`, `sourceName = NOMBRE` tal cual, `name` propuesto en formato título (el admin lo corrige), `barcode`, `barcodeValid` (dígito verificador GTIN-8/12/13/14), `gtin` (solo si es válido y no empieza con 978/979; si empieza con 978/979 → advertencia `BARCODE_ISBN_RANGE`), `unitsPerPack`/`format`/`family` extraídos del nombre cuando es posible (`X 90`), `stock` (en la **importación inicial**, negativo o vacío → **0** y entrada en `corrected`, D-018), `reserved = 0`, `active` (`SI` → true, `NO` → false, otro valor → fila inválida `INVALID_ACTIVE`), `discount = null`, `finalPrice = price`, `slug = null`.
+- Fila existente (**reimportación**, D-024 / P13: Control Farma es la fuente de verdad de precio y stock): **pisa** `price` (+ `finalPrice`) y `stock`, y actualiza `active`, `barcode`/`barcodeValid`/`gtin`, `sourceName`, `importedAt`, `updatedAt`. **Nunca** toca el contenido (`name`, `description`, `shortDescription`, `images`, `slug`, `categoryId`, `seo`, `format`, `unitsPerPack`, `family`, `published`) ni los descuentos (`discount`; solo `DISCOUNT_REMOVED` si un descuento fijo queda inválido por el precio nuevo). Un `STOCK_ACTUAL` vacío en una fila existente es `EMPTY_STOCK` (fila inválida, el stock del producto no cambia). Stock de un producto existente: `stock = max(0, STOCK_ACTUAL - reserved)` (el archivo trae el físico; lo reservado por pedidos pendientes ya no está disponible).
+- `LABORATORIO` distinto de "NUTRA ELEMENTS" → advertencia `LABORATORY_MISMATCH`; no bloquea.
+- Idempotente por SKU: repetir la misma planilla da `unchanged`.
+- Errores de fila: `INVALID_SKU`, `DUPLICATE_SKU`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK` (texto no numérico), `EMPTY_STOCK` (solo en filas de productos existentes), `INVALID_ACTIVE`.
+
+### 5.2 `importPrices` (Excel SKU + PRECIO)
+```ts
+interface PriceRow { SKU: Cell; PRECIO: Cell }
+interface ImportPricesRequest extends BatchOptions { rows: PriceRow[] }
+type ImportPricesResponse = BatchReport;
+```
+- Solo actualiza productos **existentes**. SKU inexistente → inválida `SKU_NOT_FOUND` (no crea). Precio inválido → `INVALID_PRICE`. Recalcula `finalPrice` y aplica la regla de `DISCOUNT_REMOVED`. El nombre de las columnas del Excel: el cliente las busca sin distinguir mayúsculas ("SKU", "PRECIO"); si falta una → el cliente muestra el error antes de llamar.
+- Idempotente: mismo precio → `unchanged`.
+
+### 5.3 `importStock` (Excel SKU + STOCK, con reporte de filas inválidas)
+```ts
+interface StockRow { SKU: Cell; STOCK: Cell }
+interface ImportStockRequest extends BatchOptions { rows: StockRow[] }
+type ImportStockResponse = BatchReport;
+```
+- `STOCK` es el stock **físico**; se guarda `stock = max(0, STOCK - reserved)`. Entero 0–1.000.000. Celda **vacía** → fila inválida **`EMPTY_STOCK`** (D-024: **no** se pone 0, para no vaciar el inventario por una celda en blanco; difiere de la importación inicial de la planilla, que sigue D-018). Texto no numérico → `INVALID_STOCK`. Negativo → se corrige a 0 y consta en `corrected`. SKU inexistente → `SKU_NOT_FOUND`. Las filas inválidas se informan en el reporte y las demás se aplican.
+- Recalcula `inStock`. Idempotente.
+- Limitación: un archivo de stock aplicado mientras hay compras en curso no pierde reservas, porque resta `reserved`. Si Control Farma ya descontó ventas pagadas que aún están `reserved`/`committed`, hay riesgo de doble descuento: PREGUNTA ABIERTA no bloqueante, a revisar con el jefe (ver sección 11, F6).
+
+### 5.4 `applyDiscount` (descuento por producto y masivo, por lista de SKU)
+```ts
+interface ApplyDiscountRequest extends BatchOptions {
+  skus: Sku[];                                              // 1..150, sin repetidos; un solo SKU = descuento manual de un producto
+  discount: { type: 'percent' | 'fixed'; value: number } | null;   // null = quitar el descuento
+}
+type ApplyDiscountResponse = BatchReport;
+```
+- `percent`: entero 1–99. `fixed`: entero ≥ 1 y **menor que el precio** de cada producto (si no, esa fila es inválida `DISCOUNT_TOO_HIGH`, porque el precio nunca baja de 0 ni llega a 0). SKU inexistente → `SKU_NOT_FOUND`.
+- **Reemplaza** el descuento anterior (no se acumulan). Calcula `finalPrice` con la fórmula de data-model.md 7.3. `null` deja `finalPrice = price`.
+- Aplicación parcial con reporte; `dryRun` disponible (la UI de selección múltiple muestra la vista previa con precio actual → nuevo). Guarda `imports` con `kind: "discount"`.
+- Idempotente: mismo descuento → `unchanged`.
+- Combinación con envío gratis: el servidor usa el subtotal con descuentos (data-model.md 7.4).
+
+### 5.5 `setProductsPublished`
+```ts
+interface SetPublishedRequest extends BatchOptions { skus: Sku[]; published: boolean }   // 1..150
+type SetPublishedResponse = BatchReport;
+```
+- Despublicar: siempre permitido.
+- Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `description` no vacía (`MISSING_DESCRIPTION`), `categoryId` existente y con `published == true` (`INVALID_CATEGORY`), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
+- Un producto publicado sin stock sigue siendo público (se muestra "agotado"); no se despublica solo.
+- Idempotente. Revalidación: `onProductWritten` revalida ficha, categoría, `/productos`, `/` y el sitemap.
+
+### 5.6 `createProduct`
+```ts
+interface CreateProductRequest { sku: Sku; name: string; price: Clp; stock: number; barcode?: string }
+interface CreateProductResponse { sku: Sku; created: boolean }
+```
+- Crea con `published = false`, `source = "manual"`. SKU ya existente → `failed-precondition` / `SKU_EXISTS` (idempotente solo si los datos son idénticos: devuelve `created: false`). El resto de los campos de contenido se completa con escritura directa del admin.
+
+### 5.7 `updateProductCommerce` (precio o stock de un producto)
+```ts
+interface UpdateProductCommerceRequest { sku: Sku; price?: Clp; stock?: number /* físico, como en importStock */ }
+interface UpdateProductCommerceResponse { sku: Sku; price: Clp; finalPrice: Clp; stock: number }
+```
+- Al menos uno de los dos campos. Mismas reglas que las importaciones. Errores: `SKU_NOT_FOUND` (`not-found`), `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK` (stock enviado vacío).
+
+### 5.8 `grantAdmin` / `revokeAdmin`
+```ts
+interface AdminClaimRequest { email: string }
+interface AdminClaimResponse { uid: string; admin: boolean }
+```
+- Asigna o quita `admin: true` con el Admin SDK. El usuario debe existir ya en Authentication (`USER_NOT_FOUND`). `revokeAdmin` sobre uno mismo → `failed-precondition` / `CANNOT_REVOKE_SELF`. El usuario debe volver a iniciar sesión (o refrescar el ID token) para que el claim surta efecto. Idempotente.
+- **El primer admin** no puede crearse con esta función (nadie es admin todavía): se hace con un script local de una sola ejecución que usa el Admin SDK (sin credenciales en el repo). En producción lo ejecuta devops/Carlos con confirmación. Lo escribo en 2B.7, no aquí.
+
+---
+
+## 6. Métricas
+
+- No hay función propia: las actualiza la transacción que marca un pedido como `paid` (`flowConfirm`, `getOrderStatus` por reconciliación, `confirmTransferPayment`, `resolvePaymentReview`), con `FieldValue.increment`, en `metrics/daily/days/{fecha en America/Santiago}` y `metrics/products/items/{sku}`. Como la transición solo ocurre una vez, no se cuenta doble. `recordManualRefund` **ajusta** las métricas en su propia transacción (4.6, regla D-025): `revenue -= refund.amount`, `refundsCount += 1`, `refundedAmount += refund.amount`, y unidades (diarias y por SKU) solo si `refund.restocked == true`; `ordersCount` y `merchandise` no cambian. También ocurre una sola vez.
+- El panel las lee directo con la regla de admin (data-model.md 2.6). "Sin stock": consulta a `products`.
+- Reconstrucción de métricas (función `rebuildMetrics`) **fuera del MVP**; si un cálculo falla, se corrige a mano. Ver F7 (sección 11).
+
+---
+
+## 7. Variables y secretos por ambiente (solo nombres; los valores nunca van en archivos versionados)
+
+### 7.1 Cloud Functions
+
+| Nombre | Tipo | local (emuladores) | staging / production (proyecto `nutraelements`) |
+|---|---|---|---|
+| `FLOW_API_KEY` | **secreto** | `functions/.secret.local` (no versionado; VERIFICAR) o `.env` | Secret Manager (`defineSecret`). Lo carga Carlos. En staging: credencial sandbox; en production: credencial de producción |
+| `FLOW_SECRET_KEY` | **secreto** | igual | Secret Manager |
+| `REVALIDATE_SECRET` | **secreto** | igual (cualquier valor aleatorio local) | Secret Manager |
+| `APP_ENV` | parámetro | `local` | `staging` o `production` |
+| `SITE_URL` | parámetro | `http://localhost:3000` | URL de App Hosting o `https://nutraelements.cl` |
+| `FLOW_API_BASE` | parámetro | `https://sandbox.flow.cl/api` | sandbox en staging; producción en production |
+| `FLOW_CONFIRMATION_URL` | parámetro | URL pública del túnel + `/nutraelementsdev/us-east4/flowConfirm` | URL de `flowConfirm` desplegada |
+
+- Dev (`nutraelementsdev`, Spark) no tiene Secret Manager ni Functions en la nube (D-021, D-009): todo es local. Los valores locales viven en archivos ya ignorados por git (`.env`, `functions/.env.*`, `functions/.secret.local`); devops/qa-reviewer comprueban con `git check-ignore` antes de cada push (D-013, D-020). La ubicación exacta de los `.env` para el emulador de Functions (carpeta `functions/` frente a la raíz) se confirma en 2B.1.
+- Los parámetros no secretos (`SITE_URL`, etc.) pueden ir en `functions/.env.<alias>` **sin valores sensibles**; las URLs de producción no son secretas.
+- Plantilla: `.env.example` con **solo los nombres**.
+
+### 7.2 Next.js (App Hosting)
+
+| Nombre | Tipo | Notas |
+|---|---|---|
+| `REVALIDATE_SECRET` | **secreto** | Mismo valor que el de Functions; se declara en `apphosting.yaml` como secreto de Secret Manager (prod) y en `.env.local` (local) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_APP_ID`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | pública | Configuración web de Firebase. No son secretos, pero los valores van por ambiente |
+| `NEXT_PUBLIC_USE_EMULATORS` | pública | `true` solo en local |
+| `NEXT_PUBLIC_APPCHECK_SITE_KEY` | pública | Clave del proveedor de App Check. En local se usa el token de depuración (variable `NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN` solo en `.env.local`) |
+| `SITE_URL` | servidor | URL base canónica (sitemap, JSON-LD) |
+
+Next.js usa el Admin SDK en el servidor con las credenciales por defecto de App Hosting (sin archivos de clave). Nada de credenciales de servicio en el repo.
+
+---
+
+## 8. Triggers y revalidación ISR bajo demanda (D-022)
+
+### 8.1 Triggers
+- `onProductWritten` (`onDocumentWritten("products/{sku}")`): compara `before` y `after`. Solo si cambió algo **visible en el sitio** (`name`, `slug`, `description`, `shortDescription`, `categoryId`, `images`, `price`, `discount`, `finalPrice`, `inStock`, `published`, `active`, `format`, `unitsPerPack`, `family`, `seo`, `gtin`) llama a revalidar. Los cambios solo en `stock`/`reserved` sin cambiar `inStock` **no** revalidan (evita una revalidación por cada compra). Rutas: `/productos/{slug}` (el actual y el anterior si cambió o se despublicó), `/categorias/{categoryId}` (y la anterior), `/productos`, `/`, `/sitemap.xml`.
+- `onCategoryWritten`: rutas `/categorias/{id}`, `/productos`, `/`, `/sitemap.xml`.
+- `onSettingsPublicWritten`: cambia el umbral de envío gratis o el retiro → revalidar `/`, `/productos`, `/preguntas-frecuentes`, `/contacto` y `/productos/*` mediante una **etiqueta** (`tags: ["settings"]`; las fichas con la oferta de envío en el JSON-LD usan esa etiqueta).
+- Los triggers son at-least-once: la revalidación es idempotente. Si la llamada a Next falla, se registra y **no se reintenta** (el vencimiento normal de ISR corrige después; ver `revalidate` de las páginas, definido por nextjs-frontend). Ningún trigger escribe en Firestore.
+
+### 8.2 Ruta de Next.js que recibe la revalidación
+
+`POST {SITE_URL}/api/revalidate` (route handler). Contrato que implementa nextjs-frontend:
+
+```ts
+// Cuerpo JSON
+interface RevalidateRequestBody {
+  paths?: string[];   // rutas concretas, máx. 50. Solo rutas públicas (ver lista blanca)
+  tags?: string[];    // etiquetas, máx. 10. Lista blanca: "catalog", "settings"
+}
+// Cabeceras
+//   x-ne-timestamp: <epoch en segundos, string>
+//   x-ne-signature: <hex de HMAC-SHA256(REVALIDATE_SECRET, `${timestamp}.${cuerpoCrudo}`)>
+// Respuesta: 200 { revalidated: true, paths: string[], tags: string[] } | 400 | 401
+```
+- Verificación: leer el cuerpo **crudo**, recalcular el HMAC y compararlo en tiempo constante (`timingSafeEqual`); rechazar con `401` si falta alguna cabecera, si la firma no coincide o si el timestamp se aleja más de **5 minutos** del reloj del servidor. Un reenvío dentro de esa ventana es inofensivo (revalidar es idempotente). `400` si el cuerpo no cumple el tipo. Respuestas sin detalle de por qué falló la firma.
+- Lista blanca de rutas: `/`, `/productos`, `/productos/<slug>`, `/categorias/<slug>`, `/nosotros`, `/contacto`, `/preguntas-frecuentes`, `/sitemap.xml`, y las páginas legales; `<slug>` con `^[a-z0-9-]{1,80}$`. Cualquier otra ruta → `400`. Nunca `/admin`, `/checkout`, `/api`.
+- Este endpoint **no** usa cookies ni App Check; el secreto compartido es la única autenticación. Si el secreto se filtra, cámbiese en Secret Manager (Functions y App Hosting) y se despliega de nuevo. No se acepta el secreto en la URL ni en la query.
+- Llamada desde Functions: `fetch` con timeout de 5 s a `SITE_URL + "/api/revalidate"`, firma con `REVALIDATE_SECRET`. En local, `SITE_URL=http://localhost:3000`. Si `SITE_URL` no está definida, el trigger se salta la revalidación y lo registra.
+- Responsabilidad de nextjs-frontend: marcar con ISR las páginas listadas y usar las etiquetas `catalog` y `settings` en sus lecturas si usa etiquetas (si solo usa rutas, ignora `tags`).
+
+---
+
+## 9. Tests (Emulator Suite) — qué se prueba y cómo
+
+Cada pieza lleva su test; ninguna pasa a QA sin ellos en verde.
+
+1. **Reglas** (`@firebase/rules-unit-testing`, Firestore y Storage): la lista de data-model.md 9.
+2. **Concurrencia del stock** (`createOrder`): stock 1, 10 compradores en paralelo → exactamente un pedido y nueve `OUT_OF_STOCK`; el `stock` final es 0 y `reserved` es 1; los números de pedido son consecutivos y sin repetirse (contador); stock 5 con compras de 2 en paralelo → no sobrevende.
+3. **Manipulación del precio**: el request nunca acepta `price`, `total`, `shipping` ni `discount` (campos desconocidos → `INVALID_INPUT`); con descuento activo, el snapshot usa `finalPrice` recalculado; modificar a mano `finalPrice` en el documento no cambia lo cobrado (se recalcula desde `price` y `discount`); envío gratis solo con umbral definido y `subtotal` con descuentos; retiro = 0; comuna fuera de lista rechazada; cantidades fuera de rango rechazadas.
+4. **Fórmulas**: tabla de casos de `computeFinalPrice` (porcentaje con redondeo de mitades hacia arriba, fijo, clamp a 0, 99%, `fixed == price - 1`).
+5. **Idempotencia de `createOrder`**: mismo `clientRequestId` dos veces → un solo pedido, un solo descuento de stock y el segundo token invalida al primero.
+6. **Idempotencia de Flow** (`flowConfirm`, con `getStatus` simulado): (a) pago correcto → `paid`, `fulfillmentStatus = preparing`, métricas +1; (b) la misma confirmación 5 veces (también en paralelo) → un solo `paid`, métricas +1, `receivedCount = 5`; (c) monto distinto → `payment_review`, sin `paid`; (d) pago tardío con stock → `paid`; (e) pago tardío sin stock → `payment_review`; (f) pedido cancelado → `payment_review`; (g) `getStatus` con firma o token inválidos → 400 sin cambios; (h) estado pendiente o rechazado → el pedido sigue `pending_payment`.
+7. **Firma de Flow**: prueba unitaria de la firma con vectores de la documentación oficial de Flow (VERIFICAR al implementar).
+8. **Reservas**: vencimiento libera una vez (dos ejecuciones seguidas = misma cantidad); no libera `payment_review` ni `paid`; con un `flow.token` ya pagado, aplica el pago en vez de expirar.
+9. **Transferencia y estados**: toda la matriz de transiciones de pago de data-model.md 6.1 (permitidas y prohibidas, incluidas las que parten de `refunded`) y de 6.2 (`updateFulfillment` por tipo de entrega; retroceso de un paso solo admin con `reason`; sin `reason` → `REASON_REQUIRED`; retroceso de dos pasos → `INVALID_TRANSITION`; el retroceso queda en `statusHistory` con `direction: "backward"`; mismo estado → `changed: false`).
+9b. **`recordManualRefund`**: (a) `paid` con `restock: true` y `amount == total` → `refunded`, `stock` repuesto, `stockState = released`, `refund.restocked == true`, `refund` y `statusHistory` completos; métricas: diario `revenue -total`, `refundsCount +1`, `refundedAmount +total`, `unitsSold -Σqty`, `ordersCount` y `merchandise` intactos; por SKU `unitsSold -qty` y `revenue -lineTotal`; (a2) igual con `restock: true` y `amount < total`: `revenue` baja solo `amount`, `refundedAmount +amount`, unidades diarias y por SKU sí se restan (porque `restocked == true`); (b) `restock: false` y `amount == total` → stock intacto, `stockState = committed`, `refund.restocked == false`; métricas: diario `revenue -total`, `refundsCount +1`, `refundedAmount +total`, `unitsSold` intacto, `ordersCount` y `merchandise` intactos; por SKU sin cambios; (b2) **reembolso parcial** `amount < total` con `restock: false` → `revenue` diario baja solo `amount`, `refundsCount +1`, `refundedAmount +amount`, `unitsSold`, `ordersCount` y `merchandise` intactos, métricas por SKU intactas; el ticket promedio resultante es `revenue / ordersCount` (neto); (b3) el reembolso se asienta en el día de `paidAt` aunque `refundedAt` caiga otro día; (b4) con `restock: true` pero `stockState != committed` (restocked false) las unidades no se tocan: ver nota en el handoff sobre su alcance; (c) misma llamada 5 veces, también en paralelo → una sola reposición y un solo ajuste de métricas, `alreadyRefunded: true` en las demás; (d) desde `pending_payment`, `expired`, `cancelled`, `payment_review` → `INVALID_TRANSITION`; (e) `amount` 0, negativo, decimal o mayor que `total` → `INVALID_REFUND_AMOUNT`; (f) `refundedAt` futura o anterior a `paidAt` → `INVALID_REFUND_DATE`; (g) sin `note` o sin `restock` → `INVALID_INPUT`; (h) sin sesión y sin claim → `UNAUTHENTICATED` / `NOT_ADMIN`; (i) tras `refunded`, `updateFulfillment`, `cancelOrder` y `confirmTransferPayment` fallan; (j) `getOrderStatus` devuelve `refunded` sin `refund` ni RUT.
+10. **`getOrderStatus`**: token incorrecto y número inexistente dan la misma respuesta; la respuesta **no contiene** email, teléfono, dirección ni RUT (comparación contra una lista de campos prohibidos); límite de intentos (los valores salen de `settings/private.limits`).
+10b. **RUT** (`createOrder`): tabla de casos de módulo 11 (dígito verificador 0-9 y K, con y sin puntos, `k` minúscula, mal dígito, vacío, muy corto o con letras) → `INVALID_RUT`; el valor guardado queda normalizado `12345678-K`; el RUT no aparece en los logs (se espía `logger`).
+11. **Lotes de Excel**: filas inválidas se informan y no se aplican; importación inicial D-018 (stock -5 y vacío → 0 con `corrected`); `importStock` con celda vacía → `EMPTY_STOCK` (producto sin cambios) y con negativo → 0 corregido; una fila existente de `importCatalog` con stock vacío → `EMPTY_STOCK`; reimportar pisa `price` y `stock`, es idempotente y no toca `name`/`slug`/`images`/`categoryId`/`published`/`discount`; `DISCOUNT_REMOVED`; `applyDiscount` con `dryRun`.
+12. **Publicación**: cada validación de `setProductsPublished` falla con su código; slug duplicado.
+13. **Autorización**: cada función admin (incluida `recordManualRefund`) con (a) sin sesión, (b) sesión sin claim, (c) admin. App Check se prueba en integración con el emulador (token de depuración).
+14. **Revalidación**: unidad de la firma HMAC (válida, adulterada, expirada) y de la lista blanca; el trigger solo llama cuando cambia un campo visible.
+
+---
+
+## 10. Lo que necesita nextjs-frontend de este contrato (resumen)
+
+- Cliente de Functions con región `us-east4`; App Check activo en producción (token de depuración en local).
+- `createOrder` → guardar `orderNumber` y `accessToken` (memoria o `sessionStorage`; **no** `localStorage` de larga duración). Flow: `createFlowPayment` y redirigir a `redirectUrl`. Transferencia: mostrar la pantalla con instrucciones usando `getOrderStatus`.
+- Ruta `/checkout/retorno` (GET y POST, 303) y página de confirmación con polling a `getOrderStatus`; mostrar el número `NE-xxxxxx` y el aviso de seguimiento en DispatchTrack (D-008, D-007). Páginas con `noindex`.
+- Ruta `POST /api/revalidate` con la verificación HMAC de 8.2.
+- Lecturas públicas con Admin SDK en el servidor (ISR); sin listeners en el sitio público; admin con paginación.
+- Checkout: campo **RUT obligatorio** (validar módulo 11 en el cliente también; el servidor es la autoridad y responde `INVALID_RUT`); no hay razón social ni giro.
+- Subida de imágenes a Storage directamente desde el navegador (admin), **comprimidas a WebP con el lado largo ≤ 1600 px y máx. 2 MiB**, y lectura de Excel en el navegador.
+- Admin: etiqueta "Reembolsado" para `refunded`; formulario de `recordManualRefund` (monto, medio, fecha, nota, casilla "reponer stock"); retroceder el estado logístico pide un motivo.
+
+---
+
+## 11. PREGUNTAS ABIERTAS de este contrato
+
+Del modelo de datos, siguen abiertas solo P2 (reservas configurables, pendiente del jefe) y P7 (retención de datos, después del lanzamiento); ver data-model.md sección 10.
+
+Propias de las funciones, no bloquean la v1:
+- F1. Número y nombre exactos de los parámetros, la firma, los estados, los reintentos y la forma del retorno de Flow: **no verificados**; se leen en la documentación oficial al implementar 2B.4.
+- F3. Cómo se entera el admin de que hay un pedido en `payment_review` sin correos (propuesta: contador y filtro destacado en el panel de pedidos).
+- F4. Recuperación del número o token de pedido perdido (no existe con D-008).
+- F6. Relación entre el stock físico de Control Farma y las reservas o ventas aún no facturadas (riesgo de doble descuento).
+- F7. ¿Hace falta una función para reconstruir métricas desde los pedidos?
+- F8. Herramienta de túnel para probar Flow en local (se elige en la tarea de Flow con aprobación de Carlos, D-021).
+
+## 12. Resueltas (referencia: D-024)
+
+| # | Tema | Resolución |
+|---|---|---|
+| F2 | Límites anti-abuso | 5 pedidos / 10 min por IP, 3 pendientes por correo, 30 consultas / 10 min por IP y 10 fallos por número en `getOrderStatus`: valores iniciales aceptados, configurables en `settings/private.limits` |
+| F5 | Celda vacía en el Excel de stock | Fila inválida `EMPTY_STOCK`, no 0. La importación inicial de la planilla sigue D-018 (5, 5.1 y 5.3) |
+| P5 | Pedido pagado que se reembolsa | `recordManualRefund` (4.6): `paid → refunded`, terminal, reposición opcional, métricas ajustadas según D-025 (ingresos menos `refund.amount`; unidades solo si se repuso stock) |
+| P6 | RUT | Obligatorio, módulo 11 en `createOrder`, `INVALID_RUT`, normalizado, nunca expuesto |
+| P9 | Retroceder estado logístico | Solo admin, un paso, con `reason` obligatorio (`updateFulfillment`, 4.4) |
+| P11 | Envío gratis | `>=` sobre el subtotal con descuentos |
+| P12 | Login del admin | Correo y contraseña, auto-registro desactivado, MFA después del lanzamiento (data-model.md 3) |
+| P13 | Reimportar la planilla | Pisa precio y stock; nunca toca contenido ni descuentos (5.1) |
