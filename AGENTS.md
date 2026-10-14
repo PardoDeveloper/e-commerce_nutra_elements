@@ -5,11 +5,12 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 
 ## Stack
 - Frontend: Next.js con App Router (TypeScript estricto)
-- Backend: Firebase — Authentication, Firestore (o Data Connect si se decide un modelo relacional), Cloud Storage, Cloud Functions y App Check
+- Backend: Firebase — Authentication, Firestore (decidido, ver D-004), Cloud Storage, Cloud Functions y App Check
 - Hosting: Firebase App Hosting
 - Servicios de Google Cloud: Secret Manager y otros según se necesite
-- Pagos: <proveedor, por ejemplo Webpay o Mercado Pago>, integrado mediante Cloud Functions
-- Entornos: development y production, cada uno con su propio proyecto de Firebase (alias dev y prod en .firebaserc)
+- Pagos: Flow (sandbox en dev, producción en prod), integrado mediante Cloud Functions. Credenciales en Secret Manager; en local, en `.env` (no versionado)
+- Correos: el MVP no envía correos (D-008)
+- Entornos: development y production, cada uno con su propio proyecto de Firebase. Alias en .firebaserc: `dev` → `nutraelementsdev` (plan Spark) y `prod` → `nutraelements` (plan Blaze). Ramas: develop → dev y main → prod
 
 ## Estructura del repositorio
 - /src/app — páginas y rutas (App Router)
@@ -73,7 +74,7 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 - Público objetivo: Chile, español (es-CL)
 - / (inicio)
 - /productos (catálogo)
-- /productos/[slug] (ficha de producto) — prioridad máxima: JSON-LD Product con precio, disponibilidad y valoraciones
+- /productos/[slug] (ficha de producto) — prioridad máxima: JSON-LD Product con precio y disponibilidad. Valoraciones (aggregateRating/review) solo cuando existan reseñas reales y visibles (D-014)
 - /categorias/[slug] (por ejemplo: proteínas, vitaminas, creatina)
 - /blog y /blog/[slug] (guías y artículos)
 - /nosotros
