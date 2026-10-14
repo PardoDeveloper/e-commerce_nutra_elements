@@ -1,0 +1,52 @@
+# === Secretos ===
+.env
+.env.*
+!.env.example
+.secret.local
+.runtimeconfig.json
+*-service-account*.json
+serviceAccountKey*.json
+
+# === Dependencias ===
+node_modules/
+functions/node_modules/
+
+# === Builds ===
+.next/
+out/
+build/
+dist/
+functions/lib/
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+
+# === Firebase local ===
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+pubsub-debug.log
+dataconnect-debug.log
+emulator-data/
+.emulator-data/
+.dataconnect/
+
+# === Logs ===
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# === SO / editor ===
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Vercel / otros
+.vercel/
