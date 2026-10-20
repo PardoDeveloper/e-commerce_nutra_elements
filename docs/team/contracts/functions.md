@@ -1,7 +1,7 @@
 # Contrato de Cloud Functions — Nutra Elements
 
-Tarea 2A.2. Autor: firebase-architect. Estado: **v1.1 — D-025 aplicada (2026-10-14)** (v1 aprobada por tech-lead el 2026-10-14, D-024). Contrato con nextjs-frontend: no se cambia sin aprobación.
-Depende de [data-model.md](data-model.md) (rutas, campos, estados, fórmulas). Decisiones: D-004 a D-012, D-016, D-018, D-020 a D-024.
+Tarea 2A.2. Autor: firebase-architect. Estado: **v1.3 — D-032 aplicada (2026-10-19)** (v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Contrato con nextjs-frontend: no se cambia sin aprobación.
+Depende de [data-model.md](data-model.md) (rutas, campos, estados, fórmulas). Decisiones: D-004 a D-012, D-016, D-018, D-020 a D-025, D-027, D-029.
 
 Lo que **no** he podido verificar (debe leerse en la documentación oficial antes de implementar; está marcado "VERIFICAR"): la API de Flow (nombres de parámetros, firma, estados, forma del retorno, reintentos), las opciones exactas de `firebase-functions` v2 (`onCall`, `onRequest`, `onSchedule`, `onDocumentWritten`) en la versión instalada, y el comportamiento de secretos y `.env` en el emulador.
 
@@ -77,6 +77,8 @@ Errores comunes a todas las callables
 | 19 | `onProductWritten` | trigger Firestore `products/{sku}` | system | 256 MiB / 30 s / 5 |
 | 20 | `onCategoryWritten` | trigger `categories/{id}` | system | 256 MiB / 30 s / 3 |
 | 21 | `onSettingsPublicWritten` | trigger `settings/public` | system | 256 MiB / 30 s / 2 |
+| 22 | `deleteProducts` | callable | admin + App Check | 256 MiB / 60 s / 2 |
+| 23 | `restoreProducts` | callable | admin + App Check | 256 MiB / 60 s / 2 |
 
 Los nombres son los que el frontend usa con `httpsCallable(functions, "createOrder")`. El cliente se configura con la región `us-east4`. `flowConfirm` no lo llama el frontend.
 
@@ -125,7 +127,7 @@ interface CreateOrderResponse {
 - Pasos
   1. `enforceAppCheck`. Validar esquema. Límite por IP: `rateLimits` clave `createOrder:<sha256(ip)>`, máx. **5 pedidos por 10 minutos** y, por correo, máx. **3 pedidos `pending_payment` abiertos** (se consulta fuera de la transacción) → `RATE_LIMITED`. Son los valores iniciales aceptados en D-024 y son **configurables** en `settings/private.limits` (`createOrderPerIpPer10Min`, `pendingOrdersPerEmail`); evitan bloquear stock con pedidos basura. Validar el RUT (módulo 11) y normalizarlo también en este paso, antes de tocar datos → `INVALID_RUT`.
   2. Transacción: leer `idempotencyKeys/{sha256(clientRequestId)}`; si existe, devolver el **mismo** pedido (ver "Idempotencia"). Leer `settings/public`, `settings/private`, `counters/orders` y los `products/{sku}` del carrito (todas las lecturas primero).
-  3. Verificar por producto: existe, `published && active` (`PRODUCT_UNAVAILABLE`), `stock >= qty` (`OUT_OF_STOCK`, con `sku` y `available`). Si es despacho: `communeCode` ∈ `settings.communes` (`INVALID_COMMUNE`); si es retiro: `pickup.enabled` (`PICKUP_DISABLED`).
+  3. Verificar por producto: existe, `published && active` y `deletedAt == null` (si falla algo, `PRODUCT_UNAVAILABLE`; un SKU **eliminado** se trata igual que uno no publicado y no se distingue hacia el cliente, D-029), `stock >= qty` (`OUT_OF_STOCK`, con `sku` y `available`). Si es despacho: `communeCode` ∈ `settings.communes` (`INVALID_COMMUNE`); si es retiro: `pickup.enabled` (`PICKUP_DISABLED`).
   4. Calcular con las fórmulas de data-model.md 7.3 y 7.4: `unitFinalPrice = computeFinalPrice(price, discount)` (se recalcula, no se confía en el `finalPrice` guardado), `subtotal`, `shipping`, `total`. `total > 0` y `<= 50.000.000` (`ZERO_TOTAL`, `ORDER_TOO_LARGE`).
   5. Escribir: `counters/orders.last += 1` (o iniciar en `orderNumberStart - 1`), el pedido `orders/NE-xxxxxx` con snapshot, `reservedUntil = now + settings.reservationMinutes[paymentMethod]`, `stockState = "reserved"`, y por cada producto `stock -= qty`, `reserved += qty`, `inStock = (stock - qty) > 0`; escribir `idempotencyKeys/...`. El pedido nace con `refund: null` y `statusHistory` con su primera entrada. `customer.rut` se guarda normalizado y no vuelve a salir del servidor salvo para el admin.
 - Errores (`HttpsError` / `details.code`)
@@ -373,7 +375,9 @@ interface BatchReport {
   invalid: InvalidRow[];
   warnings: Warning[];
   truncated: boolean;                 // listas recortadas a 500 entradas
+  changes: PlannedChange[];           // v1.3, aditivo (D-032): vista previa de lo que cambia/cambió; <= 500; no se guarda en imports
 }
+interface PlannedChange { row: number; sku: string; name: string; field: 'price'|'stock'|'discount'|'create'; from: Cell; to: Cell }
 ```
 Reglas comunes de los lotes
 - Máx. **1000 filas** por llamada (`TOO_MANY_ROWS`). Si el archivo tiene más, el cliente lo parte.
@@ -384,6 +388,12 @@ Reglas comunes de los lotes
 - Se guarda un reporte en `imports/{id}` (salvo `dryRun`). Errores del lote completo: `TOO_MANY_ROWS`, `EMPTY_BATCH`.
 - Cambio de `price`: recalcula `finalPrice`; si un descuento fijo existente deja de ser válido se elimina con advertencia `DISCOUNT_REMOVED`. Es la **única** vez que un lote toca un descuento.
 - **Stock vacío, dos casos distintos** (D-024 y D-018): (a) *importación inicial de la planilla* (`importCatalog` creando el producto): stock vacío o negativo pasa a 0 y se informa en `corrected`; (b) **cualquier otro caso** (`importStock`, `updateProductCommerce`, o una fila de `importCatalog` cuyo producto ya existe): una celda **vacía** es fila inválida `EMPTY_STOCK` (no se toca el producto; una celda en blanco no debe dejarlo sin stock por accidente), un texto no numérico es `INVALID_STOCK` y un negativo se corrige a 0 y consta en `corrected`.
+- **Productos eliminados (D-029)**: ningún lote revive un producto eliminado. Si el SKU existe con `deletedAt != null`, la fila es inválida con `PRODUCT_DELETED` (no se toca el documento, no se crea otro y el precio, stock, descuento o publicación no cambian). Para volver a usarlo hay que restaurarlo antes con `restoreProducts` (5.9). Vale para `importCatalog`, `importPrices`, `importStock`, `applyDiscount`, `setProductsPublished`, `createProduct` y `updateProductCommerce`.
+- **Extensiones v1.3 (D-032)**, todas aditivas (el cliente puede ignorarlas): `changes` en `BatchReport` (arriba); `discountRemoved: boolean` en la respuesta de `updateProductCommerce` (5.7); códigos nuevos de fila `INVALID_PRODUCT_DATA` (documento dañado; el producto no se toca) y `MISSING_NAME` (publicar sin nombre); advertencias nuevas `BARCODE_TOO_LONG` y `PARTIAL_FAILURE` (solo en el registro `imports` de un lote interrumpido).
+- **Auditoría (v1.3)**: `imports/{id}` se guarda **después** de las transacciones de productos, no es atómica con ellas. Si un trozo falla tras haber aplicado otros, se guarda un registro parcial con la advertencia `PARTIAL_FAILURE` y se relanza el error; repetir el lote es seguro.
+- **Números estrictos (v1.3)**: `"1,000"` y `"1,5"` son inválidos (ambiguos); `"1.000"` es 1000 (miles chilenos); `-0` no se guarda. El servidor manda sobre el prototipo del cliente.
+- **Slug único (v1.3)**: el slug debe ser único entre productos **vigentes** (los eliminados no cuentan). Si dos productos ya comparten slug, ninguno se publica hasta cambiar uno.
+- **Códigos de fila inválida (v1.3, lista completa)**: `INVALID_SKU`, `DUPLICATE_SKU`, `SKU_NOT_FOUND`, `PRODUCT_DELETED`, `INVALID_PRODUCT_DATA`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK`, `INVALID_ACTIVE`, `DISCOUNT_TOO_HIGH`, `ALREADY_DELETED`, `NOT_DELETED`, `NOT_ACTIVE`, `MISSING_NAME`, `MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG`, `MISSING_DESCRIPTION`, `INVALID_CATEGORY`, `MISSING_IMAGE`. En publicación, `code` es el primer problema y `message` los lista todos.
 - Revalidación: cada producto modificado dispara `onProductWritten` (sección 8). Un lote de 150 productos genera ≤150 revalidaciones agrupables; costo despreciable.
 
 ### 5.1 `importCatalog` (planilla de Control Farma, D-016, D-018)
@@ -403,8 +413,9 @@ type ImportCatalogResponse = BatchReport;
 - Fila nueva: crea el producto con `published = false`, `source = "controlfarma-xls"`, `sourceName = NOMBRE` tal cual, `name` propuesto en formato título (el admin lo corrige), `barcode`, `barcodeValid` (dígito verificador GTIN-8/12/13/14), `gtin` (solo si es válido y no empieza con 978/979; si empieza con 978/979 → advertencia `BARCODE_ISBN_RANGE`), `unitsPerPack`/`format`/`family` extraídos del nombre cuando es posible (`X 90`), `stock` (en la **importación inicial**, negativo o vacío → **0** y entrada en `corrected`, D-018), `reserved = 0`, `active` (`SI` → true, `NO` → false, otro valor → fila inválida `INVALID_ACTIVE`), `discount = null`, `finalPrice = price`, `slug = null`.
 - Fila existente (**reimportación**, D-024 / P13: Control Farma es la fuente de verdad de precio y stock): **pisa** `price` (+ `finalPrice`) y `stock`, y actualiza `active`, `barcode`/`barcodeValid`/`gtin`, `sourceName`, `importedAt`, `updatedAt`. **Nunca** toca el contenido (`name`, `description`, `shortDescription`, `images`, `slug`, `categoryId`, `seo`, `format`, `unitsPerPack`, `family`, `published`) ni los descuentos (`discount`; solo `DISCOUNT_REMOVED` si un descuento fijo queda inválido por el precio nuevo). Un `STOCK_ACTUAL` vacío en una fila existente es `EMPTY_STOCK` (fila inválida, el stock del producto no cambia). Stock de un producto existente: `stock = max(0, STOCK_ACTUAL - reserved)` (el archivo trae el físico; lo reservado por pedidos pendientes ya no está disponible).
 - `LABORATORIO` distinto de "NUTRA ELEMENTS" → advertencia `LABORATORY_MISMATCH`; no bloquea.
+- Fila cuyo SKU existe **eliminado** (`deletedAt != null`): fila inválida `PRODUCT_DELETED`; no se crea, no se actualiza ni se revive (D-029). Un producto nuevo se crea con `deletedAt = null` y `deletedBy = null`.
 - Idempotente por SKU: repetir la misma planilla da `unchanged`.
-- Errores de fila: `INVALID_SKU`, `DUPLICATE_SKU`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK` (texto no numérico), `EMPTY_STOCK` (solo en filas de productos existentes), `INVALID_ACTIVE`.
+- Errores de fila: `INVALID_SKU`, `DUPLICATE_SKU`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK` (texto no numérico), `EMPTY_STOCK` (solo en filas de productos existentes), `INVALID_ACTIVE`, `PRODUCT_DELETED`.
 
 ### 5.2 `importPrices` (Excel SKU + PRECIO)
 ```ts
@@ -412,7 +423,7 @@ interface PriceRow { SKU: Cell; PRECIO: Cell }
 interface ImportPricesRequest extends BatchOptions { rows: PriceRow[] }
 type ImportPricesResponse = BatchReport;
 ```
-- Solo actualiza productos **existentes**. SKU inexistente → inválida `SKU_NOT_FOUND` (no crea). Precio inválido → `INVALID_PRICE`. Recalcula `finalPrice` y aplica la regla de `DISCOUNT_REMOVED`. El nombre de las columnas del Excel: el cliente las busca sin distinguir mayúsculas ("SKU", "PRECIO"); si falta una → el cliente muestra el error antes de llamar.
+- Solo actualiza productos **existentes**. SKU inexistente → inválida `SKU_NOT_FOUND` (no crea). SKU eliminado → inválida `PRODUCT_DELETED`. Precio inválido → `INVALID_PRICE`. Recalcula `finalPrice` y aplica la regla de `DISCOUNT_REMOVED`. El nombre de las columnas del Excel: el cliente las busca sin distinguir mayúsculas ("SKU", "PRECIO"); si falta una → el cliente muestra el error antes de llamar.
 - Idempotente: mismo precio → `unchanged`.
 
 ### 5.3 `importStock` (Excel SKU + STOCK, con reporte de filas inválidas)
@@ -421,7 +432,7 @@ interface StockRow { SKU: Cell; STOCK: Cell }
 interface ImportStockRequest extends BatchOptions { rows: StockRow[] }
 type ImportStockResponse = BatchReport;
 ```
-- `STOCK` es el stock **físico**; se guarda `stock = max(0, STOCK - reserved)`. Entero 0–1.000.000. Celda **vacía** → fila inválida **`EMPTY_STOCK`** (D-024: **no** se pone 0, para no vaciar el inventario por una celda en blanco; difiere de la importación inicial de la planilla, que sigue D-018). Texto no numérico → `INVALID_STOCK`. Negativo → se corrige a 0 y consta en `corrected`. SKU inexistente → `SKU_NOT_FOUND`. Las filas inválidas se informan en el reporte y las demás se aplican.
+- `STOCK` es el stock **físico**; se guarda `stock = max(0, STOCK - reserved)`. Entero 0–1.000.000. Celda **vacía** → fila inválida **`EMPTY_STOCK`** (D-024: **no** se pone 0, para no vaciar el inventario por una celda en blanco; difiere de la importación inicial de la planilla, que sigue D-018). Texto no numérico → `INVALID_STOCK`. Negativo → se corrige a 0 y consta en `corrected`. SKU inexistente → `SKU_NOT_FOUND`. SKU eliminado → `PRODUCT_DELETED`. Las filas inválidas se informan en el reporte y las demás se aplican.
 - Recalcula `inStock`. Idempotente.
 - Limitación: un archivo de stock aplicado mientras hay compras en curso no pierde reservas, porque resta `reserved`. Si Control Farma ya descontó ventas pagadas que aún están `reserved`/`committed`, hay riesgo de doble descuento: PREGUNTA ABIERTA no bloqueante, a revisar con el jefe (ver sección 11, F6).
 
@@ -433,7 +444,7 @@ interface ApplyDiscountRequest extends BatchOptions {
 }
 type ApplyDiscountResponse = BatchReport;
 ```
-- `percent`: entero 1–99. `fixed`: entero ≥ 1 y **menor que el precio** de cada producto (si no, esa fila es inválida `DISCOUNT_TOO_HIGH`, porque el precio nunca baja de 0 ni llega a 0). SKU inexistente → `SKU_NOT_FOUND`.
+- `percent`: entero 1–99. `fixed`: entero ≥ 1 y **menor que el precio** de cada producto (si no, esa fila es inválida `DISCOUNT_TOO_HIGH`, porque el precio nunca baja de 0 ni llega a 0). SKU inexistente → `SKU_NOT_FOUND`. SKU eliminado → `PRODUCT_DELETED`.
 - **Reemplaza** el descuento anterior (no se acumulan). Calcula `finalPrice` con la fórmula de data-model.md 7.3. `null` deja `finalPrice = price`.
 - Aplicación parcial con reporte; `dryRun` disponible (la UI de selección múltiple muestra la vista previa con precio actual → nuevo). Guarda `imports` con `kind: "discount"`.
 - Idempotente: mismo descuento → `unchanged`.
@@ -444,7 +455,8 @@ type ApplyDiscountResponse = BatchReport;
 interface SetPublishedRequest extends BatchOptions { skus: Sku[]; published: boolean }   // 1..150
 type SetPublishedResponse = BatchReport;
 ```
-- Despublicar: siempre permitido.
+- Un SKU eliminado (`deletedAt != null`) es fila inválida `PRODUCT_DELETED`, tanto al publicar como al despublicar (ya está despublicado; restaurar primero, 5.9).
+- Despublicar: siempre permitido para productos vigentes.
 - Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `description` no vacía (`MISSING_DESCRIPTION`), `categoryId` existente y con `published == true` (`INVALID_CATEGORY`), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
 - Un producto publicado sin stock sigue siendo público (se muestra "agotado"); no se despublica solo.
 - Idempotente. Revalidación: `onProductWritten` revalida ficha, categoría, `/productos`, `/` y el sitemap.
@@ -453,15 +465,16 @@ type SetPublishedResponse = BatchReport;
 ```ts
 interface CreateProductRequest { sku: Sku; name: string; price: Clp; stock: number; barcode?: string }
 interface CreateProductResponse { sku: Sku; created: boolean }
+// Firma definitiva v1.3: sku string, name string, price entero CLP, stock entero 0..1.000.000, barcode opcional. Campos desconocidos -> INVALID_INPUT.
 ```
-- Crea con `published = false`, `source = "manual"`. SKU ya existente → `failed-precondition` / `SKU_EXISTS` (idempotente solo si los datos son idénticos: devuelve `created: false`). El resto de los campos de contenido se completa con escritura directa del admin.
+- Crea con `published = false`, `source = "manual"`. Registra `imports` con `kind: "create"` (`rows: 1`) solo si creó. SKU ya existente → `failed-precondition` / `SKU_EXISTS` (idempotente solo si los datos son idénticos: devuelve `created: false`). Si el SKU existe **eliminado** → `failed-precondition` / `PRODUCT_DELETED` (no se revive; restaurar con `restoreProducts`). Crea con `deletedAt = null` y `deletedBy = null`. El resto de los campos de contenido se completa con escritura directa del admin.
 
 ### 5.7 `updateProductCommerce` (precio o stock de un producto)
 ```ts
-interface UpdateProductCommerceRequest { sku: Sku; price?: Clp; stock?: number /* físico, como en importStock */ }
-interface UpdateProductCommerceResponse { sku: Sku; price: Clp; finalPrice: Clp; stock: number }
+interface UpdateProductCommerceRequest { sku: Sku; price?: Cell; stock?: Cell /* físico, como en importStock; Cell para que un stock vacío dé EMPTY_STOCK */ }
+interface UpdateProductCommerceResponse { sku: Sku; price: Clp; finalPrice: Clp; stock: number /* DISPONIBLE guardado = físico - reservado */; discountRemoved: boolean /* v1.3 */ }
 ```
-- Al menos uno de los dos campos. Mismas reglas que las importaciones. Errores: `SKU_NOT_FOUND` (`not-found`), `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK` (stock enviado vacío).
+- Al menos uno de los dos campos. Mismas reglas que las importaciones. Errores: `SKU_NOT_FOUND` (`not-found`), `PRODUCT_DELETED` (`failed-precondition`, el SKU está eliminado y no se modifica), `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK` (stock enviado vacío). Registra `imports` con `kind: "update"` (`rows: 1`) solo si algo cambió.
 
 ### 5.8 `grantAdmin` / `revokeAdmin`
 ```ts
@@ -469,7 +482,54 @@ interface AdminClaimRequest { email: string }
 interface AdminClaimResponse { uid: string; admin: boolean }
 ```
 - Asigna o quita `admin: true` con el Admin SDK. El usuario debe existir ya en Authentication (`USER_NOT_FOUND`). `revokeAdmin` sobre uno mismo → `failed-precondition` / `CANNOT_REVOKE_SELF`. El usuario debe volver a iniciar sesión (o refrescar el ID token) para que el claim surta efecto. Idempotente.
-- **El primer admin** no puede crearse con esta función (nadie es admin todavía): se hace con un script local de una sola ejecución que usa el Admin SDK (sin credenciales en el repo). En producción lo ejecuta devops/Carlos con confirmación. Lo escribo en 2B.7, no aquí.
+- **El primer admin** se crea con `claimAdmin` (5.8b, D-031), no con un script. `revokeAdmin` además invalida los refresh tokens del revocado. Errores propios: `NOT_ALLOWED`, `USER_NOT_FOUND`, `CANNOT_REVOKE_SELF`.
+
+### 5.8b `claimAdmin` (bootstrap del primer admin, D-031)
+```ts
+type ClaimAdminRequest = Record<string, never>;   // sin datos; se ignoran
+interface ClaimAdminResponse { admin: true; alreadyAdmin: boolean }
+```
+- Callable, requiere sesión (no exige claim), `enforceAppCheck`, 256 MiB / 30 s / 2 instancias.
+- Asigna `admin: true` con el Admin SDK **solo si** `token.email_verified === true` y el correo del token (en minúsculas y sin espacios) está en el parámetro `ADMIN_EMAILS` (`defineString`, correos separados por comas; no es secreto). Lista vacía = nadie puede reclamar. Conserva los demás claims.
+- Si el usuario ya es admin: `alreadyAdmin: true` y no escribe. Idempotente.
+- Si no cumple (fuera de la lista, correo sin verificar o sin correo): `permission-denied` / `NOT_ALLOWED`, mensaje fijo que no revela la lista.
+- Registra un log estructurado (uid, correo enmascarado, resultado); nunca el correo completo.
+- El cliente debe refrescar el token después de la llamada (`getIdToken(true)`) antes de usar el panel: login -> `claimAdmin` -> `getIdToken(true)` -> leer `claims.admin`.
+- Con el primer admin, el resto se gestiona con `grantAdmin`/`revokeAdmin` (5.8).
+
+---
+
+### 5.9 `deleteProducts` y `restoreProducts` (eliminación lógica con selección múltiple, D-029)
+
+Callable, `admin`, `enforceAppCheck`, 256 MiB / 60 s / 2 instancias. Eliminar **no borra el documento ni las imágenes** (data-model.md 2.1): fija `deletedAt` y `deletedBy` y despublica. La interfaz de selección múltiple confirma antes de llamar (más de 5 productos exigen escribir `ELIMINAR`); esa confirmación es solo del cliente, el servidor no la repite.
+
+```ts
+interface DeleteProductsRequest extends BatchOptions { skus: Sku[] }    // 1..200, SKU con la regex de siempre
+interface RestoreProductsRequest extends BatchOptions { skus: Sku[] }   // 1..200
+type DeleteProductsResponse = BatchReport;                              // mismo reporte que los otros lotes
+type RestoreProductsResponse = BatchReport;
+```
+- **Límite**: máximo **200 SKU** por llamada. Más de 200 → error global `invalid-argument` / `TOO_MANY_ROWS`; lista vacía → `EMPTY_BATCH`. Si la selección es mayor, el cliente parte la lista. Una escritura por transacción de hasta 200 productos (regla común de los lotes).
+- **Respuesta**: `BatchReport` (5, tipos comunes). Cada SKU cambiado cuenta en `updated`; los que ya estaban en el estado pedido salen como fila inválida (`ALREADY_DELETED` / `NOT_DELETED`, ver abajo) y `unchanged` queda en 0; `rows` = SKU recibidos; `row` en `invalid` es la posición del SKU en la lista (1-based). `dryRun` está disponible y no escribe nada ni crea documento. Se guarda `imports/{id}` con `kind: "delete"` o `"restore"` (no `dryRun`): **ese documento es el registro de auditoría** (quién, cuándo y qué SKU).
+- **Errores por fila** (van en `invalid`, el resto del lote se aplica):
+  | `details.code` | Función | Cuándo |
+  |---|---|---|
+  | `SKU_NOT_FOUND` | ambas | el SKU no existe |
+  | `ALREADY_DELETED` | `deleteProducts` | el producto ya tiene `deletedAt != null` (no se toca nada) |
+  | `NOT_DELETED` | `restoreProducts` | el producto ya está vigente (`deletedAt == null`) |
+  | `DUPLICATE_SKU` | ambas | SKU repetido en la lista (la segunda aparición) |
+  | `INVALID_SKU` | ambas | no cumple la regex del SKU |
+- **Error global**: `TOO_MANY_ROWS` (más de 200), `EMPTY_BATCH`, más los comunes de las callables (sin sesión, sin claim, App Check).
+- **`deleteProducts` efecto**, por producto vigente y en una transacción: `deletedAt = serverTimestamp`, `deletedBy = uid`, `published = false` (fuerza la despublicación aunque estuviera publicado; si ya estaba despublicado se mantiene), `updatedAt = now`. No cambia `active`, `stock`, `reserved`, precio, descuento, imágenes ni `slug`. Los pedidos con reserva pendiente de ese SKU no se alteran: el stock reservado se libera o confirma como siempre (la liberación escribe `stock`/`reserved` del documento eliminado, lo que es válido).
+- **`restoreProducts` efecto**, por producto eliminado: `deletedAt = null`, `deletedBy = null`, `published = false`, `updatedAt = now`. **Queda despublicado**: para volver a la tienda hay que publicarlo con `setProductsPublished` (que revalida todas las condiciones de publicación).
+- **Idempotencia**: el estado actual del documento decide. Repetir `deleteProducts` con los mismos SKU deja `ALREADY_DELETED` en cada fila y no escribe nada (`deletedAt` y `deletedBy` originales se conservan, nunca se pisan). Repetir `restoreProducts` da `NOT_DELETED`. Dos llamadas concurrentes sobre el mismo SKU: la transacción relee el estado, así que solo una aplica el cambio.
+- **Revalidación ISR** (sección 8): `onProductWritten` detecta el cambio de `published` y `deletedAt` y revalida la ficha `/productos/{slug}` (que pasa a 404), su categoría `/categorias/{categoryId}`, `/productos`, `/` y `/sitemap.xml`. Al restaurar no hay páginas que revalidar porque el producto sigue despublicado (la revalidación posterior ocurre al publicarlo).
+- Los productos eliminados siguen siendo legibles por el admin; los pedidos, las métricas y los reembolsos que referencian el SKU siguen funcionando (usan snapshots y el documento se conserva).
+- **Borrado físico**: no existe. Si Carlos lo pide más adelante, se agrega como "Vaciar papelera" solo para productos sin pedidos (D-029); cambio de contrato.
+
+---
+
+**Nota (v1.3, QA S-2)**: el admin puede seguir editando el **contenido** de un producto eliminado (campos de escritura directa de data-model.md 2.1); eso no lo revive ni lo publica. Los campos de comercio y `deletedAt`/`deletedBy` siguen siendo solo del servidor.
 
 ---
 
@@ -490,6 +550,7 @@ interface AdminClaimResponse { uid: string; admin: boolean }
 | `FLOW_API_KEY` | **secreto** | `functions/.secret.local` (no versionado; VERIFICAR) o `.env` | Secret Manager (`defineSecret`). Lo carga Carlos. En staging: credencial sandbox; en production: credencial de producción |
 | `FLOW_SECRET_KEY` | **secreto** | igual | Secret Manager |
 | `REVALIDATE_SECRET` | **secreto** | igual (cualquier valor aleatorio local) | Secret Manager |
+| `ADMIN_EMAILS` | parámetro (no secreto) | `functions/.env.local` | lista de correos de admins iniciales (minúsculas, separados por comas); `functions/.env.<alias>` o pregunta del CLI |
 | `APP_ENV` | parámetro | `local` | `staging` o `production` |
 | `SITE_URL` | parámetro | `http://localhost:3000` | URL de App Hosting o `https://nutraelements.cl` |
 | `FLOW_API_BASE` | parámetro | `https://sandbox.flow.cl/api` | sandbox en staging; producción en production |
@@ -516,10 +577,10 @@ Next.js usa el Admin SDK en el servidor con las credenciales por defecto de App 
 ## 8. Triggers y revalidación ISR bajo demanda (D-022)
 
 ### 8.1 Triggers
-- `onProductWritten` (`onDocumentWritten("products/{sku}")`): compara `before` y `after`. Solo si cambió algo **visible en el sitio** (`name`, `slug`, `description`, `shortDescription`, `categoryId`, `images`, `price`, `discount`, `finalPrice`, `inStock`, `published`, `active`, `format`, `unitsPerPack`, `family`, `seo`, `gtin`) llama a revalidar. Los cambios solo en `stock`/`reserved` sin cambiar `inStock` **no** revalidan (evita una revalidación por cada compra). Rutas: `/productos/{slug}` (el actual y el anterior si cambió o se despublicó), `/categorias/{categoryId}` (y la anterior), `/productos`, `/`, `/sitemap.xml`.
+- `onProductWritten` (`onDocumentWritten("products/{sku}")`): compara `before` y `after`. Solo si cambió algo **visible en el sitio** (`name`, `slug`, `description`, `shortDescription`, `categoryId`, `images`, `price`, `discount`, `finalPrice`, `inStock`, `published`, `active`, `deletedAt`, `format`, `unitsPerPack`, `family`, `seo`, `gtin`) llama a revalidar. Un producto que pasa a eliminado (`deletedAt` deja de ser null, que a la vez fuerza `published = false`) revalida su ficha `/productos/{slug}` (ahora 404), su categoría y el listado; un producto eliminado que sigue eliminado no revalida nada. Los cambios solo en `stock`/`reserved` sin cambiar `inStock` **no** revalidan (evita una revalidación por cada compra). Rutas: `/productos/{slug}` (el actual y el anterior si cambió o se despublicó), `/categorias/{categoryId}` (y la anterior), `/productos`, `/`, `/sitemap.xml`.
 - `onCategoryWritten`: rutas `/categorias/{id}`, `/productos`, `/`, `/sitemap.xml`.
 - `onSettingsPublicWritten`: cambia el umbral de envío gratis o el retiro → revalidar `/`, `/productos`, `/preguntas-frecuentes`, `/contacto` y `/productos/*` mediante una **etiqueta** (`tags: ["settings"]`; las fichas con la oferta de envío en el JSON-LD usan esa etiqueta).
-- Los triggers son at-least-once: la revalidación es idempotente. Si la llamada a Next falla, se registra y **no se reintenta** (el vencimiento normal de ISR corrige después; ver `revalidate` de las páginas, definido por nextjs-frontend). Ningún trigger escribe en Firestore.
+- Los triggers son at-least-once: la revalidación es idempotente. Si la llamada a Next falla, se registra y no se propaga el error. **Reintento acotado (v1.3, D-032)**: 3 intentos dentro de la misma ejecución (esperas de 0,5 s y 1,5 s, timeout de 5 s por intento, timestamp nuevo en cada uno), solo ante error de red, timeout, 429 o 5xx; el trigger no usa `retry` de la plataforma. Si los 3 fallan, el vencimiento normal de ISR corrige después (ver `revalidate` de las páginas, definido por nextjs-frontend). Ningún trigger escribe en Firestore.
 
 ### 8.2 Ruta de Next.js que recibe la revalidación
 
@@ -562,7 +623,19 @@ Cada pieza lleva su test; ninguna pasa a QA sin ellos en verde.
 10b. **RUT** (`createOrder`): tabla de casos de módulo 11 (dígito verificador 0-9 y K, con y sin puntos, `k` minúscula, mal dígito, vacío, muy corto o con letras) → `INVALID_RUT`; el valor guardado queda normalizado `12345678-K`; el RUT no aparece en los logs (se espía `logger`).
 11. **Lotes de Excel**: filas inválidas se informan y no se aplican; importación inicial D-018 (stock -5 y vacío → 0 con `corrected`); `importStock` con celda vacía → `EMPTY_STOCK` (producto sin cambios) y con negativo → 0 corregido; una fila existente de `importCatalog` con stock vacío → `EMPTY_STOCK`; reimportar pisa `price` y `stock`, es idempotente y no toca `name`/`slug`/`images`/`categoryId`/`published`/`discount`; `DISCOUNT_REMOVED`; `applyDiscount` con `dryRun`.
 12. **Publicación**: cada validación de `setProductsPublished` falla con su código; slug duplicado.
-13. **Autorización**: cada función admin (incluida `recordManualRefund`) con (a) sin sesión, (b) sesión sin claim, (c) admin. App Check se prueba en integración con el emulador (token de depuración).
+12b. **Eliminación lógica (`deleteProducts` / `restoreProducts`, D-029)**:
+   - (a) eliminar un producto publicado → `deletedAt` con fecha, `deletedBy` = uid, `published == false`; el documento y `images` siguen; `stock`, `price`, `active` intactos; `imports` con `kind: "delete"` y `createdBy`.
+   - (b) eliminar un lote mixto (existente, inexistente, ya eliminado, repetido, SKU inválido) → solo los válidos se aplican; las filas inválidas salen con `SKU_NOT_FOUND`, `ALREADY_DELETED`, `DUPLICATE_SKU` e `INVALID_SKU`.
+   - (c) 200 SKU pasan; 201 → `TOO_MANY_ROWS` sin cambios; lista vacía → `EMPTY_BATCH`.
+   - (d) idempotencia: repetir `deleteProducts` 3 veces, también en paralelo → un solo `deletedAt`/`deletedBy` (los originales no se pisan) y `ALREADY_DELETED` en el resto; repetir `restoreProducts` → `NOT_DELETED`.
+   - (e) `restoreProducts` → `deletedAt == null`, `deletedBy == null`, `published == false` (no vuelve publicado); restaurar un vigente → `NOT_DELETED`; SKU inexistente → `SKU_NOT_FOUND`.
+   - (f) `dryRun: true` → reporte sin escribir ni crear `imports`.
+   - (g) un SKU eliminado en `importCatalog`, `importPrices`, `importStock`, `applyDiscount`, `setProductsPublished` (publicar y despublicar), `createProduct` y `updateProductCommerce` → `PRODUCT_DELETED`, sin cambiar precio, stock, descuento, `published` ni `deletedAt`; el resto del lote se aplica.
+   - (h) `createOrder` con un SKU eliminado → `PRODUCT_UNAVAILABLE`, igual que con uno no publicado, y sin descontar stock del resto del carrito (transacción completa).
+   - (i) un pedido existente de un SKU eliminado sigue siendo legible, y `recordManualRefund` con `restock: true` sobre ese pedido repone stock en el documento eliminado sin revivirlo.
+   - (j) autorización: sin sesión → `UNAUTHENTICATED`, sin claim → `NOT_ADMIN`, admin → OK.
+   - (k) el trigger `onProductWritten` llama a revalidar con la ficha y la categoría cuando un producto publicado se elimina, y no llama cuando solo cambia `stock` de un producto eliminado.
+13. **Autorización**: cada función admin (incluidas `recordManualRefund`, `deleteProducts` y `restoreProducts`) con (a) sin sesión, (b) sesión sin claim, (c) admin. App Check se prueba en integración con el emulador (token de depuración).
 14. **Revalidación**: unidad de la firma HMAC (válida, adulterada, expirada) y de la lista blanca; el trigger solo llama cuando cambia un campo visible.
 
 ---
@@ -576,6 +649,8 @@ Cada pieza lleva su test; ninguna pasa a QA sin ellos en verde.
 - Lecturas públicas con Admin SDK en el servidor (ISR); sin listeners en el sitio público; admin con paginación.
 - Checkout: campo **RUT obligatorio** (validar módulo 11 en el cliente también; el servidor es la autoridad y responde `INVALID_RUT`); no hay razón social ni giro.
 - Subida de imágenes a Storage directamente desde el navegador (admin), **comprimidas a WebP con el lado largo ≤ 1600 px y máx. 2 MiB**, y lectura de Excel en el navegador.
+- Admin (D-029): selección múltiple con checkbox y "seleccionar todos" sobre la lista filtrada; `deleteProducts({skus})` con diálogo de confirmación (cuántos se eliminan; más de 5 exige escribir `ELIMINAR`); máximo 200 por llamada (el cliente parte la selección); mostrar el reporte por fila (`ALREADY_DELETED`, `SKU_NOT_FOUND`, etc.); filtro "Eliminados" (`where("deletedAt","!=",null)`) con la acción "Restaurar" (`restoreProducts`; el producto vuelve despublicado); la lista normal excluye eliminados (`deletedAt == null`). Las importaciones muestran `PRODUCT_DELETED` como fila inválida.
+- Consultas públicas (si alguna usa el SDK cliente) y todas las del servidor de Next.js: agregar `where("deletedAt","==",null)`; una ficha con `deletedAt != null` responde 404.
 - Admin: etiqueta "Reembolsado" para `refunded`; formulario de `recordManualRefund` (monto, medio, fecha, nota, casilla "reponer stock"); retroceder el estado logístico pide un motivo.
 
 ---

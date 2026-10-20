@@ -10,8 +10,7 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 - Servicios de Google Cloud: Secret Manager y otros según se necesite
 - Pagos: Flow (sandbox en dev, producción en prod), integrado mediante Cloud Functions. Credenciales en Secret Manager; en local, en `.env` (no versionado)
 - Correos: el MVP no envía correos (D-008)
-- Entornos: development y production, cada uno con su propio proyecto de Firebase. Alias en .firebaserc: `dev` → `nutraelementsdev` (plan Spark) y `prod` → `nutraelements` (plan Blaze). Ramas: develop → dev y main → prod
-  - Dev en Spark: todo el desarrollo y las pruebas se hacen en el Emulator Suite. No hay Functions, Storage ni App Hosting en la nube de dev (D-021)
+- Entornos: un solo proyecto de Firebase de trabajo, `nutraelements` (plan Blaze), por decisión de Carlos (D-030). Alias en .firebaserc: `prod` → `nutraelements`. `nutraelementsdev` y `nutraelementsprod` están sin uso. Rama de trabajo: develop; el sitio se publica desde main. Hasta el lanzamiento funciona como staging: noindex, Flow sandbox y sin dominio. **Cada despliegue a este proyecto requiere la confirmación explícita de Carlos sobre esa acción concreta**
 - Región: `us-east4` para App Hosting, Firestore, Functions y Storage, tanto en dev como en prod (D-010)
 - Renderizado: el catálogo y las páginas públicas son estáticos con ISR y revalidación bajo demanda; carrito, checkout y admin son dinámicos (D-022)
 

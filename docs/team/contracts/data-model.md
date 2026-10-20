@@ -1,7 +1,7 @@
 # Contrato del modelo de datos (Firestore y Storage) — Nutra Elements
 
-Tarea 2A.1. Autor: firebase-architect. Estado: **v1.1 — D-025 aplicada (2026-10-14)** (v1 aprobada por tech-lead el 2026-10-14, D-024). Es el contrato con nextjs-frontend: no se cambia sin aprobación.
-Decisiones que lo respaldan: D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-016, D-018, D-020, D-021, D-022, D-023, D-024. Requisitos de negocio: DESCUBRIMIENTO.md.
+Tarea 2A.1. Autor: firebase-architect. Estado: **v1.3 — D-032 aplicada (2026-10-19)** (v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Es el contrato con nextjs-frontend: no se cambia sin aprobación.
+Decisiones que lo respaldan: D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-027, D-029. Requisitos de negocio: DESCUBRIMIENTO.md.
 Contrato hermano (funciones): [functions.md](functions.md).
 
 Convenciones
@@ -20,7 +20,7 @@ Convenciones
 
 | Ruta | ID del documento | Para qué | Quién escribe |
 |---|---|---|---|
-| `products/{sku}` | SKU = ID de Control Farma, **string** (D-016) | Catálogo, precio, descuento y stock | Servidor (precio, descuento, stock, publicación); admin directo (solo campos de contenido) |
+| `products/{sku}` | SKU = ID de Control Farma, **string** (D-016) | Catálogo, precio, descuento y stock | Servidor (precio, descuento, stock, publicación, eliminación lógica); admin directo (solo campos de contenido) |
 | `categories/{categoryId}` | slug de la categoría | Categorías | Admin directo |
 | `orders/{orderNumber}` | `NE-000123` (D-007) | Pedidos con snapshot de precios y reserva | Solo servidor |
 | `counters/orders` | fijo `orders` | Contador del número de pedido (el primero es NE-000001) | Solo servidor |
@@ -65,21 +65,25 @@ ID del documento = `sku`. Siempre texto (`"2427831"`), nunca número, para no pe
 | `barcode` | string \| null | no | CODIGO_BARRA tal cual | Servidor, en importación |
 | `barcodeValid` | bool | sí | dígito verificador GTIN-8/12/13/14 correcto | Servidor, en importación |
 | `gtin` | string \| null | no | solo si `barcodeValid` y **no** empieza con 978 o 979 (ISBN). El JSON-LD usa `gtin` y omite el campo si es null | Servidor, en importación |
-| `format` | string \| null | no | enum abierto, hoy `"capsulas"` | Servidor propone al importar; admin directo |
+| `format` | string \| null | no | enum abierto, hoy `"capsulas"`. Si es string: **1 a 40 caracteres** (D-027) | Servidor propone al importar; admin directo |
 | `unitsPerPack` | int \| null | no | 1–1000 (30, 60, 90, 120…). Se extrae de "X 90" en el nombre | Servidor propone; admin directo |
 | `family` | string \| null | no | slug que agrupa los tamaños de un mismo producto (ej. `citrato-de-magnesio`). Cada tamaño es su propio producto y SKU. Sin variantes dentro de un producto | Servidor propone; admin directo |
 | `seo` | map \| null | no | `{title?: string ≤ 70, description?: string ≤ 170}` | Admin directo |
 | `source` | string | sí | `"controlfarma-xls"` o `"manual"` | Servidor |
 | `importedAt` | Timestamp \| null | no | última importación que lo tocó | Servidor |
+| `deletedAt` | Timestamp \| null | sí | `null` = producto vigente. Si no es null, el producto está **eliminado** (eliminación lógica, D-029). **Todo producto lo trae explícito** (`null` al crear); las reglas y las consultas públicas lo necesitan presente. Invariante: `deletedAt != null` ⇒ `published == false` | Solo servidor (`deleteProducts` / `restoreProducts`). El cliente nunca lo escribe, ni el admin |
+| `deletedBy` | string (uid) \| null | sí | uid del admin que eliminó; `null` si vigente o restaurado | Solo servidor |
 | `createdAt` | Timestamp | sí | | Servidor |
 | `updatedAt` | Timestamp | sí | | Servidor o admin directo (regla: `== request.time`) |
 
 `brand` no se guarda: es la constante "Nutra Elements" (todos los productos son de línea propia) y va en el JSON-LD desde código. Los campos de reseñas (`ratingAvg`, `reviewCount`) **no existen en el MVP** (D-014): el frontend no emite `aggregateRating`. Cuando haya reseñas reales (Fase 3) se agregan.
 
 Notas
-- El documento completo es de lectura pública cuando `published && active` (ver la matriz). Eso expone `stock` y `reserved`; es aceptable (el stock de un suplemento no es sensible) y evita duplicar documentos. Si Carlos prefiere ocultarlos, se parte el documento (cambio de contrato).
-- La consulta pública **debe** incluir `where("published","==",true)` y `where("active","==",true)`; las reglas rechazan consultas sin esas condiciones.
-- Un producto **no se borra**: se despublica (`published=false`) o se desactiva. Los pedidos tienen snapshot, pero el SKU debe seguir resolviendo para métricas y reimportaciones.
+- El documento completo es de lectura pública cuando `published && active && deletedAt == null` (ver la matriz). Eso expone `stock` y `reserved`; es aceptable (el stock de un suplemento no es sensible) y evita duplicar documentos. Si Carlos prefiere ocultarlos, se parte el documento (cambio de contrato).
+- La consulta pública **debe** incluir `where("published","==",true)`, `where("active","==",true)` y `where("deletedAt","==",null)`; las reglas rechazan consultas sin esas condiciones. Para que `deletedAt == null` encuentre el documento, el campo debe existir con valor `null` (un documento sin el campo no coincide): el servidor lo escribe siempre al crear y la migración de datos previos debe agregarlo.
+- **Eliminación lógica, D-029** (reemplaza la regla anterior "un producto no se borra", D-027): eliminar es una operación del servidor (`deleteProducts`) que fija `deletedAt = now`, `deletedBy = uid` y fuerza `published = false`. El documento y sus imágenes de Storage **se conservan**, para que los pedidos, las métricas y el historial sigan resolviendo el SKU. No existe borrado físico del documento desde el cliente. Un producto eliminado: desaparece de la tienda y de la lista normal del admin, su ficha da 404 tras la revalidación, y aparece en el filtro "Eliminados" del admin. `restoreProducts` pone `deletedAt = null`, `deletedBy = null` y lo deja **despublicado** (`published = false`); publicarlo de nuevo es un paso aparte con las validaciones de `setProductsPublished`. Un SKU eliminado **no se revive** por importaciones ni por `createProduct` (sale `PRODUCT_DELETED`, ver functions.md). Los pedidos existentes no cambian (tienen snapshot). Un SKU creado por error se elimina con este mecanismo.
+- (v1.3, QA S-2) El admin puede seguir editando el **contenido** de un producto eliminado (campos de escritura directa); no lo revive ni lo publica.
+- `active` no se toca al eliminar: `deletedAt` es independiente de `active`.
 
 Ejemplo (SKU, nombre y precio reales de la planilla; el código de barras es **ficticio**. El SKU 2427844 es la Vitamina B12 x 90 caps, categoría `vitaminas`)
 ```json
@@ -110,6 +114,8 @@ Ejemplo (SKU, nombre y precio reales de la planilla; el código de barras es **f
   "seo": null,
   "source": "controlfarma-xls",
   "importedAt": "<Timestamp>",
+  "deletedAt": null,
+  "deletedBy": null,
   "createdAt": "<Timestamp>",
   "updatedAt": "<Timestamp>"
 }
@@ -150,12 +156,14 @@ interface ProductDoc {
   seo: { title?: string; description?: string } | null;
   source: 'controlfarma-xls' | 'manual';
   importedAt: Timestamp | null;
+  deletedAt: Timestamp | null;   // solo servidor (D-029); null = vigente
+  deletedBy: string | null;      // uid del admin; solo servidor
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 ```
 
-Escrituras directas del admin sobre `products` (regla `update` con `diff().affectedKeys().hasOnly([...])`): solo `name`, `description`, `shortDescription`, `categoryId`, `images`, `slug` (si no está publicado), `format`, `unitsPerPack`, `family`, `seo` y `updatedAt`. **Todo lo demás (precio, descuento, stock, publicación, activo) solo lo cambian las Functions.** Límite de las reglas: no pueden validar cada elemento de `images` (no hay bucles); validan tipo y tamaño (≤ 8), y el admin es de confianza. La Function de publicación sí revisa cada imagen.
+Escrituras directas del admin sobre `products` (regla `update` con `diff().affectedKeys().hasOnly([...])`): solo `name`, `description`, `shortDescription`, `categoryId`, `images`, `slug` (si no está publicado), `format`, `unitsPerPack`, `family`, `seo` y `updatedAt`. **Todo lo demás (precio, descuento, stock, publicación, activo, `deletedAt`, `deletedBy`) solo lo cambian las Functions.** Límite de las reglas: no pueden validar cada elemento de `images` (no hay bucles); validan tipo y tamaño (≤ 8), y el admin es de confianza. La Function de publicación sí revisa cada imagen.
 
 ---
 
@@ -302,13 +310,13 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 
 ### 2.5 `settings/public` y `settings/private`
 
-`settings/public` (lectura pública; escribe el admin directo con validación en reglas):
+`settings/public` (lectura pública solo con `get`, **sin `list`**, D-027; escribe el admin directo con validación en reglas):
 
 | Campo | Tipo | Oblig. | Validación |
 |---|---|---|---|
 | `shippingFee` | int | sí | 0–100.000. Por defecto **3990** |
 | `freeShippingThreshold` | int \| null | sí | `null` = **no hay envío gratis** (valor inicial, D-datos confirmados). Si es entero: 1–10.000.000. Se compara con `>=` contra el subtotal con descuentos (ver 7.4) |
-| `communes` | array de `{code, name}` | sí | lista de comunas con despacho. `code`: slug sin tildes. Se siembra con las **52 comunas de la Región Metropolitana** (ver 7.5). El servidor valida `communeCode` contra esta lista |
+| `communes` | array de `{code, name}` | sí | **1 a 400 elementos** (D-027; las reglas validan el tamaño, no recorren cada elemento). Lista de comunas con despacho. `code`: slug sin tildes. Se siembra con las **52 comunas de la Región Metropolitana** (ver 7.5). El servidor valida `communeCode` contra esta lista |
 | `pickup` | map | sí | `{enabled: bool, address: string ≤200, hours: string ≤200}`. Valor inicial: Av. Concha y Toro 180, Puente Alto; lunes a viernes 9:00 a 20:00 (horario confirmado el 2026-10-14) |
 | `maxQtyPerItem` | int | sí | 1–100, por defecto 10 |
 | `updatedAt` | Timestamp | sí | `== request.time` |
@@ -319,7 +327,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 |---|---|---|---|
 | `reservationMinutes` | map `{flow: int, transfer: int}` | sí | `flow`: 5–240 (por defecto **30**). `transfer`: 60–10080 (por defecto **2880 = 48 h**). Pendiente de confirmar por el jefe (D-006, PREGUNTA ABIERTA 2); son valores configurables |
 | `bank` | map | sí | `{bankName, accountType, accountNumber, holderName, holderRut, contactEmail?}` strings ≤100. **Datos de prueba hasta que Carlos entregue los reales.** No son secretos de acceso, pero se entregan solo al comprador con transferencia vía `getOrderStatus` |
-| `orderNumberStart` | int | sí | ≥ 1, por defecto 1 (primer pedido `NE-000001`) |
+| `orderNumberStart` | int | sí | 1 a **100.000.000** (D-027), por defecto 1 (primer pedido `NE-000001`) |
 | `limits` | map | sí | Límites anti-abuso, valores iniciales configurables (D-024): `{createOrderPerIpPer10Min: int 1..100 (5), pendingOrdersPerEmail: int 1..50 (3), orderStatusPerIpPer10Min: int 1..1000 (30), orderStatusFailuresPerOrder: int 1..100 (10)}`. Si falta un valor, la Function usa el inicial |
 | `updatedAt` | Timestamp | sí | |
 
@@ -398,14 +406,14 @@ Reporte de cada importación u operación masiva del admin (D-018). Lectura solo
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `kind` | `"catalog"\|"price"\|"stock"\|"discount"\|"publish"` | |
+| `kind` | `"catalog"\|"price"\|"stock"\|"discount"\|"publish"\|"delete"\|"restore"\|"create"\|"update"` | `create` y `update` (v1.3, D-032): auditoría de `createProduct` y `updateProductCommerce` (`rows: 1`, solo si algo cambió). `delete` y `restore`: lotes de `deleteProducts` / `restoreProducts` (D-029); son el registro de auditoría de las eliminaciones (`createdBy` = admin) |
 | `dryRun` | bool | si fue vista previa, no se guarda reporte salvo que el admin lo pida (ver functions.md); por defecto las vistas previas **no** crean documento |
 | `fileName` | string \| null | informado por el cliente, solo para mostrar |
 | `rows` | int | filas recibidas |
 | `created`, `updated`, `unchanged`, `skipped` | int | contadores |
 | `corrected` | array `{row, sku, field, from, to}` | correcciones: stock negativo → 0 en cualquier lote; vacío → 0 **solo** al crear productos en `importCatalog` (importación inicial, D-018, ver functions.md 5.1). Una celda vacía en `importStock` o en una fila ya existente es inválida (`EMPTY_STOCK`) |
 | `invalid` | array `{row, sku?, code, message}` | filas rechazadas |
-| `warnings` | array `{sku?, code, message}` | por ejemplo códigos 978/979, `DISCOUNT_REMOVED` (descuento fijo que quedó inválido por un precio nuevo), laboratorio distinto |
+| `warnings` | array `{sku?, code, message}` | por ejemplo códigos 978/979, `BARCODE_TOO_LONG`, `PARTIAL_FAILURE` (lote interrumpido: el registro se guarda tras las transacciones y refleja lo aplicado), `DISCOUNT_REMOVED` (descuento fijo que quedó inválido por un precio nuevo), laboratorio distinto |
 | `truncated` | bool | `true` si alguna lista pasó de 500 entradas (límite de 1 MiB por documento) |
 | `createdBy` | string | uid del admin |
 | `createdAt` | Timestamp | |
@@ -459,11 +467,11 @@ Por defecto **todo denegado**. "Servidor" = Admin SDK (no pasa por reglas, por e
 
 | Ruta | Lectura público | Lectura admin | Crear | Actualizar | Borrar |
 |---|---|---|---|---|---|
-| `products/{sku}` | **sí, solo** si `published == true && active == true` (consulta debe incluir ambos filtros) | sí, todos | servidor | admin directo solo los campos de contenido listados en 2.1; el resto, servidor | nadie desde cliente |
+| `products/{sku}` | **sí, solo** si `published == true && active == true && deletedAt == null` (la consulta debe incluir los tres filtros). Un producto eliminado no es legible públicamente | sí, todos (incluidos los eliminados) | servidor | admin directo solo los campos de contenido listados en 2.1; el resto (incluidos `deletedAt` y `deletedBy`), servidor | nadie desde cliente (la eliminación es lógica, D-029) |
 | `categories/{id}` | sí, solo `published == true` | sí | admin (con validación) | admin (con validación; `slug` inmutable) | nadie desde cliente |
 | `orders/{id}` | **no** | sí (`get` y `list`) | servidor | servidor | nadie |
 | `counters/{id}` | **no** | **no** | servidor | servidor | nadie |
-| `settings/public` | sí | sí | admin | admin (con validación) | nadie |
+| `settings/public` | sí, solo `get` (sin `list`) | sí | admin | admin (con validación) | nadie |
 | `settings/private` | **no** | sí | admin | admin (con validación) | nadie |
 | `metrics/**` | **no** | sí | servidor | servidor | nadie |
 | `imports/{id}` | **no** | sí | servidor | servidor | nadie |
@@ -474,7 +482,7 @@ Por defecto **todo denegado**. "Servidor" = Admin SDK (no pasa por reglas, por e
 Reglas que el contrato exige (cada una con su test, sección 9)
 1. El cliente público **nunca** escribe en `orders`, `counters`, `products`, `metrics`, `imports`, `paymentEvents`.
 2. Un usuario autenticado **sin** claim `admin` equivale a un público (no hay cuentas de cliente; si alguien se registra en Auth, no obtiene nada).
-3. Admin no puede escribir `price`, `discount`, `finalPrice`, `stock`, `reserved`, `inStock`, `active`, `published` ni `sku` en `products`.
+3. Admin no puede escribir `price`, `discount`, `finalPrice`, `stock`, `reserved`, `inStock`, `active`, `published`, `deletedAt`, `deletedBy` ni `sku` en `products`. Ningún cliente escribe `deletedAt` ni `deletedBy`.
 4. `slug` de un producto publicado no cambia por escritura directa.
 5. `updatedAt`/`createdAt` deben ser `request.time`.
 6. Los tipos y rangos de las tablas de arriba se validan en las reglas para lo que el admin escribe directo (`products` contenido, `categories`, `settings`).
@@ -508,15 +516,18 @@ Los índices de un solo campo son automáticos. El estado `refunded` no necesita
 
 | Colección | Campos | Consulta que sirve |
 |---|---|---|
-| `products` | `published ASC, active ASC, name ASC` | catálogo público completo (/productos) |
-| `products` | `published ASC, active ASC, categoryId ASC, name ASC` | /categorias/[slug] |
-| `products` | `published ASC, active ASC, family ASC, unitsPerPack ASC` | tamaños de un mismo producto |
-| `products` | `published ASC, stock ASC` | admin: publicados sin stock (`stock == 0`) |
-| `products` | `stock ASC, name ASC` | admin: todos sin stock (`stock == 0`) |
+| `products` | `published ASC, active ASC, deletedAt ASC, name ASC` | catálogo público completo (/productos) |
+| `products` | `published ASC, active ASC, deletedAt ASC, categoryId ASC, name ASC` | /categorias/[slug] |
+| `products` | `published ASC, active ASC, deletedAt ASC, family ASC, unitsPerPack ASC` | tamaños de un mismo producto |
+| `products` | `published ASC, stock ASC` | admin: publicados sin stock (`stock == 0`); no necesita `deletedAt` porque un eliminado nunca está publicado |
+| `products` | `deletedAt ASC, stock ASC, name ASC` | admin: todos los vigentes sin stock (`deletedAt == null`, `stock == 0`) |
+| `products` | `deletedAt ASC, name ASC` | admin: lista normal (`deletedAt == null`, orden por nombre) |
 | `orders` | `paymentStatus ASC, reservedUntil ASC` | job de reservas vencidas |
 | `orders` | `paymentStatus ASC, createdAt DESC` | admin: pedidos por estado de pago |
 | `orders` | `fulfillmentStatus ASC, createdAt DESC` | admin: pedidos por estado logístico |
 | `orders` | `paymentMethod ASC, paymentStatus ASC, createdAt DESC` | admin: transferencias por confirmar |
+
+Cambios de la v1.2 (D-029): las tres consultas públicas ganan el filtro `deletedAt == null`, así que sus índices **se reemplazan** por versiones con `deletedAt` (un índice sin ese campo ya no sirve a la consulta); `stock ASC, name ASC` se reemplaza por `deletedAt ASC, stock ASC, name ASC`; se agrega `deletedAt ASC, name ASC` para la lista normal del admin. El filtro "Eliminados" del admin usa `where("deletedAt","!=",null)` (opcionalmente `orderBy("deletedAt","desc")`), que es de un solo campo y usa el índice automático. Si el admin carga la lista normal completa (≤150 documentos) y filtra en cliente, el índice `deletedAt, name` no hace falta. Los índices viejos hay que **quitarlos** de `firestore.indexes.json` al aplicar esto (el despliegue lo hace devops, con confirmación en prod).
 
 Sin índice compuesto: listar `orders orderBy createdAt desc`, `imports orderBy createdAt desc`, `slug == X`, `metrics/products/items orderBy unitsSold desc`.
 Política TTL (campo `expiresAt`) sobre `idempotencyKeys` y `rateLimits`: se declara como `fieldOverrides` con `ttl: true` en `firestore.indexes.json` (sintaxis por verificar al implementar).
@@ -525,15 +536,17 @@ Política TTL (campo `expiresAt`) sobre `idempotencyKeys` y `rateLimits`: se dec
 {
   "indexes": [
     { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
+      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "deletedAt", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
     { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "categoryId", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
+      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "deletedAt", "order": "ASCENDING" }, { "fieldPath": "categoryId", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
     { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "family", "order": "ASCENDING" }, { "fieldPath": "unitsPerPack", "order": "ASCENDING" } ] },
+      { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "deletedAt", "order": "ASCENDING" }, { "fieldPath": "family", "order": "ASCENDING" }, { "fieldPath": "unitsPerPack", "order": "ASCENDING" } ] },
     { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "published", "order": "ASCENDING" }, { "fieldPath": "stock", "order": "ASCENDING" } ] },
     { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
-      { "fieldPath": "stock", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
+      { "fieldPath": "deletedAt", "order": "ASCENDING" }, { "fieldPath": "stock", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "deletedAt", "order": "ASCENDING" }, { "fieldPath": "name", "order": "ASCENDING" } ] },
     { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "reservedUntil", "order": "ASCENDING" } ] },
     { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
@@ -674,9 +687,9 @@ Un `communeCode` fuera de la lista se rechaza con `INVALID_COMMUNE`.
 ## 9. Qué se prueba con el Emulator Suite (tests de reglas)
 
 Cada regla de la matriz tiene al menos un test positivo y uno negativo. Lista mínima:
-- Público: lee producto publicado y activo; **no** lee uno sin publicar, ni una consulta sin los filtros; no lee `orders`, `counters`, `settings/private`, `metrics`, `imports`, `paymentEvents`, `idempotencyKeys`, `rateLimits`; no escribe nada.
+- Público: lee producto publicado y activo con `deletedAt == null`; **no** lee uno sin publicar, ni uno eliminado (`deletedAt != null`, aunque tuviera `published` y `active` en true), ni una consulta sin los tres filtros (`published`, `active`, `deletedAt`); no lee `orders`, `counters`, `settings/private`, `metrics`, `imports`, `paymentEvents`, `idempotencyKeys`, `rateLimits`; no escribe nada.
 - Autenticado sin claim: igual que público.
-- Admin: lee todo lo que la matriz indica; actualiza contenido de un producto; **falla** al escribir `price`, `stock`, `discount`, `finalPrice`, `published`; falla al cambiar `slug` de uno publicado; no crea ni borra productos; no escribe `orders`/`counters`/`metrics`; valida tipos y rangos de `categories` y `settings`; `updatedAt` distinto de `request.time` falla.
+- Admin: lee todo lo que la matriz indica; actualiza contenido de un producto; **falla** al escribir `price`, `stock`, `discount`, `finalPrice`, `published`, `deletedAt`, `deletedBy`; lee productos eliminados; falla al cambiar `slug` de uno publicado; no crea ni borra productos; no escribe `orders`/`counters`/`metrics`; valida tipos y rangos de `categories` y `settings`; `updatedAt` distinto de `request.time` falla.
 - Admin no puede escribir `refund`, `statusHistory` ni `paymentStatus` en `orders`.
 - Ruta no declarada: denegada.
 - Storage: público lee imagen de producto; solo admin sube; rechaza `image/svg+xml`, 2 MiB + 1 byte (2 MiB exactos pasa) y nombres fuera del patrón; rutas no declaradas denegadas.
