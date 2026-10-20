@@ -1,0 +1,346 @@
+/* Estilos compartidos de la tienda pública. Solo tokens de globals.css. */
+
+.page {
+  padding-block: var(--space-4) var(--space-6);
+}
+
+.pageHead {
+  margin-block: var(--space-3) var(--space-4);
+}
+
+.lead {
+  max-width: 68ch;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+  margin: var(--space-2) 0 0;
+}
+
+.block {
+  margin-top: var(--space-5);
+}
+
+.block h2 {
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-3);
+}
+
+.block h3 {
+  font-size: var(--text-xl);
+}
+
+.text {
+  max-width: 68ch;
+  line-height: var(--leading-body);
+}
+
+.text p {
+  margin: 0 0 var(--space-3);
+}
+
+.text ul {
+  padding-left: var(--space-4);
+  margin: 0 0 var(--space-3);
+}
+
+.text a,
+.inlineLink {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.text a:hover,
+.inlineLink:hover {
+  color: var(--color-primary-hover);
+}
+
+.linkList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.linkList a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-navy);
+  text-decoration: none;
+  background: var(--color-bg);
+}
+
+.linkList a:hover {
+  background: var(--color-navy-soft);
+}
+
+.linkList a[aria-current="true"] {
+  background: var(--color-navy);
+  color: #fff;
+  border-color: var(--color-navy);
+}
+
+/* Hero de la home */
+.hero {
+  background: linear-gradient(135deg, var(--color-primary-soft), var(--color-gold-soft));
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.hero h1 {
+  font-size: var(--text-4xl);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-3);
+  max-width: 20ch;
+}
+
+.hero p {
+  max-width: 60ch;
+  line-height: var(--leading-body);
+  margin: 0 0 var(--space-4);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* Beneficios */
+.benefits {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 768px) {
+  .benefits {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.benefit {
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.benefit h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+}
+
+.benefit p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: var(--leading-body);
+}
+
+/* Ficha de producto */
+.productLayout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .productLayout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+}
+
+.productMedia {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-soft);
+}
+
+.buyBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.buyBox h1 {
+  font-size: var(--text-3xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.perUnit {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.qtyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.qty {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.qtyBtn {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-navy);
+  font-size: var(--text-xl);
+  cursor: pointer;
+}
+
+.qtyBtn:hover:not(:disabled) {
+  background: var(--color-navy-soft);
+}
+
+.qtyBtn:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.qtyValue {
+  min-width: var(--tap-min);
+  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
+}
+
+/* Catálogo */
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.groupHead h2 {
+  margin: 0;
+}
+
+.filters {
+  margin-bottom: var(--space-4);
+}
+
+.searchNote {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.empty {
+  background: var(--color-bg-soft);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+/* Preguntas frecuentes */
+.faq details {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.faq summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+  padding-block: var(--space-2);
+}
+
+.faq details > p {
+  margin: 0 0 var(--space-3);
+  max-width: 68ch;
+  line-height: var(--leading-body);
+}
+
+/* Aviso de borrador legal y formulario de ejemplo */
+.draft {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-block: var(--space-3);
+  font-weight: 600;
+}
+
+.formBox {
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  max-width: 36rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.field input,
+.field textarea {
+  min-height: var(--tap-min);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  background: var(--color-bg);
+}
+
+.address {
+  font-style: normal;
+  line-height: var(--leading-body);
+}
+
+.faqQ {
+  font: inherit;
+  margin: 0;
+}

@@ -1,0 +1,34 @@
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  --bg: var(--color-primary-soft);
+  --accent: var(--color-primary);
+}
+.vitaminas { --bg: var(--color-gold-soft); --accent: var(--color-gold); }
+.magnesio { --bg: var(--color-navy-soft); --accent: var(--color-navy); }
+.minerales { --bg: var(--color-bg-soft); --accent: var(--color-navy-hover); }
+.omega3 { --bg: var(--color-navy-soft); --accent: var(--color-primary); }
+.belleza { --bg: var(--color-gold-soft); --accent: var(--color-gold-text); }
+.bienestar { --bg: var(--color-primary-soft); --accent: var(--color-primary); }
+
+.bg { fill: var(--bg); }
+.glow { fill: #fff; opacity: 0.55; }
+.cap { fill: var(--accent); }
+.bottle { fill: var(--accent); }
+.label { fill: #fff; }
+.brand { fill: var(--color-gold-text); font-weight: 700; }
+.leaf { fill: var(--color-primary); }
+.name { fill: var(--color-navy); }
+.pack { fill: var(--color-text-muted); }
+
+/* Foto real del producto (D-030): cuadrada, sin deformarse. */
+.photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--color-bg-soft);
+}
