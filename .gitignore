@@ -55,3 +55,15 @@ desktop.ini
 *.xls
 *.xlsx
 *.csv
+
+# === Functions: secretos locales ===
+functions/.secret.local
+functions/.env
+functions/.env.*
+!functions/.env.example
+
+# === Catálogo de la demo generado desde la planilla (D-017, D-028) ===
+src/data/*.local.json
+
+# Persistencia local del prototipo (D-030)
+.demo-data/

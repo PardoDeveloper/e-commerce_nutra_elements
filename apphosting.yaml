@@ -1,0 +1,93 @@
+# Configuración de Firebase App Hosting para Nutra Elements.
+# Aplica al backend conectado a la rama main (proyecto prod = nutraelements).
+# Estado actual: staging (D-021 y D-031): noindex, Flow sandbox y sin dominio.
+# Este archivo es público: aquí NO van secretos. Los secretos se referencian
+# por nombre y viven en Secret Manager.
+
+# Recursos de Cloud Run. La región (us-east4, D-010) NO se fija aquí: se elige
+# al crear el backend (firebase apphosting:backends:create --location us-east4)
+# y no se puede cambiar después.
+runConfig:
+  minInstances: 0   # escala a cero en staging para no generar costo en reposo
+  maxInstances: 2   # tope bajo para cuidar el presupuesto; subir al lanzar
+  # cpu, memoryMiB y concurrency: se dejan los valores por defecto de la plataforma.
+
+env:
+  # Fuente de datos de la tienda: "firebase" usa Firestore. Sin esta variable el
+  # código cae al modo demo (login simulado y catálogo mock), lo cual es
+  # inaceptable en la nube (QA B-1). Debe estar en BUILD y RUNTIME.
+  - variable: DATA_SOURCE
+    value: firebase
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Interruptor único de indexación (D-021, D-023). Solo "true" permite indexar;
+  # cualquier otro valor emite noindex y robots.txt bloqueando todo.
+  # CAMBIAR a "true" únicamente en el lanzamiento, con confirmación del usuario.
+  - variable: SITE_INDEXABLE
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Origen canónico del sitio (sitemap, JSON-LD, metadatos), sin barra final.
+  # PENDIENTE: se fija con la URL real del backend una vez creado (formato
+  # https://<backend>--nutraelements.us-east4.hosted.app) y luego con el dominio
+  # definitivo. Descomentar y completar tras crear el backend.
+  # - variable: SITE_URL
+  #   value: https://REEMPLAZAR-CON-URL-DEL-BACKEND
+  #   availability:
+  #     - BUILD
+  #     - RUNTIME
+
+  # Secreto compartido con las Functions para POST /api/revalidate (ISR bajo
+  # demanda, D-022). Nombre del secreto en Secret Manager; el valor nunca va aquí.
+  # Requiere: firebase apphosting:secrets:grantaccess REVALIDATE_SECRET --backend <backend>
+  - variable: REVALIDATE_SECRET
+    secret: REVALIDATE_SECRET
+    availability:
+      - RUNTIME
+
+  # Configuración web de Firebase de PROD (app web "nutra-web"). Son
+  # identificadores públicos, no secretos. El código lee estas NEXT_PUBLIC_*
+  # directamente (no usa FIREBASE_WEBAPP_CONFIG), así que van explícitas.
+  # Deben estar disponibles en BUILD porque Next.js las incrusta en el cliente.
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyC8XeHfJGOVtMOmgXi2FeSVCevuvgwbGsg
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: nutraelements.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: nutraelements
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: nutraelements.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:48808849043:web:f3249fc13c0b0cf86b6766"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "48808849043"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Clave del sitio de App Check (reCAPTCHA Enterprise). PENDIENTE: Carlos la
+  # entregará. Descomentar y completar cuando exista (pública, no es secreto).
+  # - variable: NEXT_PUBLIC_APPCHECK_SITE_KEY
+  #   value: REEMPLAZAR-CON-CLAVE-DEL-SITIO
+  #   availability:
+  #     - BUILD
+  #     - RUNTIME
