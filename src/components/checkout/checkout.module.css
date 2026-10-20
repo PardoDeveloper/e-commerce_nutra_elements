@@ -1,0 +1,307 @@
+/* Estilos compartidos de carrito, checkout y pedido. Solo tokens de globals.css. */
+.page {
+  padding-block: var(--space-4) var(--space-6);
+}
+.title {
+  margin-bottom: var(--space-3);
+}
+.layout {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    gap: var(--space-5);
+  }
+  .aside {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-3));
+  }
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+@media (min-width: 768px) {
+  .panel {
+    padding: var(--space-4);
+  }
+}
+.panelTitle {
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-3);
+}
+.soft {
+  background: var(--color-bg-soft);
+}
+
+/* Avisos */
+.notice {
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-soft);
+}
+.notice p:last-child {
+  margin-bottom: 0;
+}
+.noticeDanger {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+  color: var(--color-text);
+}
+.noticeSuccess {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+.noticeWarning {
+  background: var(--color-warning-soft);
+  border-color: var(--color-warning-text);
+  color: var(--color-warning-text);
+}
+.noticeTitle {
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+.banner {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  border-bottom: 1px solid var(--color-warning-text);
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Líneas del carrito */
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.line {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.line:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+@media (min-width: 768px) {
+  .line {
+    grid-template-columns: 6rem minmax(0, 1fr);
+  }
+}
+.thumb {
+  width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+.lineBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.lineName {
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.lineName:hover {
+  text-decoration: underline;
+}
+.lineControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.lineSubtotal {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.stepBtn {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  border: 0;
+  background: var(--color-bg);
+  color: var(--color-navy);
+  font: inherit;
+  font-size: var(--text-xl);
+  cursor: pointer;
+}
+.stepBtn:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+}
+.stepBtn:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.qty {
+  min-width: 2.5rem;
+  text-align: center;
+  font-weight: 600;
+}
+.linkBtn {
+  min-height: var(--tap-min);
+  padding-inline: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-danger);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.linkBtn:hover {
+  color: var(--color-text);
+}
+
+/* Resumen */
+.summaryList {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.summaryRow dt {
+  color: var(--color-text-muted);
+}
+.summaryRow dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+.discount dd {
+  color: var(--color-primary);
+}
+.totalRow {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-strong);
+  font-size: var(--text-lg);
+}
+.totalRow dt {
+  color: var(--color-navy);
+  font-weight: 700;
+}
+.totalRow dd {
+  color: var(--color-navy);
+  font-weight: 700;
+}
+.summaryNote {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.miniLines {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.miniLine {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.miniLine span:first-child {
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* Estados vacío / carga */
+.empty {
+  text-align: center;
+  padding-block: var(--space-5);
+}
+.skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+.skeletonBar {
+  height: 5rem;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border);
+}
+
+/* Pedido */
+.orderNumber {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: var(--text-4xl);
+  font-weight: 700;
+  color: var(--color-navy);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.orderBox {
+  background: var(--color-gold-soft);
+  border: 2px solid var(--color-gold);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.orderLabel {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-gold-text);
+}
+.bank {
+  margin: 0 0 var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+.bank div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+.bank dt {
+  color: var(--color-text-muted);
+}
+.bank dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

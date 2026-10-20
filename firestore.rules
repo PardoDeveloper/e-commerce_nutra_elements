@@ -1,0 +1,268 @@
+rules_version = '2';
+
+// Reglas de Firestore de Nutra Elements (2B.2). Contrato: docs/team/contracts/data-model.md (secciones 2 y 3).
+// Principios:
+//  - Todo lo que no se permite de forma explícita queda denegado (regla final).
+//  - "Servidor" = Cloud Functions con Admin SDK: no pasa por estas reglas, por eso aquí el cliente no escribe
+//    pedidos, contadores, métricas, reportes, eventos de pago ni claves de idempotencia.
+//  - Admin = custom claim `admin == true` (D-011). Sin get(): el claim viene en el token.
+//  - Un usuario autenticado sin el claim equivale a un visitante anónimo.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------
+    // Funciones de apoyo
+    // ---------------------------------------------------------------
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.get('admin', false) == true;
+    }
+
+    // Un campo opcional nuevo/actualizado: si no viene, es null.
+    function newField(name) {
+      return request.resource.data.get(name, null);
+    }
+
+    function isSlug(v, maxLen) {
+      return v is string && v.size() >= 1 && v.size() <= maxLen
+        && v.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
+    }
+
+    function isStr(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+
+    function isIntBetween(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
+    }
+
+    // Mapa {title?, description?} para `seo` (productos y categorías).
+    function validSeo(v) {
+      return v == null || (
+        v is map
+        && v.keys().hasOnly(['title', 'description'])
+        && (!('title' in v) || isStr(v.title, 0, 70))
+        && (!('description' in v) || isStr(v.description, 0, 170))
+      );
+    }
+
+    // `updatedAt` siempre es la hora del servidor: el cliente no la elige.
+    function updatedAtIsNow() {
+      return request.resource.data.updatedAt == request.time;
+    }
+
+    // ---------------------------------------------------------------
+    // products/{sku}
+    // Lectura pública solo de publicados, activos y no eliminados (la consulta debe llevar los tres filtros).
+    // Crear y borrar: nadie desde el cliente (la eliminación es lógica, D-029). El admin solo edita campos de contenido;
+    // precio, descuento, stock, publicación, activo, sku, deletedAt y deletedBy los escribe únicamente el servidor.
+    // ---------------------------------------------------------------
+
+    function productContentKeys() {
+      return ['name', 'description', 'shortDescription', 'categoryId', 'images', 'slug',
+              'format', 'unitsPerPack', 'family', 'seo', 'updatedAt'];
+    }
+
+    function validProductContent(changed) {
+      return (!changed.hasAny(['name']) || isStr(newField('name'), 1, 120))
+        // El slug solo cambia mientras el producto no está publicado.
+        && (!changed.hasAny(['slug']) || (
+              resource.data.published == false
+              && (newField('slug') == null || isSlug(newField('slug'), 80))))
+        && (!changed.hasAny(['description']) || newField('description') == null || isStr(newField('description'), 0, 5000))
+        && (!changed.hasAny(['shortDescription']) || newField('shortDescription') == null || isStr(newField('shortDescription'), 0, 300))
+        // La categoría debe existir (única lectura extra de las reglas). Que esté publicada lo valida la Function al publicar.
+        && (!changed.hasAny(['categoryId']) || newField('categoryId') == null || (
+              isSlug(newField('categoryId'), 60)
+              && exists(/databases/$(database)/documents/categories/$(newField('categoryId')))))
+        // Las reglas no recorren arreglos: validan tipo y tamaño (<= 8). Cada elemento lo revisa la Function de publicación.
+        && (!changed.hasAny(['images']) || (newField('images') is list && newField('images').size() <= 8))
+        && (!changed.hasAny(['format']) || newField('format') == null || isStr(newField('format'), 1, 40))
+        && (!changed.hasAny(['unitsPerPack']) || newField('unitsPerPack') == null || isIntBetween(newField('unitsPerPack'), 1, 1000))
+        && (!changed.hasAny(['family']) || newField('family') == null || isSlug(newField('family'), 80))
+        && (!changed.hasAny(['seo']) || validSeo(newField('seo')));
+    }
+
+    match /products/{sku} {
+      allow get, list: if isAdmin()
+        // deletedAt == null: un producto eliminado (D-029) no es público. Si el campo falta, la regla deniega.
+        || (resource.data.published == true && resource.data.active == true && resource.data.deletedAt == null);
+
+      allow create: if false;
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(productContentKeys())
+        // updatedAt es obligatorio en toda edición y debe ser request.time.
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+        && updatedAtIsNow()
+        && validProductContent(request.resource.data.diff(resource.data).affectedKeys());
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // categories/{categoryId}
+    // Lectura pública solo de publicadas. El admin crea y edita con validación; nadie borra.
+    // ---------------------------------------------------------------
+
+    function validCategory(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['slug', 'name', 'description', 'imagePath', 'order', 'published', 'seo', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['slug', 'name', 'order', 'published', 'createdAt', 'updatedAt'])
+        && d.slug == id
+        && isSlug(id, 60)
+        && isStr(d.name, 1, 80)
+        && (d.get('description', null) == null || isStr(d.description, 0, 2000))
+        && (d.get('imagePath', null) == null || (
+              d.imagePath is string
+              && d.imagePath.matches('^categories/' + id + '/[A-Za-z0-9_-]{8,40}\\.(jpg|jpeg|png|webp)$')))
+        && isIntBetween(d.order, 0, 9999)
+        && d.published is bool
+        && validSeo(d.get('seo', null))
+        && d.createdAt is timestamp
+        && d.updatedAt == request.time;
+    }
+
+    match /categories/{categoryId} {
+      allow get, list: if isAdmin() || resource.data.published == true;
+
+      allow create: if isAdmin()
+        && validCategory(categoryId)
+        && request.resource.data.createdAt == request.time;
+
+      // slug y createdAt son inmutables (slug = ID).
+      allow update: if isAdmin()
+        && validCategory(categoryId)
+        && request.resource.data.slug == resource.data.slug
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // orders/{orderNumber}: contienen datos personales (RUT, correo, teléfono, dirección).
+    // Solo el admin lee. Nadie escribe desde el cliente (ni el admin): solo el servidor.
+    // El público consulta el estado con la Function getOrderStatus.
+    // ---------------------------------------------------------------
+    match /orders/{orderNumber} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // counters/*: sin acceso desde el cliente (ni lectura).
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // settings/public (lectura pública) y settings/private (solo admin).
+    // Se nombran explícitamente: cualquier otro documento de settings queda denegado.
+    // ---------------------------------------------------------------
+
+    function validPublicSettings() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['shippingFee', 'freeShippingThreshold', 'communes', 'pickup', 'maxQtyPerItem', 'updatedAt'])
+        && d.keys().hasAll(['shippingFee', 'freeShippingThreshold', 'communes', 'pickup', 'maxQtyPerItem', 'updatedAt'])
+        && isIntBetween(d.shippingFee, 0, 100000)
+        && (d.freeShippingThreshold == null || isIntBetween(d.freeShippingThreshold, 1, 10000000))
+        // Las reglas no recorren los elementos {code, name}: validan tipo y tamaño (1..400).
+        && d.communes is list && d.communes.size() >= 1 && d.communes.size() <= 400
+        && d.pickup is map
+        && d.pickup.keys().hasOnly(['enabled', 'address', 'hours'])
+        && d.pickup.keys().hasAll(['enabled', 'address', 'hours'])
+        && d.pickup.enabled is bool
+        && isStr(d.pickup.address, 0, 200)
+        && isStr(d.pickup.hours, 0, 200)
+        && isIntBetween(d.maxQtyPerItem, 1, 100)
+        && d.updatedAt == request.time;
+    }
+
+    // Entero opcional dentro de un rango (para `limits`, donde un valor ausente usa el inicial).
+    function optInt(m, k, lo, hi) {
+      return !(k in m) || isIntBetween(m[k], lo, hi);
+    }
+
+    function validBank(b) {
+      return b is map
+        && b.keys().hasOnly(['bankName', 'accountType', 'accountNumber', 'holderName', 'holderRut', 'contactEmail'])
+        && b.keys().hasAll(['bankName', 'accountType', 'accountNumber', 'holderName', 'holderRut'])
+        && isStr(b.bankName, 1, 100)
+        && isStr(b.accountType, 1, 100)
+        && isStr(b.accountNumber, 1, 100)
+        && isStr(b.holderName, 1, 100)
+        && isStr(b.holderRut, 1, 100)
+        && (!('contactEmail' in b) || isStr(b.contactEmail, 0, 100));
+    }
+
+    function validLimits(l) {
+      return l is map
+        && l.keys().hasOnly(['createOrderPerIpPer10Min', 'pendingOrdersPerEmail', 'orderStatusPerIpPer10Min', 'orderStatusFailuresPerOrder'])
+        && optInt(l, 'createOrderPerIpPer10Min', 1, 100)
+        && optInt(l, 'pendingOrdersPerEmail', 1, 50)
+        && optInt(l, 'orderStatusPerIpPer10Min', 1, 1000)
+        && optInt(l, 'orderStatusFailuresPerOrder', 1, 100);
+    }
+
+    function validPrivateSettings() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['reservationMinutes', 'bank', 'orderNumberStart', 'limits', 'updatedAt'])
+        && d.keys().hasAll(['reservationMinutes', 'bank', 'orderNumberStart', 'limits', 'updatedAt'])
+        && d.reservationMinutes is map
+        && d.reservationMinutes.keys().hasOnly(['flow', 'transfer'])
+        && d.reservationMinutes.keys().hasAll(['flow', 'transfer'])
+        && isIntBetween(d.reservationMinutes.flow, 5, 240)
+        && isIntBetween(d.reservationMinutes.transfer, 60, 10080)
+        && validBank(d.bank)
+        && isIntBetween(d.orderNumberStart, 1, 100000000)
+        && validLimits(d.limits)
+        && d.updatedAt == request.time;
+    }
+
+    match /settings/public {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isAdmin() && validPublicSettings();
+      allow delete: if false;
+    }
+
+    match /settings/private {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin() && validPrivateSettings();
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // Solo lectura para el admin; escribe únicamente el servidor.
+    // metrics/daily/days/{fecha} y metrics/products/items/{sku} caen en el comodín recursivo.
+    // ---------------------------------------------------------------
+    match /metrics/{path=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /imports/{importId} {
+      allow get, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /paymentEvents/{flowToken} {
+      allow get, list: if isAdmin();
+      allow write: if false;
+    }
+
+    // idempotencyKeys y rateLimits: sin acceso del cliente (ni lectura). No hace falta
+    // un match propio, pero se deja explícito para que el contrato quede legible.
+    match /idempotencyKeys/{key} {
+      allow read, write: if false;
+    }
+
+    match /rateLimits/{key} {
+      allow read, write: if false;
+    }
+
+    // Cualquier otra ruta: denegada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

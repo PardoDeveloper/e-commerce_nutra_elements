@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Reglas de Storage de Nutra Elements (2B.2). Contrato: docs/team/contracts/data-model.md (sección 4).
+// - Lectura pública solo de imágenes de productos y de categorías.
+// - Subida y borrado solo del admin (claim `admin == true`, D-011).
+// - Máximo 2 MiB (D-024), solo JPEG, PNG o WebP (SVG no: puede llevar scripts).
+// - Todo lo demás, denegado. Las reglas no inspeccionan el contenido real del archivo.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.get('admin', false) == true;
+    }
+
+    // Nombre inmutable con identificador aleatorio nuevo en cada subida.
+    function validFileName(file) {
+      return file.matches('^[A-Za-z0-9_-]{8,40}\\.(jpg|jpeg|png|webp)$');
+    }
+
+    function validImageUpload() {
+      return request.resource != null
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    match /products/{sku}/{file} {
+      allow get: if true;
+      allow create, update: if isAdmin()
+        && sku.matches('^[A-Za-z0-9_-]{1,32}$')
+        && validFileName(file)
+        && validImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{slug}/{file} {
+      allow get: if true;
+      allow create, update: if isAdmin()
+        && slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+        && validFileName(file)
+        && validImageUpload();
+      allow delete: if isAdmin();
+    }
+
+    // Cualquier otra ruta: denegada.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,303 @@
+.root {
+  --admin-banner-h: 2.75rem;
+  --admin-nav-w: 15rem;
+  --admin-nav-w-collapsed: 4rem;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-soft);
+  min-height: 100vh;
+}
+
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  min-height: var(--admin-banner-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  border-bottom: 2px solid var(--color-warning-text);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.topbar {
+  position: sticky;
+  top: var(--admin-banner-h);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-navy);
+  color: #fff;
+}
+.brand {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+}
+.brand:hover {
+  color: #fff;
+}
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid #fff;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.body {
+  flex: 1;
+  display: block;
+}
+
+/* Fondo oscurecido detrás del panel deslizable (solo < 1024 px). */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  /* No existe un token de overlay: mismo azul de las sombras de globals.css. */
+  background: rgb(0 40 72 / 0.55);
+}
+
+/* Móvil y tablet: panel deslizable desde la izquierda, cerrado por defecto. */
+.nav {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: min(18rem, 85vw);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  overflow-y: auto;
+  background: var(--color-navy);
+  color: #fff;
+  padding: var(--space-3);
+  transform: translateX(-100%);
+  visibility: hidden;
+  /* Al cerrar, la visibilidad cambia al final para que se vea la animación. */
+  transition:
+    transform 0.2s ease,
+    visibility 0s linear 0.2s;
+}
+.navOpen {
+  transform: none;
+  visibility: visible;
+  /* Al abrir, visible de inmediato (permite mover el foco al panel). */
+  transition:
+    transform 0.2s ease,
+    visibility 0s;
+}
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+.navLink svg,
+.logout svg,
+.collapseButton svg,
+.menuButton svg {
+  flex: none;
+}
+.navLink:hover {
+  background: var(--color-navy-hover);
+  color: #fff;
+}
+.navLink[aria-current="page"] {
+  background: #fff;
+  color: var(--color-navy);
+}
+.navFooter {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-navy-hover);
+  display: grid;
+  gap: var(--space-2);
+}
+.user {
+  margin: 0;
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid #fff;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.logout:hover {
+  background: #fff;
+  color: var(--color-navy);
+}
+.collapseButton {
+  display: none;
+}
+.navLink:focus-visible,
+.logout:focus-visible,
+.menuButton:focus-visible,
+.collapseButton:focus-visible,
+.brand:focus-visible {
+  outline-color: #fff;
+}
+.navTitle {
+  margin: 0 0 var(--space-3);
+  padding-inline: var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: #fff;
+}
+
+.content {
+  padding: var(--space-4) var(--space-3) var(--space-6);
+  min-width: 0;
+  max-width: 80rem;
+}
+
+@media (min-width: 1024px) {
+  .topbar,
+  .scrim {
+    display: none;
+  }
+  .body {
+    display: grid;
+    grid-template-columns: var(--admin-nav-w) minmax(0, 1fr);
+    align-items: start;
+    transition: grid-template-columns 0.2s ease;
+  }
+  .bodyCollapsed {
+    grid-template-columns: var(--admin-nav-w-collapsed) minmax(0, 1fr);
+  }
+  .nav {
+    position: sticky;
+    top: var(--admin-banner-h);
+    bottom: auto;
+    z-index: auto;
+    width: auto;
+    height: calc(100vh - var(--admin-banner-h));
+    padding: var(--space-3) var(--space-3);
+    transform: none;
+    visibility: visible;
+    transition: padding 0.2s ease;
+  }
+  .collapseButton {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--tap-min);
+    margin-bottom: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-navy-hover);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .collapseButton:hover {
+    background: var(--color-navy-hover);
+  }
+  .content {
+    padding: var(--space-5) var(--space-5) var(--space-6);
+  }
+  .contentWide {
+    max-width: 96rem;
+  }
+
+  /* Plegada: solo íconos; los textos siguen disponibles por aria-label y title. */
+  .navCollapsed {
+    padding-inline: var(--space-2);
+  }
+  .navCollapsed .label,
+  .navCollapsed .navTitle {
+    display: none;
+  }
+  .navCollapsed .navLink,
+  .navCollapsed .logout,
+  .navCollapsed .collapseButton {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav,
+  .body {
+    transition: none;
+  }
+}
+
+.centered {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4) var(--space-3);
+}
+.loginCard {
+  width: 100%;
+  max-width: 26rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: var(--space-3);
+}
+.loginCard h1 {
+  margin: 0;
+  font-size: var(--text-3xl);
+}
+.status {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+}

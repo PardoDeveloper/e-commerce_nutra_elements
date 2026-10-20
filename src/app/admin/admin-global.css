@@ -1,0 +1,9 @@
+/*
+ * El admin no usa el encabezado ni el pie de la tienda. El layout raíz los monta para todas las
+ * rutas, así que se ocultan solo cuando existe la raíz del admin (display:none también los saca
+ * del orden de tabulación y de los lectores de pantalla).
+ */
+body:has([data-admin-root]) > header,
+body:has([data-admin-root]) > footer {
+  display: none;
+}

@@ -49,9 +49,10 @@ Estado: **vigente** (decidida) · **propuesta** (espera la aprobación de Carlos
 - **Por qué:** Carlos creó el proyecto de dev. El aislamiento es total y mucho más simple que D-019.
 - **Riesgo:** en Spark no se pueden desplegar Cloud Functions ni App Hosting, no hay Secret Manager y, en proyectos nuevos, probablemente tampoco Storage. Dev queda limitado a Auth y Firestore en la nube, o al Emulator Suite local. Ver D-021.
 
-## D-010 · 2026-10-14 · Región — propuesta
-- **Decisión:** usar `southamerica-west1` (Santiago) para Firestore, Functions y Storage, **solo si se confirma** que App Hosting funciona en esa región o en una cercana con latencia aceptable. Si App Hosting no está en Santiago, se elegirá con evidencia entre ubicar todo junto a la región de App Hosting o separar las regiones usando caché o ISR.
-- **Por qué:** la región de Firestore no se puede cambiar después de crear la base, así que se verifica primero (tarea 0.9).
+## D-010 · 2026-10-14 · Región `us-east4` para todo — vigente (aprobada por Carlos el 2026-10-14)
+- **Decisión:** App Hosting, Firestore, Functions y Storage en `us-east4`, tanto en prod como en dev. Las fichas y categorías se sirven estáticas o con ISR desde el CDN, para compensar la distancia a Chile.
+- **Alternativas:** Firestore en `southamerica-west1` con App Hosting en EE. UU. (cada render SSR haría un viaje de ida y vuelta entre continentes) o `us-central1`.
+- **Por qué:** según la documentación oficial, revisada por firebase-architect, App Hosting **no** soporta `southamerica-west1`. Colocar todo junto evita latencia entre servicios. Sin verificar: latencias y precios por región.
 
 ## D-011 · 2026-10-14 · Admin con un solo rol — vigente
 - **Decisión:** custom claim `admin: true` en Firebase Auth. Las reglas y las Functions lo verifican.
@@ -120,12 +121,226 @@ Estado: **vigente** (decidida) · **propuesta** (espera la aprobación de Carlos
 - **Alternativas:** privado (lo recomendaba el tech-lead).
 - **Por qué:** decisión del dueño. Mitigaciones obligatorias: nada de secretos ni datos del negocio en git (D-013, D-017); qa-reviewer y devops revisan que no haya secretos antes de cada push. La seguridad no puede depender de que el código sea secreto: debe sostenerse en las reglas y en el servidor.
 
-## D-021 · 2026-10-14 · Limitaciones de dev en Spark — pendiente de resolver
-- **Problema:** el flujo de pago con Flow sandbox necesita Cloud Functions desplegadas o un túnel hacia el emulador, porque Flow llama a una URL de confirmación pública. En Spark no hay Functions ni App Hosting.
-- **Opciones:** (a) pasar `nutraelementsdev` a Blaze, con una alerta de presupuesto baja; el costo esperado es casi 0, sin verificar. (b) Mantenerlo en Spark: el trabajo diario se hace en el Emulator Suite y el pago end-to-end se prueba con un túnel temporal; no habría URL de dev publicada.
-- **Recomendación del tech-lead:** (a), porque permite probar en la nube exactamente lo que irá a prod. Lo decide Carlos, porque implica costo.
+## D-021 · 2026-10-14 · Dev en Spark: el desarrollo se hace en el Emulator Suite — vigente (decisión de Carlos)
+- **Decisión:** `nutraelementsdev` sigue en Spark.
+  - **Todo el desarrollo y las pruebas se hacen en el Emulator Suite local**: Auth, Firestore, Storage y Functions. En el emulador funcionan todos, sin importar el plan.
+  - El pago con Flow sandbox de punta a punta se prueba con un **túnel temporal** hacia el emulador de Functions, porque Flow necesita una URL pública de confirmación. La herramienta del túnel (por ejemplo, cloudflared) se elegirá en la tarea de Flow, con aprobación de Carlos, porque es una herramienta nueva.
+  - **No hay URL de dev publicada.** Las auditorías de SEO y QA se hacen sobre `next build && next start` en local, contra los emuladores.
+- **Mitigación (prod como staging antes del lanzamiento):** como todavía no hay clientes, la primera publicación en `nutraelements` se hace con `noindex`, Flow sandbox y sin apuntar el dominio. Solo después de una prueba de humo y de la confirmación de Carlos se cambia a Flow de producción, se quita el noindex y se apunta nutraelements.cl.
+- **Alternativas:** dev en Blaze (recomendado por el tech-lead; Carlos lo descartó).
+- **Riesgo aceptado:** la primera vez que el código corre en la nube real es en el proyecto de prod, antes del lanzamiento público.
 
 ## Datos de negocio confirmados el 2026-10-14
 - Envío gratis: monto configurable en el admin, sin valor por defecto (desactivado hasta que se configure).
 - Retiro en tienda: Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00.
-- Reserva de 48 horas para transferencias (D-006): pendiente de confirmar con el jefe. Formato NE-000123: Carlos confirma que DispatchTrack lo acepta.
+- Reserva de 48 horas para transferencias (D-006): PENDIENTE. Mientras tanto, 48 h configurable en settings. Formato NE-000123: Carlos confirma que DispatchTrack lo acepta.
+
+## D-022 · 2026-10-14 · Renderizado: catálogo estático con ISR, cerca del cliente — vigente (aprobada por Carlos)
+- **Decisión:**
+  - /, /productos, /categorias/[slug], /productos/[slug], /nosotros, /contacto y /preguntas-frecuentes se generan como **páginas estáticas con ISR**, y el CDN de App Hosting las sirve cerca de Chile.
+  - Cuando el admin cambia un producto, un precio, el stock o un descuento, se **revalida bajo demanda** la ficha afectada y su categoría, sin esperar al vencimiento.
+  - El precio y el stock **mostrados** pueden tener unos segundos de retraso. El precio y el stock **cobrados** siempre los recalcula el servidor al crear el pedido (D-005).
+  - Carrito, checkout y admin se renderizan dinámicamente y llevan noindex.
+- **Alternativas:** SSR en cada visita, que suma la latencia desde `us-east4` y más costo por bots.
+- **Por qué:** compensa que App Hosting no esté en Santiago, mejora los Core Web Vitals (SEO) y reduce lecturas y costo.
+
+## D-023 · 2026-10-14 · Categorías y estrategia SEO del catálogo — vigente (tech-lead, sobre la propuesta de seo-specialist)
+- **Decisión:**
+  - Seis categorías: `vitaminas`, `magnesio`, `minerales`, `omega-3`, `belleza` y `bienestar`. La línea Ultra va en `bienestar`.
+  - **Una ficha por SKU**, con canonical a sí misma. Los tamaños se diferencian en title, H1 y slug, y se enlazan entre sí.
+  - No se crean páginas por comuna ni `/retiro-en-tienda`: lo local se trabaja en `/contacto`, la home y las preguntas frecuentes.
+  - El catálogo no se pagina en el MVP.
+  - `revalidate` de 3600 s como respaldo del ISR.
+  - Variables `SITE_URL` y `SITE_INDEXABLE`; esta última es false por defecto y es el interruptor único del noindex de prelanzamiento (D-021).
+  - Teléfono, correo, redes y logo: PENDIENTE, y se omiten del JSON-LD hasta que existan.
+- **Alternativas:** una ficha por familia con selector de tamaño (no calza con un SKU por producto) o canonical al tamaño principal (plan B, solo si Search Console muestra duplicados).
+- **Por qué:** es lo más simple que evita contenido duplicado con 33 SKU, y es coherente con D-016.
+- **Riesgo regulatorio a revisar por Carlos:** Ultra Light, Ultra Relax, Ultra Lax, cranberry, melena de león y cúrcuma. Ultra Lax puede ser un tema sanitario, no solo de redacción. Los textos pasan por un profesional antes de publicarse.
+
+## D-024 · 2026-10-14 · Contratos de datos y funciones: resoluciones del tech-lead — vigente
+Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con estas resoluciones a las preguntas abiertas:
+- **P1 Categorías:** las de D-023. El ejemplo de 2.1 debe corregirse: el SKU 2427844 es la Vitamina B12, y el Citrato de Magnesio va en `magnesio`.
+- **P3 Número inicial:** NE-000001. DispatchTrack acepta el formato.
+- **P8 Imágenes:** máximo 2 MiB, comprimidas en el navegador a WebP (lado largo ≤ 1600 px).
+- **P9 Retroceder un estado logístico:** **sí**, solo admin y solo un paso atrás, registrado en `statusHistory` con un motivo obligatorio. **Por qué:** un clic errado en "Entregado" no puede quedar sin corrección; la operación real lo necesita (correctitud > simplicidad).
+- **P10 Ofertas con fechas:** no en el MVP.
+- **P11 Envío gratis:** se combina con descuentos; se compara el subtotal con descuentos con `>=`.
+- **P12 Login del admin:** correo y contraseña, con el auto-registro desactivado. MFA queda para después del lanzamiento.
+- **P13 Reimportar la planilla:** pisa precio y stock (Control Farma es la fuente de verdad) y nunca toca contenido ni descuentos.
+- **Excel de stock con una celda vacía:** se trata como **fila inválida**, no como 0. **Por qué:** una celda vacía no debe dejar un producto sin stock por accidente.
+- **Límites anti-abuso** (5 pedidos cada 10 min por IP y 3 pendientes por correo): se aceptan como valores iniciales configurables.
+- **P5 Pedidos pagados que se cancelan o reembolsan (respuesta de Carlos):** el reembolso se hace **a mano** en Flow o por transferencia, fuera del sistema. El admin lo **registra en el pedido** con una función `recordManualRefund`:
+  - Transición `paid → refunded`, con monto, medio (flow o transferencia), fecha, nota obligatoria y quién lo hizo, todo en `statusHistory`.
+  - Es terminal.
+  - El stock **no** se repone solo: hay una opción explícita "reponer stock", porque el producto puede haber salido ya.
+  - Las métricas restan el pedido reembolsado.
+- **P6 RUT (respuesta de Carlos):** **obligatorio** en el checkout, en `customer.rut`. Se valida en el cliente y en el servidor con dígito verificador (módulo 11) y se normaliza a `12345678-K`. Es un dato personal: no se expone en `getOrderStatus`. **No hay factura:** solo boleta manual en Control Farma, sin razón social ni giro.
+- **Aún abierta:** P2, reservas de 30 min y 48 h (pendiente del jefe; quedan como valores configurables). P7 (retención de datos personales) queda para después del lanzamiento, con revisión legal según la Ley 21.719.
+- **Por verificar en la implementación:** la API de Flow (parámetros, firma y retorno), las opciones de firebase-functions v2, el emulador con secretos y la librería para leer .xls.
+
+## D-025 · 2026-10-14 · Confirmaciones sobre los contratos v1 — vigente
+- **Confirmado:**
+  - (1) D-018 (vacío o negativo → 0) aplica **solo al crear** un producto en `importCatalog`. Si el producto ya existe, una celda vacía da `EMPTY_STOCK`.
+  - (3) Con `restock: true`, `stockState` pasa a `released`; con `false`, queda `committed`.
+- **Corregido (2), reembolso parcial:** **no** se resta el pedido completo de las métricas.
+  - Los **ingresos** se reducen solo en `refund.amount`, en el día de `paidAt`.
+  - Las **unidades vendidas** se restan solo si `restock: true`.
+  - `ordersCount` no cambia. El ticket promedio se calcula con los ingresos netos.
+  - **Por qué:** restar el pedido completo por un reembolso parcial falsea las ventas (correctitud).
+  - firebase-architect debe ajustar `functions.md` (sección 4.6, línea "Un reembolso parcial…") y la sección de métricas de `data-model.md` al empezar la Fase 2B. Es la primera tarea de la próxima sesión.
+  - **Detalle (tech-lead, 2026-10-14), para que el contrato no quede ambiguo:**
+    - `metrics/daily`: `revenue -= refund.amount`; se agregan `refundsCount += 1` y `refundedAmount += refund.amount`; `ordersCount` y `merchandise` no cambian (`merchandise` es la mercadería bruta antes de reembolsos); `unitsSold -= Σqty` solo si `refund.restocked == true`.
+    - `metrics/products/items/{sku}`: `unitsSold -= qty` y `revenue -= lineTotal` solo si `refund.restocked == true`. Sin reposición no cambian.
+    - Se usa `restocked` (lo que de verdad pasó), no `restock` (lo pedido).
+    - Ticket promedio = `revenue / ordersCount` (neto).
+    - Aplica igual a reembolsos totales y parciales: una sola regla.
+
+## D-026 · 2026-10-14 · Fase 2B sin emuladores ni túnel por ahora; Node 24 — vigente (decisión de Carlos)
+- **Decisión:**
+  - Por ahora no se levantan los emuladores. Se construye y se verifica con build, lint y **tests unitarios** de lógica pura (precios, RUT, transiciones de estado, métricas y parseo de Excel), con Firestore simulado cuando haga falta.
+  - Los tests de reglas y los de transacciones contra el emulador **se escriben, pero no se ejecutan**. Quedan marcados como "sin ejecutar" hasta que Carlos autorice los emuladores. No se instala Java mientras tanto.
+  - Flow se implementa contra un mock de `getStatus`. El túnel (cloudflared u otro) queda **pendiente para el futuro**.
+  - Las Functions usan la versión de Node ya instalada: Node 24 LTS (`engines.node: "24"`). firebase-architect confirma en la documentación oficial que Cloud Functions la soporta; si no la soporta, lo informa sin instalar nada.
+- **Alternativas:** instalar Java y levantar los emuladores ahora (propuesta del tech-lead).
+- **Por qué:** decisión de Carlos.
+- **Riesgo aceptado:** las reglas de seguridad y la concurrencia del stock **no quedan verificadas** hasta correr esos tests. Nada sale a prod sin ejecutarlos (regla 5 de AGENTS.md).
+
+## D-027 · 2026-10-14 · Resoluciones del tech-lead sobre las tareas 2B.2, 2B.3 y 2C.1 — vigente
+- **2B.3 (lógica común), se aceptan las tres:**
+  - Los SKU duplicados en un pedido se rechazan con `INVALID_INPUT`; el carrito los fusiona antes de enviar.
+  - Un umbral de envío gratis inválido (0, negativo, decimal) se ignora, es decir, no hay envío gratis.
+  - El RUT tiene una sola forma normalizada: cuerpo de 7 u 8 dígitos sin ceros a la izquierda.
+  - **Por qué:** en los tres casos es la opción más segura y simple.
+- **2B.2 (reglas):**
+  - Se aceptan como valores por defecto restrictivos:
+    - `communes` con 1 a 400 elementos.
+    - `orderNumberStart` como máximo 100.000.000.
+    - `format` de 1 a 40 caracteres.
+    - `settings/public` solo con `get`.
+  - firebase-architect los incorpora al contrato (v1.2) en su próxima tarea.
+  - Se acepta que Storage no contraste el nombre con el contenido del archivo.
+  - **Un producto no se borra** (data-model.md, "Un producto no se borra"). Un SKU creado por error se marca `active=false`.
+- **2C.1 (Next.js):**
+  - robots.txt **no** bloquea /carrito, /checkout ni /cuenta, porque así Google puede leer su noindex (contrato SEO 06, sección 4). El contrato manda sobre el encargo del tech-lead, que estaba mal.
+  - `cacheComponents` queda **desactivado**, porque usamos `revalidate` e ISR (D-022 y D-023).
+  - App Check con reCAPTCHA Enterprise.
+  - Si `next dev` reescribe un bloque de AGENTS.md, ese cambio **no se acepta** y se revierte.
+  - CSS plano con variables; los tokens de diseño se definen cuando Carlos entregue la marca (logo y colores).
+
+## D-028 · 2026-10-14 · Prototipo visible para la demo del 2026-10-15 — vigente (pedido de Carlos)
+- **Decisión:** se construye todo lo visible (tienda pública, carrito, checkout y admin) con **datos simulados detrás de una capa de datos** (`src/lib/data/`), para cambiarla por Firestore y Functions sin rehacer pantallas.
+  - Sin Firebase real, sin emuladores (D-026) y sin commits por ahora; devops y QA van después.
+  - **Marca:** logo de hojas (`img/elements.png`) a la izquierda y el texto (`img/elements_2.png`) a su lado. Paleta: verde, azul marino y blanco, con el dorado del logo como acento.
+  - **Catálogo de la demo:** un script local lee la planilla y genera `src/data/catalog.local.json`, que **queda ignorado por git** (D-017). Solo usa nombre, SKU, precio y si hay stock (sí/no), nunca la cantidad. En el repo hay un fixture ficticio de respaldo.
+  - Para leer el .xls se usa SheetJS como devDependency, instalado desde su CDN oficial (el paquete de npm está desactualizado). firebase-architect lo puede reutilizar en la 2B.6.
+  - El carrito y el checkout calculan el total **solo para mostrarlo**. En producción manda el servidor (D-005). El pago y el número de pedido son simulados.
+  - El admin muestra un aviso de "Modo demostración"; sus acciones no persisten. Antes de producción, el modo demo se elimina y se reemplaza por Auth con el claim de admin (D-011).
+  - Las imágenes de productos son marcadores generados con los colores de la marca, hasta que existan las fotos reales.
+- **Por qué:** Carlos necesita mostrar un prototipo mañana. La capa de datos evita tener que tirar las pantallas.
+- **Riesgo:** el modo demo del admin no debe llegar a producción; qa-reviewer lo revisará.
+
+## D-029 · 2026-10-19 · Eliminar productos con selección múltiple (eliminación lógica) — vigente (pedido de Carlos; actualiza D-027)
+- **Decisión:** el admin puede seleccionar productos con checkbox (también "seleccionar todos" sobre la lista filtrada) y **eliminarlos**.
+  - La eliminación es **lógica**: el producto recibe `deletedAt` y `deletedBy`, queda `published=false`, desaparece de la tienda y de la lista normal del admin, y su ficha da 404 tras la revalidación.
+  - El documento y sus imágenes se conservan, para que los pedidos, las métricas y el historial sigan resolviendo el SKU.
+  - Hay un filtro "Eliminados" con la acción "Restaurar" (vuelve despublicado).
+  - **Confirmación:** un diálogo que muestra cuántos productos se eliminarán. Si son más de 5, hay que escribir `ELIMINAR`. Máximo 200 por operación.
+  - **Importaciones:** una fila con un SKU eliminado **no lo revive**. Se reporta como fila inválida `PRODUCT_DELETED`, tanto en la planilla como en precio y stock.
+  - Los pedidos existentes no cambian (tienen snapshot).
+- **Alternativas:**
+  - Borrado físico, que rompe pedidos y métricas, y que la próxima planilla volvería a crear.
+  - Solo desactivar, que no es lo que pidió Carlos.
+- **Por qué:** cumple el pedido ("eliminar", y desaparece) sin perder la integridad de los pedidos (correctitud). Además es reversible ante un error de selección.
+- **Si Carlos quiere borrado físico definitivo**, se agrega después como "Vaciar papelera" solo para productos sin pedidos.
+- **Contrato:** firebase-architect agrega `deleteProducts` / `restoreProducts` y el campo `deletedAt` a los contratos (v1.2).
+- **2026-10-19, tech-lead:** contratos v1.2 aprobados (D-027 y D-029 aplicadas). Los índices que no incluían `deletedAt` se **reemplazan** (no hay nada desplegado). Todo producto lleva `deletedAt: null` explícito. Next.js lee con el Admin SDK, así que debe filtrar `deletedAt == null` por su cuenta.
+
+## D-030 · 2026-10-19 · Persistencia local del prototipo: los cambios del admin se ven en la tienda — vigente (pedido de Carlos)
+- **Decisión:** mientras no haya Firebase (D-026), el servidor de Next.js guarda en disco los cambios de **productos** hechos en el admin, para que la tienda los muestre:
+  - Qué se guarda: contenido, imágenes, precio y stock, publicar, eliminar o restaurar, y descuentos.
+  - Dónde: `.demo-data/` en la raíz, ignorada por git. Las imágenes se guardan en `.demo-data/images/` y se sirven desde una ruta propia, porque `public/` no sirve archivos agregados después del build.
+  - La capa `@/lib/data` (mock) mezcla esos cambios con el catálogo.
+  - Al guardar, se llama a `revalidatePath` sobre la ficha, la categoría, /productos y /, igual que lo hará la revalidación bajo demanda real (D-022).
+  - Pedidos, métricas y ajustes siguen en memoria.
+- **Seguridad:** las rutas de escritura **solo existen si `DEMO_PERSISTENCE === "true"`** y nunca en producción.
+  - Sin la variable, responden 404 y el admin vuelve al modo en memoria.
+  - Se validan el tipo y el tamaño de las imágenes (WebP, JPEG o PNG; ≤ 2 MiB). El nombre del archivo lo genera el servidor, sin rutas del cliente.
+  - El SKU se valida contra el catálogo.
+  - qa-reviewer bloquea cualquier despliegue con `DEMO_PERSISTENCE` o con el código demo activo.
+- **Alternativas:**
+  - Integración real con Firebase: requiere emuladores (Java) o dev en Blaze. Es la solución definitiva y sigue pendiente.
+  - localStorage: solo sirve en un navegador.
+- **Por qué:** Carlos necesita ver de punta a punta el efecto del admin en la tienda. Es lo más simple que reproduce el flujo real (servidor → revalidación) sin cambiar D-026. Todo el código queda aislado para reemplazarlo por Firestore y Storage.
+
+## D-031 · 2026-10-19 · Producción como backend real (staging antes del lanzamiento) — vigente (decisión de Carlos)
+- **Decisión:** se trabaja contra `nutraelements` (Blaze) en modo staging, como en D-021: noindex, Flow sandbox y sin dominio.
+  - Firestore y Storage en **us-east4**, confirmado por Carlos (irreversible, D-010).
+  - Orden: catálogo, admin e imágenes reales primero; después compras con Flow sandbox. En prod, `flowConfirm` tiene URL pública, así que no hace falta el túnel.
+- **Reglas sin tests ejecutados (riesgo aceptado por Carlos):** se publican sin instalar Java.
+  - Mitigación: deny-by-default, revisión estática de qa-reviewer, compilación de las reglas en el deploy, y prueba manual con el SDK cliente después del despliegue.
+  - Queda pendiente ejecutar `test:rules` cuando haya Java.
+- **Login:** correo y contraseña, más Google.
+  - El admin se habilita **solo** con el claim `admin` (D-011). Iniciar sesión, incluso con Google, no da permisos.
+- **Primer administrador (bootstrap), sin credenciales locales:**
+  - Una función `claimAdmin` asigna el claim solo si el correo del usuario está en la lista `ADMIN_EMAILS` (parámetro de Functions, no es secreto) **y `email_verified == true`**.
+  - Con el claim asignado, se usan `grantAdmin` y `revokeAdmin`.
+  - **Por qué:** evita guardar claves de cuenta de servicio y evita depender de gcloud.
+- **Lecturas de Next.js:** el catálogo público se lee con el SDK cliente de Firestore bajo las reglas públicas (published, active y `deletedAt == null`); el admin lee como usuario autenticado con el claim. Las escrituras de dinero, stock, publicación y eliminación van por Functions. No hay Admin SDK en Next.js. La revalidación se hace con `/api/revalidate` y `REVALIDATE_SECRET` (Secret Manager).
+- **Cuenta `admin@gmail.com` con contraseña `admin123`: NO se crea (tech-lead, seguridad > preferencias).**
+  - `admin@gmail.com` no es un correo de Carlos. Su dueño real podría recuperar la contraseña o entrar con Google y quedarse con el admin de la tienda.
+  - `admin123` aparece en todas las listas de contraseñas filtradas.
+  - Se propone que Carlos use su propio Gmail, entrando con Google: es lo más simple y no requiere contraseña. La lista `ADMIN_EMAILS` se fija cuando Carlos confirme el correo.
+  - Las contraseñas nunca se escriben en archivos ni en el repo.
+
+## D-032 · 2026-10-19 · Resoluciones sobre 2B.6, admin y triggers — vigente (tech-lead)
+- **Se aceptan:**
+  - Las extensiones aditivas del catálogo: `changes` en `BatchReport`, `discountRemoved`, `INVALID_PRODUCT_DATA`, `MISSING_NAME`, `BARCODE_TOO_LONG` y `PARTIAL_FAILURE`.
+  - `imports.kind` incluye `create` y `update`.
+  - Auditoría posterior a las transacciones, con `PARTIAL_FAILURE`.
+  - Slug único entre productos vigentes.
+  - Números estrictos (`"1,000"` es inválido; `"1.000"` = 1000).
+  - Reintento acotado de los triggers: 3 intentos, solo ante error de red, 429 o 5xx. Cambia la sección 8.1 del contrato.
+  - `claimAdmin` (sección 5.8b) con `ADMIN_EMAILS` y `email_verified`.
+  - El admin puede editar el contenido de un producto eliminado (QA, S-2).
+- **Se corrige:** el tipo `AuthRequestLike` de `common/auth.ts` debe aceptar `CallableRequest` y se quitan los rodeos de `admin` y `catalog`.
+- **Por qué:** son cambios aditivos o más estrictos (seguridad y correctitud) y ya tienen tests.
+- Los contratos pasan a la v1.3.
+
+## D-030 · 2026-10-19 · Un solo proyecto de trabajo: `nutraelements` (Blaze) — vigente (decisión de Carlos; reemplaza D-009 y D-021)
+- **Decisión:** el desarrollo y las pruebas con Firebase real se hacen en `nutraelements` (plan Blaze).
+  - Verificado en solo lectura el 2026-10-19:
+    - Firestore `(default)` en `us-east4`, modo nativo.
+    - Web app `nutra-web`.
+    - Bucket `nutraelements.firebasestorage.app`.
+  - Carlos creó Firestore y Authentication (con un usuario).
+  - `nutraelementsdev` y `nutraelementsprod` quedan **sin uso** (no se borran).
+  - `.env.local` ya apunta a `nutraelements`.
+- **Alternativas:** mantener `nutraelementsdev` en Spark con emuladores (D-021).
+- **Por qué:** decisión de Carlos. En Blaze se pueden desplegar Functions, Secret Manager y App Hosting, así que se puede conectar el admin con la tienda de verdad.
+- **Riesgo:** no hay separación entre pruebas y producción. Mitigaciones:
+  - El sitio sigue en noindex (`SITE_INDEXABLE=false`), con Flow sandbox y sin dominio, como ya decía D-021.
+  - Las reglas de Firestore y Storage nunca se abren.
+  - Alerta de presupuesto de 20 USD.
+  - **Antes del lanzamiento**, limpiar los pedidos de prueba y reiniciar `counters/orders`, con confirmación de Carlos.
+  - Más adelante, si se quiere aislamiento real, se vuelve a un proyecto de dev separado.
+- **Regla de despliegue (AGENTS.md, regla 6):** como ahora es el proyecto con plan de pago, **cada despliegue a `nutraelements` requiere la confirmación explícita de Carlos sobre esa acción concreta**. La autorización de "usar el proyecto" no cubre desplegar.
+- **Por actualizar** (devops, cuando Carlos confirme): el alias `default` de `.firebaserc` y `AGENTS.md`, que hoy dicen `dev → nutraelementsdev`. D-026 (sin emuladores) sigue vigente hasta que Carlos lo cambie.
+- **Pendiente de confirmar:** la región del bucket (Carlos indicó "uest1", que se interpreta como `us-east1`; el CLI no la muestra).
+
+## D-031 · 2026-10-19 · Integración real en `nutraelements`: autorizaciones y condiciones — vigente (decisión de Carlos)
+- **Carlos autoriza:**
+  - El plan de integración real (funciones, reglas, índices y conexión del frontend).
+  - El despliegue de reglas e índices de Firestore y de las reglas de Storage a `nutraelements`. Cada despliegue siguiente se consulta aparte (D-030).
+  - Flow **sandbox** por ahora.
+  - **No instalar Java:** los tests de reglas siguen sin ejecutarse (D-026).
+- **Admin inicial:** el usuario de Authentication es `admin@gmail.com`. **La contraseña no se escribe en ningún archivo.** Carlos reconoce que es provisoria y la cambiará.
+- **Bloqueos antes de recibir pedidos reales o publicar el dominio** (qa-reviewer y devops lo verifican con Carlos):
+  1. Cambiar la contraseña del admin por una fuerte, y usar un correo propio que reciba recuperaciones de contraseña, no `admin@gmail.com`.
+  2. Activar MFA para el admin, o evaluar hacerlo.
+  3. Cargar las credenciales de Flow en Secret Manager (las carga Carlos) y pasar a producción solo con su confirmación.
+  4. Limpiar los pedidos de prueba y reiniciar `counters/orders` (D-030).
+- **Por qué se acepta el riesgo hoy:** el sitio está en noindex y sin dominio, los datos son de prueba y el admin solo manipula datos de prueba.
+- **Sin emuladores:** los tests de transacciones y de reglas siguen sin ejecutarse. El primer arranque real de estas funciones será en el proyecto en la nube.
+- **2026-10-19, tech-lead (sobre D-031):** el primer admin se obtiene con la función `claimAdmin` (contrato 5.8b), que exige que el **correo esté verificado** y figure en el parámetro `ADMIN_EMAILS`. Una cuenta creada en la consola de Firebase no queda verificada. Por eso el admin real debe ser un **correo propio de Carlos, verificado**, no `admin@gmail.com`. Después de reclamar el rol, `ADMIN_EMAILS` se vacía. Los triggers reintentan 3 veces (cambio menor de la sección 8.1 del contrato, aceptado).
+- **2026-10-19, tech-lead (sobre D-031):** Carlos pidió usar `admin@gmail.com` como admin. **No se pone en `ADMIN_EMAILS`.** Motivos: ese correo no es verificable por Carlos, y si el proveedor de Google está activo en Auth, quien sea dueño de esa dirección de Gmail podría iniciar sesión con Google y reclamar el rol de administrador. `ADMIN_EMAILS` se despliega **vacío** (nadie puede reclamar el rol) hasta que Carlos entregue un correo propio y verificable. Es reversible.
+- **2026-10-19, tech-lead:** Carlos confirmó el primer despliegue: secreto `REVALIDATE_SECRET`, funciones de catálogo, admin y triggers, código a GitHub con PR de `develop` a `main`, backend de App Hosting en `us-east4` conectado a `main`, y pruebas de humo. El merge del PR lo aprueba Carlos.

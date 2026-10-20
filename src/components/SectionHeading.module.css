@@ -1,0 +1,34 @@
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.center {
+  justify-content: center;
+  text-align: center;
+}
+.title {
+  margin: 0;
+}
+.subtitle {
+  margin: var(--space-2) 0 0;
+  max-width: 60ch;
+  color: var(--color-text-muted);
+}
+.rule {
+  display: block;
+  width: 3rem;
+  height: 3px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--color-gold), var(--color-primary));
+}
+.center .rule {
+  margin-inline: auto;
+}
+.action {
+  flex-shrink: 0;
+}

@@ -10,7 +10,9 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 - Servicios de Google Cloud: Secret Manager y otros según se necesite
 - Pagos: Flow (sandbox en dev, producción en prod), integrado mediante Cloud Functions. Credenciales en Secret Manager; en local, en `.env` (no versionado)
 - Correos: el MVP no envía correos (D-008)
-- Entornos: development y production, cada uno con su propio proyecto de Firebase. Alias en .firebaserc: `dev` → `nutraelementsdev` (plan Spark) y `prod` → `nutraelements` (plan Blaze). Ramas: develop → dev y main → prod
+- Entornos: un solo proyecto de Firebase de trabajo, `nutraelements` (plan Blaze), por decisión de Carlos (D-030). Alias en .firebaserc: `prod` → `nutraelements`. `nutraelementsdev` y `nutraelementsprod` están sin uso. Rama de trabajo: develop; el sitio se publica desde main. Hasta el lanzamiento funciona como staging: noindex, Flow sandbox y sin dominio. **Cada despliegue a este proyecto requiere la confirmación explícita de Carlos sobre esa acción concreta**
+- Región: `us-east4` para App Hosting, Firestore, Functions y Storage, tanto en dev como en prod (D-010)
+- Renderizado: el catálogo y las páginas públicas son estáticos con ISR y revalidación bajo demanda; carrito, checkout y admin son dinámicos (D-022)
 
 ## Estructura del repositorio
 - /src/app — páginas y rutas (App Router)
@@ -28,7 +30,9 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 - Tests de reglas de seguridad: <comando, cuando exista>
 - Build: npm run build
 - Build de funciones: cd functions && npm run build
-- Despliegue a desarrollo: firebase deploy --project dev (solo devops)
+- Desarrollo y pruebas: siempre contra el Emulator Suite (dev en Spark no admite Functions, Storage ni App Hosting)
+- Despliegue de reglas e índices a dev (solo Auth y Firestore): firebase deploy --project dev --only firestore (solo devops)
+- Despliegue a producción: firebase deploy --project prod --only functions,firestore,storage y rollout de App Hosting desde main (solo devops, con confirmación explícita del usuario). Antes del lanzamiento, prod funciona como staging: noindex, Flow sandbox y sin dominio (D-021)
 
 ## Equipo de agentes
 - tech-lead: planifica, decide, coordina y revisa. Es el único que delega trabajo.
@@ -75,7 +79,7 @@ E-Commerce de Suplementos Nutra Elements el cual necesita posicionamiento SEO, d
 - / (inicio)
 - /productos (catálogo)
 - /productos/[slug] (ficha de producto) — prioridad máxima: JSON-LD Product con precio y disponibilidad. Valoraciones (aggregateRating/review) solo cuando existan reseñas reales y visibles (D-014)
-- /categorias/[slug] (por ejemplo: proteínas, vitaminas, creatina)
+- /categorias/[slug] (vitaminas, magnesio, minerales, omega-3, belleza y bienestar; ver D-023)
 - /blog y /blog/[slug] (guías y artículos)
 - /nosotros
 - /contacto
