@@ -1,0 +1,60 @@
+import * as logger from "firebase-functions/logger";
+import { getAppErrorCode } from "../common/errors.js";
+import type { Deps } from "../orders/tx.js";
+import { applyFlowStatus, FLOW_TOKEN_REGEX } from "./apply-status.js";
+import { FlowApiError, type FlowClient } from "./flow-client.js";
+
+// flowConfirm (functions.md 3.3): endpoint HTTP que Flow llama (POST application/x-www-form-urlencoded
+// con `token`). No se confía en nada del cuerpo salvo el token, que se valida contra Flow con
+// `getStatus` firmado. Respuestas: 405 método, 400 token inválido/desconocido, 500 fallo interno o de
+// red (Flow reintenta; su política de reintentos NO está en la documentación), 200 procesado.
+
+export interface FlowConfirmDeps extends Deps {
+  /** Cliente de Flow; puede lanzar si la configuración no es válida (se responde 500). */
+  getFlow: () => FlowClient;
+}
+
+export interface HttpRequestLike {
+  method: string;
+  body?: unknown;
+}
+
+export interface HttpResult {
+  status: 200 | 400 | 405 | 500;
+  /** Cabecera `Allow` para el 405. */
+  allow?: string;
+}
+
+function extractToken(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const token = (body as { token?: unknown }).token;
+  return typeof token === "string" && FLOW_TOKEN_REGEX.test(token) ? token : undefined;
+}
+
+export async function handleFlowConfirm(deps: FlowConfirmDeps, req: HttpRequestLike): Promise<HttpResult> {
+  if (req.method !== "POST") return { status: 405, allow: "POST" };
+  const token = extractToken(req.body);
+  if (!token) return { status: 400 };
+
+  try {
+    const status = await deps.getFlow().getStatus(token);
+    const result = await applyFlowStatus(deps, token, status);
+    if (result.kind === "order_not_found") {
+      logger.warn("Confirmación de Flow para un pedido desconocido");
+      return { status: 400 };
+    }
+    return { status: 200 };
+  } catch (err) {
+    if (err instanceof FlowApiError && err.kind === "client") {
+      // Flow no reconoce el token (o las credenciales no sirven): reintentar no ayuda.
+      logger.warn("getStatus rechazado por Flow", { httpStatus: err.httpStatus, flowCode: err.flowCode });
+      return { status: 400 };
+    }
+    // Error de red/Flow/Firestore/configuración: 500 para que Flow reintente. Sin mensaje (puede traer datos).
+    logger.error("flowConfirm falló", {
+      errorName: err instanceof Error ? err.name : typeof err,
+      appCode: getAppErrorCode(err),
+    });
+    return { status: 500 };
+  }
+}
