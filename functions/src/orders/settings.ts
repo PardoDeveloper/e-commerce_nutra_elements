@@ -12,8 +12,11 @@ export const DEFAULT_RESERVATION_MINUTES = { flow: 30, transfer: 2880 } as const
 export const DEFAULT_LIMITS = {
   createOrderPerIpPer10Min: 5,
   pendingOrdersPerEmail: 3,
-  orderStatusPerIpPer10Min: 30,
+  // 120: el polling de la página de retorno de Flow hace 18 a 30 consultas en 90 s (D-032).
+  orderStatusPerIpPer10Min: 120,
   orderStatusFailuresPerOrder: 10,
+  // flowConfirm: Flow llama desde pocas IPs, por eso el valor es holgado; frena el abuso, no el uso normal.
+  flowConfirmPerIpPer10Min: 300,
 } as const;
 
 const publicSchema = z.object({
@@ -43,6 +46,7 @@ const privateSchema = z.object({
       pendingOrdersPerEmail: z.number().int().optional(),
       orderStatusPerIpPer10Min: z.number().int().optional(),
       orderStatusFailuresPerOrder: z.number().int().optional(),
+      flowConfirmPerIpPer10Min: z.number().int().optional(),
     })
     .optional(),
 });
@@ -95,6 +99,7 @@ export function parsePrivateSettings(data: DocData | undefined): PrivateSettings
       pendingOrdersPerEmail: inRange(limits?.pendingOrdersPerEmail, 1, 50, DEFAULT_LIMITS.pendingOrdersPerEmail),
       orderStatusPerIpPer10Min: inRange(limits?.orderStatusPerIpPer10Min, 1, 1000, DEFAULT_LIMITS.orderStatusPerIpPer10Min),
       orderStatusFailuresPerOrder: inRange(limits?.orderStatusFailuresPerOrder, 1, 100, DEFAULT_LIMITS.orderStatusFailuresPerOrder),
+      flowConfirmPerIpPer10Min: inRange(limits?.flowConfirmPerIpPer10Min, 1, 10_000, DEFAULT_LIMITS.flowConfirmPerIpPer10Min),
     },
   };
 }

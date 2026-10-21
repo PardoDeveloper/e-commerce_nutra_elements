@@ -162,6 +162,7 @@ export class MemoryDb implements Db {
   }
 
   private applyWrites(writes: Write[]): void {
+    if (writes.length === 0) return; // transacción de solo lectura: no hay commit de escritura
     // Se simula en una copia para que un fallo a mitad (create duplicado, update de algo inexistente)
     // no deje la transacción aplicada a medias.
     const staged = new Map<string, Stored | undefined>();

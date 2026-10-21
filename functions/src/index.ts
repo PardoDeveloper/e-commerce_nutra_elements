@@ -16,3 +16,8 @@ export * from "./catalog/index.js";
 export * from "./admin/index.js";
 // triggers/: revalidación ISR (otro agente).
 export * from "./triggers/index.js";
+// orders/: createOrder, getOrderStatus, confirmTransferPayment, resolvePaymentReview, cancelOrder,
+// updateFulfillment, recordManualRefund, releaseExpiredReservations.
+export * from "./orders/index.js";
+// payments/: createFlowPayment, flowConfirm.
+export * from "./payments/index.js";

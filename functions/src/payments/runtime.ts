@@ -57,23 +57,38 @@ export function getFlowRuntime(): { config: FlowConfig; client: FlowClient } {
   return cachedFlow;
 }
 
-let cachedApiClient: FlowClient | null | undefined;
+/**
+ * Proveedor del cliente solo para `getStatus` (config `api`: ambiente, base y claves; sin las URLs).
+ * Cachea SOLO el éxito: un fallo de configuración (p. ej. un secreto aún no cargado) no se recuerda,
+ * así que al corregirlo la misma instancia se recupera sin reiniciarse (M4, QA). Devuelve `undefined`
+ * si la configuración no es válida; el llamador decide qué hacer.
+ */
+export function makeApiClientProvider(readEnv: () => FlowEnvInput): () => FlowClient | undefined {
+  let cached: FlowClient | undefined;
+  return () => {
+    if (cached) return cached;
+    try {
+      const c = resolveFlowConfig(readEnv(), "api");
+      cached = createFlowClient({ apiBase: c.apiBase, apiKey: c.apiKey, secretKey: c.secretKey });
+      return cached;
+    } catch (err) {
+      logger.warn("Flow no está configurado; no se puede consultar a Flow", { errorName: err instanceof Error ? err.name : typeof err });
+      return undefined;
+    }
+  };
+}
 
 /**
  * Cliente solo para consultar `getStatus` (reconciliación y expiración). `undefined` si la
  * configuración de Flow no es válida: en ese caso esas rutas siguen funcionando sin Flow.
  */
-export function getFlowApiClient(): FlowClient | undefined {
-  if (cachedApiClient === undefined) {
-    try {
-      const c = resolveFlowConfig(readFlowEnv(), "api");
-      cachedApiClient = createFlowClient({ apiBase: c.apiBase, apiKey: c.apiKey, secretKey: c.secretKey });
-    } catch (err) {
-      logger.warn("Flow no está configurado; no se reconcilia con Flow", { errorName: err instanceof Error ? err.name : typeof err });
-      cachedApiClient = null;
-    }
-  }
-  return cachedApiClient ?? undefined;
+export const getFlowApiClient: () => FlowClient | undefined = makeApiClientProvider(readFlowEnv);
+
+/** Para `flowConfirm`: lanza si no hay configuración válida (la respuesta es 500 y Flow reintenta). */
+export function requireFlowApiClient(): FlowClient {
+  const client = getFlowApiClient();
+  if (!client) throw new Error("Configuración de Flow no válida");
+  return client;
 }
 
 /** Reconciliación de `getOrderStatus`: consulta `getStatus` y aplica la rutina de `flowConfirm`. */

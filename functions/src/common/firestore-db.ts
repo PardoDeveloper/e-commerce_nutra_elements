@@ -63,6 +63,9 @@ class FirestoreTx implements Tx {
   }
 }
 
+/** Reintentos por contención (el SDK usa 5 por defecto): el contador de pedidos es un documento caliente. */
+const MAX_TX_ATTEMPTS = 10;
+
 function isAborted(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code;
   return code === 10 || code === "aborted" || code === "ABORTED";
@@ -74,7 +77,7 @@ export function createFirestoreDb(): Db {
   return {
     async runTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
       try {
-        return await db.runTransaction((t) => fn(new FirestoreTx(db, t)));
+        return await db.runTransaction((t) => fn(new FirestoreTx(db, t)), { maxAttempts: MAX_TX_ATTEMPTS });
       } catch (err) {
         if (isAborted(err)) throw new ContentionError();
         throw err;

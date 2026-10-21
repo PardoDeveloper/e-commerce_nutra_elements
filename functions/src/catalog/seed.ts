@@ -100,7 +100,7 @@ export function buildSeedData(): SeedData {
       limits: {
         createOrderPerIpPer10Min: 5,
         pendingOrdersPerEmail: 3,
-        orderStatusPerIpPer10Min: 30,
+        orderStatusPerIpPer10Min: 120,
         orderStatusFailuresPerOrder: 10,
       },
     },
