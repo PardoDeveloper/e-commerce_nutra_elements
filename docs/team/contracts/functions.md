@@ -1,6 +1,17 @@
 # Contrato de Cloud Functions — Nutra Elements
 
-Tarea 2A.2. Autor: firebase-architect. Estado: **v1.3 — D-032 aplicada (2026-10-19)** (v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Contrato con nextjs-frontend: no se cambia sin aprobación.
+Tarea 2A.2. Autor: firebase-architect. Estado: **v1.4 — D-032 y correcciones del QA de pedidos y pagos (2026-10-20)** (v1.3: D-032 de catálogo; v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Contrato con nextjs-frontend: no se cambia sin aprobación.
+
+**Cambios y desviaciones aceptadas v1.4 (D-032, aprobadas por el tech-lead):**
+- `order.flow.paidFlowOrder` (ver data-model.md 2.3) y detección del segundo pago de Flow en cualquier estado salvo `pending_payment`, `expired` y `cancelled` (3.3).
+- `ORDER_NOT_PAYABLE` en el reintento idempotente de `createOrder` cuando el pedido ya no está `pending_payment`.
+- Huella de idempotencia más estricta: carrito (ordenado), medio de pago, RUT, correo y entrega; el mismo `clientRequestId` con otro contenido es `INVALID_INPUT`.
+- Guarda anti-cobro real: en `APP_ENV` `local` y `staging` solo se acepta el sandbox de Flow; en `production`, solo la API real.
+- Token de acceso derivado del `clientRequestId` (3.1): un reintento idempotente devuelve el mismo token (M3).
+- `flowConfirm`: límite por IP y respuesta 429 (3.3); usa solo la configuración de la API de Flow (M4).
+- `releaseExpiredReservations` corta el ciclo tras 3 errores seguidos de Flow (4.5, M2).
+- `recordManualRefund`: `method: "flow"` solo si el pedido se pagó con Flow (4.6, B1).
+- Límite de `getOrderStatus`: 120 consultas por IP cada 10 minutos (3.4).
 Depende de [data-model.md](data-model.md) (rutas, campos, estados, fórmulas). Decisiones: D-004 a D-012, D-016, D-018, D-020 a D-025, D-027, D-029.
 
 Lo que **no** he podido verificar (debe leerse en la documentación oficial antes de implementar; está marcado "VERIFICAR"): la API de Flow (nombres de parámetros, firma, estados, forma del retorno, reintentos), las opciones exactas de `firebase-functions` v2 (`onCall`, `onRequest`, `onSchedule`, `onDocumentWritten`) en la versión instalada, y el comportamiento de secretos y `.env` en el emulador.
@@ -123,7 +134,7 @@ interface CreateOrderResponse {
 }
 ```
 - Los precios del `response` son informativos para pintar la confirmación; lo que vale es el pedido en el servidor. El cliente **no** envía nunca precios, descuentos, envío ni total.
-- Token de acceso: 32 bytes aleatorios (`crypto.randomBytes`), `base64url` (43 caracteres). En el pedido solo se guarda `accessTokenHash = sha256(token)`. Quien conozca solo el número `NE-xxxxxx` no puede ver nada.
+- Token de acceso (v1.4): `base64url(sha256("nutra-elements:order-access-token:v1:" + clientRequestId))` (43 caracteres; 122 bits de entropía del UUID v4 que solo conoce el navegador). Antes eran 32 bytes aleatorios; se deriva para que un reintento idempotente devuelva el mismo token sin guardarlo en claro. En el pedido solo se guarda `accessTokenHash = sha256(token)`. Quien conozca solo el número `NE-xxxxxx` no puede ver nada.
 - Pasos
   1. `enforceAppCheck`. Validar esquema. Límite por IP: `rateLimits` clave `createOrder:<sha256(ip)>`, máx. **5 pedidos por 10 minutos** y, por correo, máx. **3 pedidos `pending_payment` abiertos** (se consulta fuera de la transacción) → `RATE_LIMITED`. Son los valores iniciales aceptados en D-024 y son **configurables** en `settings/private.limits` (`createOrderPerIpPer10Min`, `pendingOrdersPerEmail`); evitan bloquear stock con pedidos basura. Validar el RUT (módulo 11) y normalizarlo también en este paso, antes de tocar datos → `INVALID_RUT`.
   2. Transacción: leer `idempotencyKeys/{sha256(clientRequestId)}`; si existe, devolver el **mismo** pedido (ver "Idempotencia"). Leer `settings/public`, `settings/private`, `counters/orders` y los `products/{sku}` del carrito (todas las lecturas primero).
@@ -142,7 +153,7 @@ interface CreateOrderResponse {
   | `failed-precondition` | `ZERO_TOTAL` / `ORDER_TOO_LARGE` | "No se puede procesar este pedido." |
   | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos. Intenta de nuevo en unos minutos." |
   | `aborted` | `CONTENTION` | "El sistema está ocupado, intenta de nuevo." (la transacción agotó los reintentos) |
-- Idempotencia: el cliente genera `clientRequestId` una vez por intento de compra y lo reutiliza si hay un fallo de red o un reintento. Si `idempotencyKeys/...` ya existe, se devuelve el pedido ya creado (sin descontar de nuevo ni consumir otro número). **Como el token en claro nunca se guarda, un reintento idempotente genera un token nuevo y reemplaza `accessTokenHash`** (el token anterior queda invalidado; el primero nunca llegó al cliente). Para cualquier otra llamada con ese `clientRequestId` pero con carrito distinto (o con otro RUT) → `INVALID_INPUT`.
+- Idempotencia: el cliente genera `clientRequestId` una vez por intento de compra y lo reutiliza si hay un fallo de red o un reintento. Si `idempotencyKeys/...` ya existe, se devuelve el pedido ya creado (sin descontar de nuevo ni consumir otro número). **Desde la v1.4 el token se deriva del `clientRequestId`, así que el reintento devuelve el MISMO token y no escribe nada en el pedido** (el que el cliente ya recibió sigue válido). Si el pedido ya no está `pending_payment`, `ORDER_NOT_PAYABLE`. Para cualquier otra llamada con ese `clientRequestId` pero con carrito distinto (o con otro RUT) → `INVALID_INPUT`.
 - Efectos y revalidación: cambia `stock` de los productos → el trigger `onProductWritten` revalida las fichas solo si cambió `inStock` (ver 8).
 - Concurrencia: dos compradores del último producto → uno obtiene el pedido y el otro `OUT_OF_STOCK`, nunca ambos (sección 9, test 1).
 
@@ -178,7 +189,8 @@ interface CreateFlowPaymentResponse {
   | Situación | Respuesta |
   |---|---|
   | Método distinto de POST | 405 |
-  | `token` ausente, vacío, >100 caracteres o con caracteres no esperados | 400 |
+  | Más de `limits.flowConfirmPerIpPer10Min` (300) llamadas por IP en 10 minutos (v1.4) | 429, sin llamar a Flow |
+  | `token` ausente, vacío, >100 caracteres o con caracteres no esperados | 400 (se rechaza antes de leer Firestore o llamar a Flow, y no consume el límite) |
   | Flow no reconoce el token (`getStatus` devuelve error de cliente) | 400 (no se reintenta) |
   | Falla interna o de red hacia Flow/Firestore | 500 (Flow reintenta; VERIFICAR política de reintentos) |
   | Procesado (pagado, en revisión, pendiente, rechazado, duplicado) | **200** cuerpo vacío |
@@ -190,11 +202,13 @@ interface CreateFlowPaymentResponse {
        - `pending_payment` con `stockState == reserved` → `paid` (confirmar venta: `reserved -= qty`, `stockState = committed`, `fulfillmentStatus = preparing`, `paidAt`, `statusHistory`, **métricas** con `increment`).
        - `expired` (`stockState == released`) → intentar **re-reservar** todo en la misma transacción; si alcanza → `paid`; si no → `payment_review` (`NO_STOCK_AFTER_EXPIRY`) y sin tocar stock.
        - `cancelled` → `payment_review` (`PAID_AFTER_CANCEL`).
-       - `paid`, `payment_review` o `refunded` → no hay cambios (duplicado; un pedido reembolsado no vuelve a `paid`).
+       - `paid`, `payment_review` o `refunded` con el mismo `flowOrder` → no hay cambios (duplicado; un pedido reembolsado no vuelve a `paid`).
+       - (v1.4) `paid`, `payment_review` o `refunded` con un `flowOrder` distinto de `flow.paidFlowOrder` → segundo cobro: resultado `duplicate`; se anota `DUPLICATE_PAYMENT` una sola vez por token en `statusHistory` y en `paymentEvents.warnings`; el pedido no cambia de estado.
      - `status` pendiente (1) → solo registrar `flow.lastStatus`; el pedido sigue `pending_payment`.
      - `status` rechazado o anulado (3, 4) → registrar; el pedido sigue `pending_payment` y el cliente puede reintentar mientras dure la reserva.
      - Escribir `paymentEvents/{token}` con `outcome` y `receivedCount += 1`.
   4. Responder 200.
+- **Configuración (v1.4)**: `flowConfirm` solo necesita el cliente de la API (`APP_ENV`, `FLOW_API_BASE`, `FLOW_API_KEY`, `FLOW_SECRET_KEY`); no exige `FLOW_CONFIRMATION_URL` ni `SITE_URL`. Un fallo de configuración responde 500 y no se recuerda: al corregirlo, la misma instancia se recupera.
 - **Idempotencia**: Flow puede llamar varias veces (reintentos, o la reconciliación de `getOrderStatus`). Es seguro porque (a) el `getStatus` es la fuente de verdad, no el cuerpo; (b) la transición `pending_payment → paid` solo ocurre dentro de la transacción si el estado leído es `pending_payment`/`expired`; una segunda ejecución lee `paid` y no cambia nada, ni stock ni métricas; (c) `paymentEvents/{token}` registra el resultado y cuenta las llegadas. Un mismo pedido con dos tokens distintos pagados (dos intentos) deja el segundo como `duplicate` y queda **anotado para revisión manual** (reembolso a mano): se agrega `warnings` en `paymentEvents` y una entrada en `statusHistory`. PREGUNTA ABIERTA F3 (cómo avisar al admin sin correos: se muestra en el panel de pedidos "en revisión").
 - Efectos: escribe `orders/{n}`, `paymentEvents/{token}`, `products/*` (solo `reserved`/`stock`/`inStock`), `metrics/*` (solo al pasar a `paid`).
 - Revalidación: el cambio de `inStock` en productos lo cubre `onProductWritten`.
@@ -244,7 +258,7 @@ interface GetOrderStatusResponse {
 }
 ```
 - **No se devuelve**: email, teléfono, dirección, notas, **RUT** (dato personal, D-024), `accessTokenHash`, datos de Flow, `refund` ni `statusHistory`. Un pedido reembolsado se ve solo como `paymentStatus: 'refunded'`. Del domicilio solo `communeName`.
-- Errores: `not-found` / `ORDER_NOT_FOUND` tanto si el número no existe como si el token es incorrecto (misma respuesta y mismo tiempo aproximado; comparación en tiempo constante, y se hace el hash aunque el pedido no exista). `RATE_LIMITED`: máx. **30 consultas por 10 min por IP** (clave `getOrderStatus:<sha256(ip)>`) y **10 fallos por número**; ambos son valores iniciales aceptados (D-024), configurables en `settings/private.limits` (`orderStatusPerIpPer10Min`, `orderStatusFailuresPerOrder`).
+- Errores: `not-found` / `ORDER_NOT_FOUND` tanto si el número no existe como si el token es incorrecto (misma respuesta y mismo tiempo aproximado; comparación en tiempo constante, y se hace el hash aunque el pedido no exista). `RATE_LIMITED`: máx. **120 consultas por 10 min por IP** (v1.4; antes 30: el polling del retorno de Flow hace 18 a 30 en 90 s) (clave `getOrderStatus:<sha256(ip)>`) y **10 fallos por número**; ambos son valores iniciales aceptados (D-024), configurables en `settings/private.limits` (`orderStatusPerIpPer10Min`, `orderStatusFailuresPerOrder`).
 - **Reconciliación**: si `paymentMethod == "flow"`, `paymentStatus == "pending_payment"`, hay `flow.token` y `flow.lastCheckedAt` tiene más de 15 s, la función consulta `getStatus` y aplica **la misma rutina transaccional de `flowConfirm`** (es idempotente). Sirve si la confirmación de Flow se retrasa o si el túnel local no está activo. El resultado ya actualizado se devuelve en la misma respuesta.
 - Costo: 1 lectura del pedido (más ≤1 llamada a Flow cada 15 s) por consulta.
 - Pérdida del número o del token: sin correos (D-008) no hay recuperación; el número lo ve el cliente en pantalla. PREGUNTA ABIERTA F4.
@@ -309,11 +323,13 @@ interface UpdateFulfillmentResponse {
 - Consulta `orders where paymentStatus == "pending_payment" and reservedUntil <= now` (índice en data-model.md 5), `limit(100)` por ciclo.
 - Por cada pedido, **transacción propia**: releer; solo si sigue `pending_payment`, `stockState == "reserved"` y `reservedUntil <= now`: `stock += qty`, `reserved -= qty`, `inStock` recalculado, `stockState = released`, `paymentStatus = expired`, `statusHistory`. Antes de expirar un pedido de Flow que tenga `flow.token`, consulta `getStatus`: si ya está pagado, aplica la rutina de pago en lugar de expirar.
 - Idempotente: reejecutar no repone dos veces (lo impide `stockState`). Un fallo en un pedido no impide procesar los demás. No toca `payment_review`.
+- (v1.4, M2) **Corte por Flow caído**: antes de expirar un pedido de Flow con `flow.token` se consulta `getStatus` (hasta 10 s). Tras **3 errores seguidos** de Flow en una misma ejecución se corta el ciclo (el resto queda para la siguiente, 5 minutos después); un resultado sin error reinicia la cuenta.
 - Costo: 8.640 invocaciones por mes, con una consulta barata cada una (0 documentos casi siempre). El número de jobs de Cloud Scheduler es 1 (cuota gratuita por VERIFICAR).
 
 ---
 
 ### 4.6 `recordManualRefund` (registrar un reembolso hecho a mano, D-024 / P5)
+(v1.4, B1) Validación agregada: `method: "flow"` solo se acepta si el pedido se pagó con Flow; en uno pagado por transferencia da `INVALID_INPUT`. Lo contrario (un pedido de Flow devuelto por transferencia bancaria) sigue siendo válido.
 
 El dinero se devuelve **fuera del sistema** (panel de Flow o transferencia bancaria). Esta función solo lo **registra** en el pedido; no llama a Flow ni mueve dinero.
 
@@ -613,7 +629,7 @@ Cada pieza lleva su test; ninguna pasa a QA sin ellos en verde.
 2. **Concurrencia del stock** (`createOrder`): stock 1, 10 compradores en paralelo → exactamente un pedido y nueve `OUT_OF_STOCK`; el `stock` final es 0 y `reserved` es 1; los números de pedido son consecutivos y sin repetirse (contador); stock 5 con compras de 2 en paralelo → no sobrevende.
 3. **Manipulación del precio**: el request nunca acepta `price`, `total`, `shipping` ni `discount` (campos desconocidos → `INVALID_INPUT`); con descuento activo, el snapshot usa `finalPrice` recalculado; modificar a mano `finalPrice` en el documento no cambia lo cobrado (se recalcula desde `price` y `discount`); envío gratis solo con umbral definido y `subtotal` con descuentos; retiro = 0; comuna fuera de lista rechazada; cantidades fuera de rango rechazadas.
 4. **Fórmulas**: tabla de casos de `computeFinalPrice` (porcentaje con redondeo de mitades hacia arriba, fijo, clamp a 0, 99%, `fixed == price - 1`).
-5. **Idempotencia de `createOrder`**: mismo `clientRequestId` dos veces → un solo pedido, un solo descuento de stock y el segundo token invalida al primero.
+5. **Idempotencia de `createOrder`**: mismo `clientRequestId` dos veces → un solo pedido, un solo descuento de stock y el mismo token (v1.4: el reintento no invalida el token ya entregado).
 6. **Idempotencia de Flow** (`flowConfirm`, con `getStatus` simulado): (a) pago correcto → `paid`, `fulfillmentStatus = preparing`, métricas +1; (b) la misma confirmación 5 veces (también en paralelo) → un solo `paid`, métricas +1, `receivedCount = 5`; (c) monto distinto → `payment_review`, sin `paid`; (d) pago tardío con stock → `paid`; (e) pago tardío sin stock → `payment_review`; (f) pedido cancelado → `payment_review`; (g) `getStatus` con firma o token inválidos → 400 sin cambios; (h) estado pendiente o rechazado → el pedido sigue `pending_payment`.
 7. **Firma de Flow**: prueba unitaria de la firma con vectores de la documentación oficial de Flow (VERIFICAR al implementar).
 8. **Reservas**: vencimiento libera una vez (dos ejecuciones seguidas = misma cantidad); no libera `payment_review` ni `paid`; con un `flow.token` ya pagado, aplica el pago en vez de expirar.
@@ -671,7 +687,7 @@ Propias de las funciones, no bloquean la v1:
 
 | # | Tema | Resolución |
 |---|---|---|
-| F2 | Límites anti-abuso | 5 pedidos / 10 min por IP, 3 pendientes por correo, 30 consultas / 10 min por IP y 10 fallos por número en `getOrderStatus`: valores iniciales aceptados, configurables en `settings/private.limits` |
+| F2 | Límites anti-abuso | 5 pedidos / 10 min por IP, 3 pendientes por correo, 120 consultas / 10 min por IP (v1.4) y 10 fallos por número en `getOrderStatus`: valores iniciales aceptados, configurables en `settings/private.limits` |
 | F5 | Celda vacía en el Excel de stock | Fila inválida `EMPTY_STOCK`, no 0. La importación inicial de la planilla sigue D-018 (5, 5.1 y 5.3) |
 | P5 | Pedido pagado que se reembolsa | `recordManualRefund` (4.6): `paid → refunded`, terminal, reposición opcional, métricas ajustadas según D-025 (ingresos menos `refund.amount`; unidades solo si se repuso stock) |
 | P6 | RUT | Obligatorio, módulo 11 en `createOrder`, `INVALID_RUT`, normalizado, nunca expuesto |

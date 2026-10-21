@@ -227,19 +227,31 @@ describe("createOrder - validación del RUT (10b)", () => {
 });
 
 describe("createOrder - idempotencia (test 5)", () => {
-  it("mismo clientRequestId dos veces: un pedido, un descuento de stock y el segundo token invalida al primero", async () => {
+  it("mismo clientRequestId dos veces: un pedido, un descuento de stock y el MISMO token, que sigue válido (M3)", async () => {
     const env = makeEnv();
     const req = validCreateRequest();
     const first = await create(env, req);
+    const orderBefore = JSON.stringify(env.db.peek("orders/NE-000001"));
+    env.clock.advance(60_000);
     const second = await create(env, req);
     expect(second.orderNumber).toBe(first.orderNumber);
-    expect(second.accessToken).not.toBe(first.accessToken);
+    expect(second.accessToken).toBe(first.accessToken);
+    expect(second.accessToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(env.db.paths("orders/")).toEqual(["orders/NE-000001"]);
     expect(productStock(env.db, "1001")).toEqual({ stock: 3, reserved: 2, inStock: true });
     expect(env.db.peek("counters/orders")).toMatchObject({ last: 1 });
     const order = env.db.peek("orders/NE-000001") as DocData;
-    expect(order["accessTokenHash"]).toBe(hashAccessToken(second.accessToken));
-    expect(order["accessTokenHash"]).not.toBe(hashAccessToken(first.accessToken));
+    expect(order["accessTokenHash"]).toBe(hashAccessToken(first.accessToken)); // el token ya entregado no se invalidó
+    expect(JSON.stringify(order)).toBe(orderBefore); // el reintento no escribe nada en el pedido
+  });
+
+  it("el token depende del clientRequestId: pedidos distintos, tokens distintos; y no se guarda en claro ni en la clave", async () => {
+    const env = makeEnv();
+    const a = await create(env, validCreateRequest());
+    const b = await create(env, validCreateRequest());
+    expect(a.accessToken).not.toBe(b.accessToken);
+    expect(JSON.stringify(env.db.peek(`orders/${a.orderNumber}`))).not.toContain(a.accessToken);
+    for (const key of env.db.paths("idempotencyKeys/")) expect(JSON.stringify(env.db.peek(key))).not.toContain(a.accessToken);
   });
 
   it("el reintento no consume cupo de límite por IP ni cuenta como pedido pendiente por correo", async () => {

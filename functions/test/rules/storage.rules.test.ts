@@ -122,6 +122,11 @@ describe("escritura como admin", () => {
     await assertFails(storage("admin").ref("private/secreto.txt").delete());
   });
 
+  it("no sobrescribe (update) una imagen existente: los archivos son inmutables", async () => {
+    await assertFails(upload(OK_PATH, 100, "image/webp"));
+    await assertFails(upload("categories/magnesio/k3f9a1b2c3.webp", 100, "image/webp"));
+  });
+
   it("un token con admin como cadena no es admin", async () => {
     const ctx = env.authenticatedContext("user-3", { admin: "true" });
     await assertFails(putFile(ctx.storage().ref("products/2427831/nueva12345.webp"), 100, "image/webp"));

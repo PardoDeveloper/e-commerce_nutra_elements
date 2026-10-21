@@ -8,7 +8,7 @@ import { buildCreateResponse, buildOrderDoc, planReserve, requestFingerprint, ty
 import {
   consumeAttempt,
   formatOrderNumber,
-  generateAccessToken,
+  deriveAccessToken,
   hashAccessToken,
   rateLimitDoc,
   rateLimitKey,
@@ -58,7 +58,8 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
 
   const ipKey = ctx.ip ? paths.rateLimit(rateLimitKey("createOrder", ctx.ip)) : undefined;
   if (!ipKey) logger.warn("createOrder sin IP: no se aplica el límite por IP");
-  const token = generateAccessToken();
+  // Derivado del clientRequestId: un reintento idempotente devuelve el mismo token (M3).
+  const token = deriveAccessToken(req.clientRequestId);
   const tokenHash = hashAccessToken(token);
 
   try {
@@ -73,7 +74,7 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
 
       const now = clock();
 
-      // Reintento idempotente: mismo pedido, token nuevo (el anterior queda invalidado).
+      // Reintento idempotente: mismo pedido y MISMO token (derivado del clientRequestId); no se escribe nada.
       if (idemDoc) {
         const prevFingerprint = idemDoc["fingerprint"];
         const prevOrderNumber = idemDoc["orderNumber"];
@@ -82,7 +83,7 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
         if (!orderData) throw appError("INTERNAL");
         const order = parseOrder(orderData);
         if (order.paymentStatus !== "pending_payment") throw appError("ORDER_NOT_PAYABLE");
-        tx.update(paths.order(prevOrderNumber), { accessTokenHash: tokenHash, updatedAt: now });
+        if (order.accessTokenHash !== tokenHash) throw appError("INTERNAL"); // pedido creado con otro esquema de token: no debería existir
         return buildCreateResponse(order, token);
       }
 

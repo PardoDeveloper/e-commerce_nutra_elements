@@ -1,6 +1,12 @@
 # Contrato del modelo de datos (Firestore y Storage) — Nutra Elements
 
-Tarea 2A.1. Autor: firebase-architect. Estado: **v1.3 — D-032 aplicada (2026-10-19)** (v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Es el contrato con nextjs-frontend: no se cambia sin aprobación.
+Tarea 2A.1. Autor: firebase-architect. Estado: **v1.4.1 — ajustes de reglas (2026-10-20): `limits.flowConfirmPerIpPer10Min` admitido en `firestore.rules`; Storage sin `update` (archivos inmutables), sin cambios de datos ni de API** (v1.4: D-032 y correcciones del QA de pedidos y pagos; v1.3: D-032 de catálogo; v1.2: D-027 y D-029; v1.1: D-025; v1 aprobada por tech-lead el 2026-10-14, D-024). Es el contrato con nextjs-frontend: no se cambia sin aprobación.
+
+**Cambios v1.4 (aprobados por el tech-lead con la tarea de correcciones del QA, D-032):**
+- `orders.flow.paidFlowOrder` (int \| null): `flowOrder` del pago aceptado. Lo escribe `flowConfirm` al pasar a `paid` o `payment_review`.
+- Segundo pago de Flow: en cualquier estado salvo `pending_payment`, `expired` y `cancelled`, un `getStatus` pagado con un `flowOrder` distinto de `paidFlowOrder` no cambia el estado; agrega una vez a `statusHistory` `{kind: "payment", from: <estado>, to: <estado>, by: "flow", note: "DUPLICATE_PAYMENT"}` y `warnings: ["DUPLICATE_PAYMENT"]` en `paymentEvents/{token}`.
+- `settings/private.limits.orderStatusPerIpPer10Min` inicial 120 (antes 30); `limits.flowConfirmPerIpPer10Min` (300) es opcional y lo lee `flowConfirm`.
+- Token de acceso derivado del `clientRequestId` (ver functions.md 3.1). `idempotencyKeys` no cambia.
 Decisiones que lo respaldan: D-004, D-005, D-006, D-007, D-008, D-010, D-011, D-012, D-016, D-018, D-020, D-021, D-022, D-023, D-024, D-025, D-027, D-029. Requisitos de negocio: DESCUBRIMIENTO.md.
 Contrato hermano (funciones): [functions.md](functions.md).
 
@@ -227,7 +233,7 @@ ID = número legible `NE-000123` (D-007). El primer pedido es **`NE-000001`** (D
 | `currency` | `"CLP"` | sí | | `createOrder` |
 | `freeShippingApplied` | bool | sí | informativo | `createOrder` |
 | `accessTokenHash` | string | sí | SHA-256 hex del token de acceso (el token en claro se entrega una vez y no se guarda) | `createOrder` (y rotación en un reintento idempotente) |
-| `flow` | map \| null | no | `{commerceOrder, token, flowOrder, paymentUrl, attempt, lastStatus, lastCheckedAt, paidAt, amountPaid}`; solo si `paymentMethod == "flow"` | `createFlowPayment`, `flowConfirm` |
+| `flow` | map \| null | no | `{commerceOrder, token, flowOrder, paymentUrl, attempt, lastStatus, lastCheckedAt, paidAt, amountPaid, paidFlowOrder}`; `paidFlowOrder` (v1.4, int \| null) es el `flowOrder` del pago que se aceptó (o puso en revisión); un `getStatus` pagado con otro `flowOrder` es un segundo cobro (`DUPLICATE_PAYMENT`); solo si `paymentMethod == "flow"` | `createFlowPayment`, `flowConfirm` |
 | `transfer` | map \| null | no | `{confirmedBy (uid), confirmedAt, reference?, note?}` | `confirmTransferPayment` |
 | `refund` | map \| null | no | Solo si `paymentStatus == "refunded"`: `{amount: int (1..total), method: "flow"\|"transfer", refundedAt: Timestamp (fecha del reembolso hecho a mano), note (1..300), restock: bool, restocked: bool (true si se repuso stock), recordedBy: uid, recordedAt: Timestamp}` | `recordManualRefund` |
 | `review` | map \| null | no | `{reason, openedAt, resolvedBy?, resolvedAt?, resolution?: "accepted"\|"cancelled", note?}`; razones: `AMOUNT_MISMATCH`, `NO_STOCK_AFTER_EXPIRY`, `PAID_AFTER_CANCEL`, `CURRENCY_MISMATCH` | Servidor |
@@ -270,7 +276,7 @@ Ejemplo (pago con Flow, despacho a domicilio, sin umbral de envío gratis config
   "currency": "CLP",
   "freeShippingApplied": false,
   "accessTokenHash": "<sha256 hex>",
-  "flow": { "commerceOrder": "NE-000123", "token": "<token de Flow>", "flowOrder": 0, "paymentUrl": "<url de Flow>", "attempt": 1, "lastStatus": 2, "lastCheckedAt": "<Timestamp>", "paidAt": "<Timestamp>", "amountPaid": 32762 },
+  "flow": { "commerceOrder": "NE-000123", "token": "<token de Flow>", "flowOrder": 0, "paymentUrl": "<url de Flow>", "attempt": 1, "lastStatus": 2, "lastCheckedAt": "<Timestamp>", "paidAt": "<Timestamp>", "amountPaid": 32762, "paidFlowOrder": 0 },
   "transfer": null,
   "review": null,
   "refund": null,
@@ -328,7 +334,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 | `reservationMinutes` | map `{flow: int, transfer: int}` | sí | `flow`: 5–240 (por defecto **30**). `transfer`: 60–10080 (por defecto **2880 = 48 h**). Pendiente de confirmar por el jefe (D-006, PREGUNTA ABIERTA 2); son valores configurables |
 | `bank` | map | sí | `{bankName, accountType, accountNumber, holderName, holderRut, contactEmail?}` strings ≤100. **Datos de prueba hasta que Carlos entregue los reales.** No son secretos de acceso, pero se entregan solo al comprador con transferencia vía `getOrderStatus` |
 | `orderNumberStart` | int | sí | 1 a **100.000.000** (D-027), por defecto 1 (primer pedido `NE-000001`) |
-| `limits` | map | sí | Límites anti-abuso, valores iniciales configurables (D-024): `{createOrderPerIpPer10Min: int 1..100 (5), pendingOrdersPerEmail: int 1..50 (3), orderStatusPerIpPer10Min: int 1..1000 (30), orderStatusFailuresPerOrder: int 1..100 (10)}`. Si falta un valor, la Function usa el inicial |
+| `limits` | map | sí | Límites anti-abuso, valores iniciales configurables (D-024): `{createOrderPerIpPer10Min: int 1..100 (5), pendingOrdersPerEmail: int 1..50 (3), orderStatusPerIpPer10Min: int 1..1000 (120; v1.4, antes 30), orderStatusFailuresPerOrder: int 1..100 (10), flowConfirmPerIpPer10Min: int 1..10000 (300; v1.4, opcional: no se siembra; v1.4.1: `firestore.rules` ya lo admite)}`; todas las claves son opcionales y cualquier otra clave se rechaza. Si falta un valor, la Function usa el inicial |
 | `updatedAt` | Timestamp | sí | |
 
 ```json
@@ -346,7 +352,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
   "reservationMinutes": { "flow": 30, "transfer": 2880 },
   "bank": { "bankName": "BANCO DE PRUEBA", "accountType": "Cuenta corriente", "accountNumber": "000000000", "holderName": "Nutra Elements (prueba)", "holderRut": "11.111.111-1" },
   "orderNumberStart": 1,
-  "limits": { "createOrderPerIpPer10Min": 5, "pendingOrdersPerEmail": 3, "orderStatusPerIpPer10Min": 30, "orderStatusFailuresPerOrder": 10 },
+  "limits": { "createOrderPerIpPer10Min": 5, "pendingOrdersPerEmail": 3, "orderStatusPerIpPer10Min": 120, "orderStatusFailuresPerOrder": 10 },
   "updatedAt": "<Timestamp>"
 }
 ```
@@ -498,7 +504,7 @@ Bucket por defecto del proyecto, ubicación `us-east4` (D-010). **En dev (Spark)
 
 | Ruta | Lectura | Escritura / borrado | Tipos | Tamaño máx. |
 |---|---|---|---|---|
-| `products/{sku}/{file}` | pública | solo admin (claim) | `image/jpeg`, `image/png`, `image/webp` | **2 MiB** (D-024) |
+| `products/{sku}/{file}` | pública | solo admin (claim): `create` y `delete`, **sin `update`** (v1.4.1) | `image/jpeg`, `image/png`, `image/webp` | **2 MiB** (D-024) |
 | `categories/{slug}/{file}` | pública | solo admin | igual | 2 MiB |
 | cualquier otra ruta | denegada | denegada | — | — |
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   commerceOrderFor,
   consumeAttempt,
+  deriveAccessToken,
   currentCount,
   formatOrderNumber,
   generateAccessToken,
@@ -22,6 +23,14 @@ describe("token de acceso", () => {
     const b = generateAccessToken();
     expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(a).not.toBe(b);
+  });
+
+  it("el token derivado del clientRequestId es estable, de 43 caracteres y distinto por pedido", () => {
+    const id = "3f9c1c1e-3b0a-4f0e-9d53-2d3a6b1c7e11";
+    expect(deriveAccessToken(id)).toBe(deriveAccessToken(id));
+    expect(deriveAccessToken(id)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(deriveAccessToken(id)).not.toBe(deriveAccessToken("3f9c1c1e-3b0a-4f0e-9d53-2d3a6b1c7e12"));
+    expect(deriveAccessToken(id)).not.toBe(hashAccessToken(id)); // no es el hash que guarda la clave de idempotencia
   });
 
   it("el hash es SHA-256 hexadecimal conocido", () => {

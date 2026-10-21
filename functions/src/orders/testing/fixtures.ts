@@ -72,7 +72,7 @@ export const SETTINGS_PRIVATE: DocData = {
     holderRut: "11.111.111-1",
   },
   orderNumberStart: 1,
-  limits: { createOrderPerIpPer10Min: 5, pendingOrdersPerEmail: 3, orderStatusPerIpPer10Min: 30, orderStatusFailuresPerOrder: 10 },
+  limits: { createOrderPerIpPer10Min: 5, pendingOrdersPerEmail: 3, orderStatusPerIpPer10Min: 120, orderStatusFailuresPerOrder: 10 },
   updatedAt: T0,
 };
 

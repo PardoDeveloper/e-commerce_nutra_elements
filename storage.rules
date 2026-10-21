@@ -12,7 +12,8 @@ service firebase.storage {
       return request.auth != null && request.auth.token.get('admin', false) == true;
     }
 
-    // Nombre inmutable con identificador aleatorio nuevo en cada subida.
+    // Los archivos son inmutables: solo `create` y `delete` (sin `update`; para cambiar una imagen se sube otra y se borra la vieja).
+    // Nombre con identificador aleatorio nuevo en cada subida.
     function validFileName(file) {
       return file.matches('^[A-Za-z0-9_-]{8,40}\\.(jpg|jpeg|png|webp)$');
     }
@@ -25,7 +26,7 @@ service firebase.storage {
 
     match /products/{sku}/{file} {
       allow get: if true;
-      allow create, update: if isAdmin()
+      allow create: if isAdmin()
         && sku.matches('^[A-Za-z0-9_-]{1,32}$')
         && validFileName(file)
         && validImageUpload();
@@ -34,7 +35,7 @@ service firebase.storage {
 
     match /categories/{slug}/{file} {
       allow get: if true;
-      allow create, update: if isAdmin()
+      allow create: if isAdmin()
         && slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
         && validFileName(file)
         && validImageUpload();

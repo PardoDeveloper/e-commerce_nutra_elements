@@ -173,6 +173,9 @@ export async function handleRecordManualRefund(deps: Deps, data: unknown, uid: s
       return { orderNumber: order.orderNumber, paymentStatus: "refunded", alreadyRefunded: true, restocked };
     }
     if (status !== "paid") throw appError("INVALID_TRANSITION");
+    // B1 (QA): un pedido pagado por transferencia no pudo devolverse "por Flow". (Lo contrario es
+    // válido: un pedido de Flow puede reembolsarse a mano por transferencia bancaria.)
+    if (input.method === "flow" && order.paymentMethod !== "flow") throw appError("INVALID_INPUT");
 
     const now = deps.clock();
     const refund = { amount: input.amount, method: input.method, refundedAt, note: input.note, restock: input.restock };

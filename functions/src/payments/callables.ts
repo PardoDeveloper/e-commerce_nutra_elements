@@ -1,9 +1,10 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { callableSecurityOptions } from "../common/auth.js";
 import { toHttpsError } from "../common/errors.js";
+import { clientIpFrom } from "../orders/client-ip.js";
 import { handleCreateFlowPayment } from "./create-payment.js";
 import { handleFlowConfirm } from "./flow-confirm.js";
-import { FLOW_SECRETS, getDeps, getFlowRuntime } from "./runtime.js";
+import { FLOW_SECRETS, getDeps, getFlowRuntime, requireFlowApiClient } from "./runtime.js";
 
 // Funciones de Flow expuestas (functions.md 3.2 y 3.3). Región us-east4 por `setGlobalOptions`.
 
@@ -31,8 +32,9 @@ export const flowConfirm = onRequest(
   { invoker: "public", cors: false, memory: "256MiB", timeoutSeconds: 30, maxInstances: 10, secrets: FLOW_SECRETS },
   async (req, res) => {
     const result = await handleFlowConfirm(
-      { ...getDeps(), getFlow: () => getFlowRuntime().client },
-      { method: req.method, body: req.body },
+      // Solo necesita el cliente de la API (getStatus): no exige FLOW_CONFIRMATION_URL ni SITE_URL (M4).
+      { ...getDeps(), getFlow: requireFlowApiClient },
+      { method: req.method, body: req.body, ip: clientIpFrom(req.headers, req.ip) },
     );
     if (result.allow) res.set("Allow", result.allow);
     res.status(result.status).send();

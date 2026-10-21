@@ -344,3 +344,26 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **2026-10-19, tech-lead (sobre D-031):** el primer admin se obtiene con la función `claimAdmin` (contrato 5.8b), que exige que el **correo esté verificado** y figure en el parámetro `ADMIN_EMAILS`. Una cuenta creada en la consola de Firebase no queda verificada. Por eso el admin real debe ser un **correo propio de Carlos, verificado**, no `admin@gmail.com`. Después de reclamar el rol, `ADMIN_EMAILS` se vacía. Los triggers reintentan 3 veces (cambio menor de la sección 8.1 del contrato, aceptado).
 - **2026-10-19, tech-lead (sobre D-031):** Carlos pidió usar `admin@gmail.com` como admin. **No se pone en `ADMIN_EMAILS`.** Motivos: ese correo no es verificable por Carlos, y si el proveedor de Google está activo en Auth, quien sea dueño de esa dirección de Gmail podría iniciar sesión con Google y reclamar el rol de administrador. `ADMIN_EMAILS` se despliega **vacío** (nadie puede reclamar el rol) hasta que Carlos entregue un correo propio y verificable. Es reversible.
 - **2026-10-19, tech-lead:** Carlos confirmó el primer despliegue: secreto `REVALIDATE_SECRET`, funciones de catálogo, admin y triggers, código a GitHub con PR de `develop` a `main`, backend de App Hosting en `us-east4` conectado a `main`, y pruebas de humo. El merge del PR lo aprueba Carlos.
+- **2026-10-20, tech-lead (sobre D-031):** Carlos pidió quitar el inicio de sesión con Google. Se verificó con la API pública que **no está configurado** en `nutraelements` (`createAuthUri` con `google.com` responde `OPERATION_NOT_ALLOWED`), así que no hay nada que quitar y el riesgo de toma de cuenta por Google no existe hoy. **Si algún día se activa Google, esta decisión se revisa antes.** El comando correcto para crear el backend usa `--primary-region`, no `--location` (el handoff de devops tenía el flag equivocado).
+
+## D-032 · 2026-10-20 · Pedidos y pagos: resoluciones tras el QA (B1) — vigente
+- **Se acepta:**
+  - El límite inicial de `getOrderStatus` sube a **120 consultas por IP cada 10 minutos**, porque el polling del retorno de Flow hace 18 a 30 en 90 s.
+  - `order.flow.paidFlowOrder` entra al contrato (v1.4).
+  - `ORDER_NOT_PAYABLE` en el reintento idempotente.
+  - La huella de idempotencia más estricta.
+  - La guarda anti-cobro real: en `local` y `staging` solo el sandbox de Flow.
+- **Se corrige antes de la primera prueba de punta a punta con Flow:** A1, M1, M2 y M4 del QA.
+- **Se corrige antes de usar Flow real (producción):** A2 (el token de acceso en la `urlReturn`) y las pruebas contra Firestore real.
+- **M3:** un reintento idempotente de `createOrder` no debe invalidar el token ya entregado.
+- **F3 (cómo se entera el admin de un `payment_review`):** sin correos en el MVP, el panel de pedidos muestra un contador y una etiqueta destacada de "Pagos en revisión". Se implementa en el admin (nextjs-frontend).
+- **Despliegue:** pedidos y pagos se desploegan a `nutraelements` solo después de estas correcciones, con las credenciales de Flow sandbox cargadas por Carlos y con su confirmación para ese despliegue.
+
+## D-033 · 2026-10-21 · Operación privilegiada única para dejar operativo el admin — vigente (autorizada por Carlos)
+- **Contexto:** 10 de las 12 funciones invocables desde el navegador quedaron sin el permiso público de invocación tras el primer despliegue (devuelven 403 de IAM), y el usuario de Carlos no tiene el rol de administrador. En el equipo no hay `gcloud` ni credenciales por defecto.
+- **Carlos autoriza (opción A):** usar la sesión de Firebase CLI de Carlos, **solo en memoria**, para dos acciones:
+  1. Agregar el permiso público de invocación (`allUsers`, `roles/run.invoker`) **solo a los callables**: `claimAdmin`, `grantAdmin`, `revokeAdmin`, `createProduct`, `deleteProducts`, `restoreProducts`, `importPrices`, `importStock`, `setProductsPublished` y `updateProductCommerce`. **Los triggers de Firestore nunca se hacen públicos.**
+  2. Dejar como administrador al usuario `carlos.pardo.b78@gmail.com` (custom claim `admin: true` y correo verificado). Ningún otro usuario.
+- **Carlos NO autoriza:** la política de limpieza de imágenes de Artifact Registry (`functions:artifacts:setpolicy`). Queda pendiente.
+- **Condiciones:** el token no se imprime ni se guarda; no se crean claves de cuentas de servicio; el script va fuera del repo y se borra; no se despliega nada más.
+- **Por qué:** es el camino más corto y con menos superficie que instalar herramientas nuevas; son las mismas credenciales que Carlos ya usa para desplegar.

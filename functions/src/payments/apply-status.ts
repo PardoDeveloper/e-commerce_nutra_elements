@@ -53,7 +53,14 @@ export async function applyFlowStatus(deps: Deps, token: string, status: FlowPay
     if (status.status === FlowStatus.PAID) {
       const mismatch = mismatchOf(order, status);
       const paidFlow = order.flow.paidFlowOrder;
-      const isSecondPayment = order.paymentStatus === "paid" && paidFlow != null && paidFlow !== status.flowOrder;
+      // Segundo pago (A1, QA): en cualquier estado salvo pending_payment, expired y cancelled (donde aún
+      // no hay un pago registrado) un `flowOrder` distinto del ya registrado es otro cobro al comprador.
+      const isSecondPayment =
+        order.paymentStatus !== "pending_payment" &&
+        order.paymentStatus !== "expired" &&
+        order.paymentStatus !== "cancelled" &&
+        paidFlow != null &&
+        paidFlow !== status.flowOrder;
 
       const products = confirmNeedsProducts(order, "flow", mismatch) && !isSecondPayment
         ? await readStockMap(tx, order.items)
@@ -78,14 +85,15 @@ export async function applyFlowStatus(deps: Deps, token: string, status: FlowPay
       });
 
       if (isSecondPayment) {
-        // Segundo pago (otro `flowOrder`) de un pedido ya pagado: no cambia nada del pedido salvo, la
-        // primera vez que llega, una anotación para revisión manual (reembolso a mano, F3).
+        // Segundo pago (otro `flowOrder`) de un pedido ya pagado, en revisión o reembolsado: no cambia
+        // nada del pedido salvo, la primera vez que llega ESTE token, una anotación para revisión manual
+        // (reembolso a mano, F3). Un reintento del mismo token ya tiene evento y no vuelve a anotar.
         outcome = "duplicate";
         if (previousOutcome === undefined) {
           warnings.push("DUPLICATE_PAYMENT");
           orderPatch = {
             statusHistory: appendHistory(order.statusHistory, [
-              { at: now, kind: "payment", from: "paid", to: "paid", by: "flow", note: "DUPLICATE_PAYMENT" },
+              { at: now, kind: "payment", from: order.paymentStatus, to: order.paymentStatus, by: "flow", note: "DUPLICATE_PAYMENT" },
             ]),
             updatedAt: now,
           };

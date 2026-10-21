@@ -9,6 +9,17 @@ export function generateAccessToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+/**
+ * Token de acceso derivado del `clientRequestId` (UUID v4 que solo conoce el navegador que crea el
+ * pedido): sha256 con separación de dominio, en base64url (43 caracteres). Así un reintento
+ * idempotente de `createOrder` devuelve EL MISMO token sin guardarlo en claro y sin invalidar el que
+ * el cliente ya recibió (M3, QA). La clave de idempotencia guardada es otro hash (`sha256(id)`), por
+ * lo que no permite recuperar el token. Entropía: 122 bits del UUID v4.
+ */
+export function deriveAccessToken(clientRequestId: string): string {
+  return createHash("sha256").update(`nutra-elements:order-access-token:v1:${clientRequestId}`, "utf8").digest("base64url");
+}
+
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
