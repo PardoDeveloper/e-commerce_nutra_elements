@@ -367,3 +367,10 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **Carlos NO autoriza:** la política de limpieza de imágenes de Artifact Registry (`functions:artifacts:setpolicy`). Queda pendiente.
 - **Condiciones:** el token no se imprime ni se guarda; no se crean claves de cuentas de servicio; el script va fuera del repo y se borra; no se despliega nada más.
 - **Por qué:** es el camino más corto y con menos superficie que instalar herramientas nuevas; son las mismas credenciales que Carlos ya usa para desplegar.
+
+## D-034 · 2026-10-21 · Hero de la home: solo banner y botón, H1 oculto — vigente (pedido de Carlos)
+- **Decisión:** el hero de `/` muestra únicamente `public/banner.jpeg` y un botón "Ver catálogo". El H1 sigue en el HTML, **único y visualmente oculto** con la técnica `srOnly` (no `display:none`). El párrafo introductorio y los CTA secundarios se eliminaron.
+- **Desviación del contrato SEO 01-inicio.md:** el contrato pedía un texto introductorio de 40 a 80 palabras bajo el H1 con "Puente Alto", "RM" y "retiro en tienda". Esas menciones siguen en las secciones de despacho y "Por qué Nutra Elements" de la misma home.
+- **Alternativas:** mantener el texto visible sobre o bajo el banner (descartada por Carlos).
+- **Por qué:** decisión de diseño de Carlos. El H1 oculto mantiene la señal semántica para buscadores y lectores de pantalla.
+- **Pendiente:** antes del lanzamiento, el seo-specialist debe confirmar o actualizar el contrato 01 y auditar la home (no estaba disponible en esta sesión).
