@@ -295,7 +295,7 @@ export function buildContentUpdate(patch: ProductContentPatch): Doc {
 export const DEFAULT_LIMITS = {
   createOrderPerIpPer10Min: 5,
   pendingOrdersPerEmail: 3,
-  orderStatusPerIpPer10Min: 30,
+  orderStatusPerIpPer10Min: 120, // D-032
   orderStatusFailuresPerOrder: 10,
 } as const;
 

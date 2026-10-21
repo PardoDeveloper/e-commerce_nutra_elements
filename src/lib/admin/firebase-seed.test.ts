@@ -34,7 +34,9 @@ describe("ajustes privados iniciales (espejo de validPrivateSettings)", () => {
     expect(d.orderNumberStart).toBe(1);
     const l = d.limits as Record<string, number>;
     expect(isInt(l.createOrderPerIpPer10Min, 1, 100) && isInt(l.pendingOrdersPerEmail, 1, 50)).toBe(true);
-    expect(isInt(l.orderStatusPerIpPer10Min, 1, 1000) && isInt(l.orderStatusFailuresPerOrder, 1, 100)).toBe(true);
+    expect(l.orderStatusPerIpPer10Min).toBe(120);
+    expect(l).not.toHaveProperty("flowConfirmPerIpPer10Min");
+    expect(isInt(l.orderStatusPerIpPer10Min, 1, 1000) &&isInt(l.orderStatusFailuresPerOrder, 1, 100)).toBe(true);
   });
 });
 
