@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { CategoryCard } from "@/components/CategoryCard";
@@ -50,17 +51,24 @@ export default async function HomePage() {
       <JsonLd data={graph(organizationNode(), websiteNode())} />
 
       <section className={styles.hero} aria-labelledby="home-titulo">
-        <h1 id="home-titulo">Suplementos en cápsulas de marca propia</h1>
-        <p>
-          En Nutra Elements encuentras vitaminas, magnesio, minerales, omega 3 y más, en cápsulas. Recibe tu pedido en
-          toda la RM o retíralo en nuestra tienda en Puente Alto. Elige tu categoría y arma tu compra en pocos pasos.
-        </p>
+        {/* El banner trae el logo y el lema dentro de la imagen. El H1 queda solo para lectores de pantalla y buscadores. */}
+        <h1 id="home-titulo" className={styles.srOnly}>
+          Nutra Elements: suplementos en cápsulas de marca propia
+        </h1>
+        <Image
+          src="/banner.jpeg"
+          alt="Nutra Elements: productos naturales premium. Hojas verdes, mortero y frascos de vidrio ámbar."
+          width={1565}
+          height={629}
+          priority
+          fetchPriority="high"
+          quality={75}
+          sizes="100vw"
+          className={styles.heroImage}
+        />
         <div className={styles.heroActions}>
           <Button href="/productos" size="lg">
-            Ver todo el catálogo
-          </Button>
-          <Button href="/contacto" size="lg" variant="outline">
-            Retiro en tienda en Puente Alto
+            Ver catálogo
           </Button>
         </div>
       </section>
