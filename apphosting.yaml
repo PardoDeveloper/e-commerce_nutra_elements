@@ -35,11 +35,11 @@ env:
   # PENDIENTE: se fija con la URL real del backend una vez creado (formato
   # https://<backend>--nutraelements.us-east4.hosted.app) y luego con el dominio
   # definitivo. Descomentar y completar tras crear el backend.
-  # - variable: SITE_URL
-  #   value: https://REEMPLAZAR-CON-URL-DEL-BACKEND
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
+  - variable: SITE_URL
+    value: https://nutra-web--nutraelements.us-east4.hosted.app
+    availability:
+      - BUILD
+      - RUNTIME
 
   # Secreto compartido con las Functions para POST /api/revalidate (ISR bajo
   # demanda, D-022). Nombre del secreto en Secret Manager; el valor nunca va aquí.
@@ -86,8 +86,8 @@ env:
 
   # Clave del sitio de App Check (reCAPTCHA Enterprise). PENDIENTE: Carlos la
   # entregará. Descomentar y completar cuando exista (pública, no es secreto).
-  # - variable: NEXT_PUBLIC_APPCHECK_SITE_KEY
-  #   value: REEMPLAZAR-CON-CLAVE-DEL-SITIO
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
+  - variable: NEXT_PUBLIC_APPCHECK_SITE_KEY
+    value: 6LcovPktAAAAAEMnoOSG2_ICEotbSC_lk2OQcgtz
+    availability:
+      - BUILD
+      - RUNTIME
