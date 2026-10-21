@@ -90,27 +90,38 @@
 .hero {
   background: linear-gradient(135deg, var(--color-primary-soft), var(--color-gold-soft));
   border-radius: var(--radius-lg);
-  padding: var(--space-5) var(--space-4);
   margin-top: var(--space-3);
+  overflow: hidden;
 }
 
-.hero h1 {
-  font-size: var(--text-4xl);
-  line-height: var(--leading-tight);
-  margin: 0 0 var(--space-3);
-  max-width: 20ch;
+/* Banner: en móvil se recorta a la izquierda para conservar el logo y el lema; desde 640px va completo. */
+.heroImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: left center;
 }
 
-.hero p {
-  max-width: 60ch;
-  line-height: var(--leading-body);
-  margin: 0 0 var(--space-4);
-}
-
+/* Botón centrado bajo la imagen, sin tapar el logo ni el lema. */
 .heroActions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Texto solo para lectores de pantalla y buscadores (no usar display:none). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Beneficios */
