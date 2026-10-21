@@ -618,6 +618,19 @@ describe("settings/private como admin", () => {
     await assertFails(set({ limits: { inventado: 1 } }));
   });
 
+  it("admite flowConfirmPerIpPer10Min (1..10000, entero) y orderStatusPerIpPer10Min hasta 1000", async () => {
+    await assertSucceeds(set({ limits: { flowConfirmPerIpPer10Min: 300 } }));
+    await assertSucceeds(set({ limits: { flowConfirmPerIpPer10Min: 1 } }));
+    await assertSucceeds(set({ limits: { flowConfirmPerIpPer10Min: 10000 } }));
+    await assertFails(set({ limits: { flowConfirmPerIpPer10Min: 0 } }));
+    await assertFails(set({ limits: { flowConfirmPerIpPer10Min: 10001 } }));
+    await assertFails(set({ limits: { flowConfirmPerIpPer10Min: 1.5 } }));
+    await assertFails(set({ limits: { flowConfirmPerIpPer10Min: "300" } }));
+    await assertSucceeds(set({ limits: { orderStatusPerIpPer10Min: 120 } }));
+    await assertSucceeds(set({ limits: { orderStatusPerIpPer10Min: 1000 } }));
+    await assertFails(set({ limits: { orderStatusPerIpPer10Min: 1001 } }));
+  });
+
   it("valida los datos bancarios", async () => {
     const bank = privateSettings().bank;
     await assertFails(set({ bank: { ...bank, bankName: "" } }));

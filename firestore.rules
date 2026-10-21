@@ -196,11 +196,12 @@ service cloud.firestore {
 
     function validLimits(l) {
       return l is map
-        && l.keys().hasOnly(['createOrderPerIpPer10Min', 'pendingOrdersPerEmail', 'orderStatusPerIpPer10Min', 'orderStatusFailuresPerOrder'])
+        && l.keys().hasOnly(['createOrderPerIpPer10Min', 'pendingOrdersPerEmail', 'orderStatusPerIpPer10Min', 'orderStatusFailuresPerOrder', 'flowConfirmPerIpPer10Min'])
         && optInt(l, 'createOrderPerIpPer10Min', 1, 100)
         && optInt(l, 'pendingOrdersPerEmail', 1, 50)
         && optInt(l, 'orderStatusPerIpPer10Min', 1, 1000)
-        && optInt(l, 'orderStatusFailuresPerOrder', 1, 100);
+        && optInt(l, 'orderStatusFailuresPerOrder', 1, 100)
+        && optInt(l, 'flowConfirmPerIpPer10Min', 1, 10000);
     }
 
     function validPrivateSettings() {
