@@ -67,7 +67,7 @@ export default async function HomePage() {
           className={styles.heroImage}
         />
         <div className={styles.heroActions}>
-          <Button href="/productos" size="lg">
+          <Button href="/productos">
             Ver catálogo
           </Button>
         </div>

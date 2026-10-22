@@ -88,27 +88,60 @@
 
 /* Hero de la home */
 .hero {
+  position: relative;
   background: linear-gradient(135deg, var(--color-primary-soft), var(--color-gold-soft));
   border-radius: var(--radius-lg);
   margin-top: var(--space-3);
   overflow: hidden;
 }
 
-/* Banner: en móvil se recorta a la izquierda para conservar el logo y el lema; desde 640px va completo. */
+/*
+ * Banner recortado por CSS (la imagen original no se toca). Móvil: 2:1, conserva el
+ * logo y el lema a la izquierda. Desde 640px: 3,1:1 y se recorta arriba y abajo
+ * (más abajo que arriba, porque sobra aire sobre el logo) para dejar libre la franja
+ * bajo el lema donde va el botón.
+ */
 .heroImage {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 2 / 1;
   object-fit: cover;
   object-position: left center;
 }
 
-/* Botón centrado bajo la imagen, sin tapar el logo ni el lema. */
+/* Botón sobre la imagen, bajo el lema y centrado en el eje del logo (~28 % desde la izquierda). */
 .heroActions {
+  position: absolute;
+  left: 28%;
+  bottom: 4%;
+  transform: translateX(-50%);
   display: flex;
   justify-content: center;
-  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+}
+.heroActions a {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.28);
+  font-size: clamp(0.875rem, 0.6rem + 0.9vw, 1.125rem);
+  padding-inline: clamp(var(--space-3), 2.4vw, var(--space-5));
+}
+
+/* Bajo 1024px el logo ocupa más del ancho y sobra poca altura bajo el lema: el botón va a la derecha, sobre la escena. */
+@media (max-width: 1023px) {
+  .heroActions {
+    left: auto;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    transform: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .heroImage {
+    aspect-ratio: 1565 / 505;
+    max-height: 420px;
+    object-position: left 77%;
+  }
 }
 
 /* Texto solo para lectores de pantalla y buscadores (no usar display:none). */
