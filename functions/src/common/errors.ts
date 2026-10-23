@@ -34,6 +34,10 @@ const ERROR_CATALOG = {
   REASON_REQUIRED: ["invalid-argument", "Indica el motivo del cambio."],
   INVALID_REFUND_AMOUNT: ["invalid-argument", "El monto del reembolso no es válido."],
   INVALID_REFUND_DATE: ["invalid-argument", "La fecha del reembolso no es válida."],
+  // Credenciales de Flow (5.10)
+  FLOW_SECRETS_LOCAL: ["failed-precondition", "En el entorno local las credenciales de Flow se configuran en functions/.secret.local."],
+  FLOW_SECRET_MISSING: ["failed-precondition", "El secreto de Flow no existe en Secret Manager. Debe crearse antes de guardar credenciales."],
+  FLOW_SECRET_FORBIDDEN: ["failed-precondition", "Las funciones no tienen permiso para usar los secretos de Flow en Secret Manager."],
 } as const satisfies Record<string, readonly [FunctionsErrorCode, string]>;
 
 export type AppErrorCode = keyof typeof ERROR_CATALOG;

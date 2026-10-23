@@ -21,7 +21,7 @@ const endpointOf = (fn: unknown): Endpoint => (fn as { __endpoint: Endpoint })._
 const ALL = { ...orders, ...payments } as Record<string, unknown>;
 
 describe("funciones exportadas de orders/ y payments/", () => {
-  it("exporta exactamente las 10 funciones del contrato (secciones 3 y 4)", () => {
+  it("exporta exactamente las 12 funciones del contrato (secciones 3, 4 y 5.10)", () => {
     expect(Object.keys(ALL).sort()).toEqual(
       [
         "cancelOrder",
@@ -29,10 +29,12 @@ describe("funciones exportadas de orders/ y payments/", () => {
         "createFlowPayment",
         "createOrder",
         "flowConfirm",
+        "getFlowCredentialsStatus",
         "getOrderStatus",
         "recordManualRefund",
         "releaseExpiredReservations",
         "resolvePaymentReview",
+        "setFlowCredentials",
         "updateFulfillment",
       ].sort(),
     );
@@ -50,6 +52,8 @@ describe("funciones exportadas de orders/ y payments/", () => {
       updateFulfillment: { timeout: 15, max: 5 },
       recordManualRefund: { timeout: 30, max: 5 },
       releaseExpiredReservations: { timeout: 120, max: 1 },
+      getFlowCredentialsStatus: { timeout: 30, max: 2 },
+      setFlowCredentials: { timeout: 30, max: 2 },
     };
     for (const [name, want] of Object.entries(expected)) {
       const ep = endpointOf(ALL[name]);
@@ -109,5 +113,34 @@ describe("autorización de los callables de admin (test 13)", () => {
 
   it.each(ADMIN_FUNCTIONS)("%s: (c) admin pasa la autorización (y falla después por entrada vacía)", async (name) => {
     expect(await detailsOf(call(name, { uid: "u1", token: { admin: true } }))).toEqual({ code: "invalid-argument", app: "INVALID_INPUT" });
+  });
+});
+
+describe("autorización de las credenciales de Flow (D-035)", () => {
+  const CREDENTIAL_FUNCTIONS = ["getFlowCredentialsStatus", "setFlowCredentials"] as const;
+  type Runnable = { run: (request: unknown) => Promise<unknown> };
+  const call = (name: string, auth: unknown, data: unknown = { apiKey: "1F90971E-8276-4715" }) =>
+    (ALL[name] as Runnable).run({ data, auth, rawRequest: { headers: {}, ip: "203.0.113.5" } });
+  const appCodeOf = async (p: Promise<unknown>): Promise<string | undefined> => {
+    try {
+      await p;
+    } catch (err) {
+      return (err as { details?: { code?: string } }).details?.code;
+    }
+    return undefined;
+  };
+
+  it.each(CREDENTIAL_FUNCTIONS)("%s: sin sesión o sin claim admin se rechaza antes de tocar Secret Manager", async (name) => {
+    expect(await appCodeOf(call(name, undefined))).toBe("UNAUTHENTICATED");
+    expect(await appCodeOf(call(name, { uid: "u1", token: {} }))).toBe("NOT_ADMIN");
+    expect(await appCodeOf(call(name, { uid: "u1", token: { admin: "true" } }))).toBe("NOT_ADMIN");
+  });
+
+  it.each(CREDENTIAL_FUNCTIONS)("%s: un admin sin proyecto en la nube recibe FLOW_SECRETS_LOCAL", async (name) => {
+    expect(await appCodeOf(call(name, { uid: "u1", token: { admin: true } }))).toBe("FLOW_SECRETS_LOCAL");
+  });
+
+  it.each(CREDENTIAL_FUNCTIONS)("%s: no lleva secretos enlazados", (name) => {
+    expect(endpointOf(ALL[name]).secretEnvironmentVariables ?? []).toEqual([]);
   });
 });

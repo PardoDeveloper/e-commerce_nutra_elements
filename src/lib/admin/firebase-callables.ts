@@ -15,6 +15,9 @@ import type {
   BatchReport,
   CatalogRow,
   DeleteReport,
+  FlowCredentialsInput,
+  FlowCredentialsStatus,
+  FlowCredentialStatus,
   FulfillmentStatus,
   InvalidRow,
   PriceRow,
@@ -49,6 +52,9 @@ const MESSAGES: Record<string, string> = {
   INVALID_PRICE: "El precio debe ser un entero entre 1 y 10.000.000.",
   INVALID_STOCK: "El stock debe ser un entero entre 0 y 1.000.000.",
   EMPTY_STOCK: "El stock no puede ir vacío.",
+  FLOW_SECRETS_LOCAL: "En el entorno local las credenciales de Flow se configuran en functions/.secret.local.",
+  FLOW_SECRET_MISSING: "El secreto de Flow no existe en Secret Manager. Pide que lo creen antes de guardar credenciales.",
+  FLOW_SECRET_FORBIDDEN: "Las funciones no tienen permiso para usar los secretos de Flow en Secret Manager.",
 };
 
 export const FUNCTION_UNAVAILABLE_MESSAGE = "Función no disponible todavía.";
@@ -282,6 +288,38 @@ export function createOrderCallables(invoke: CallableInvoker) {
         }),
       );
       return { changed: r.alreadyRefunded !== true };
+    },
+  };
+}
+
+// ---------- Credenciales de Flow (functions.md 5.10, D-035) ----------
+
+const credentialStatus = (v: unknown): FlowCredentialStatus => {
+  const r = typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+  return { configured: r.configured === true, updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : null };
+};
+
+export function parseFlowCredentialsStatus(raw: unknown): FlowCredentialsStatus {
+  const r = record(raw);
+  const apiKey = typeof r.apiKey === "object" && r.apiKey !== null ? (r.apiKey as Record<string, unknown>) : {};
+  return {
+    apiKey: { ...credentialStatus(r.apiKey), hint: typeof apiKey.hint === "string" ? apiKey.hint : null },
+    secretKey: credentialStatus(r.secretKey),
+  };
+}
+
+export function createFlowCredentialsCallables(invoke: CallableInvoker) {
+  return {
+    async getFlowCredentialsStatus(): Promise<FlowCredentialsStatus> {
+      return parseFlowCredentialsStatus(await invoke("getFlowCredentialsStatus", {}));
+    },
+    /** Solo viajan los campos con valor: un campo vacío deja la credencial como está. */
+    async setFlowCredentials(input: FlowCredentialsInput): Promise<FlowCredentialsStatus> {
+      const apiKey = input.apiKey?.trim();
+      const secretKey = input.secretKey?.trim();
+      return parseFlowCredentialsStatus(
+        await invoke("setFlowCredentials", { ...(apiKey ? { apiKey } : {}), ...(secretKey ? { secretKey } : {}) }),
+      );
     },
   };
 }

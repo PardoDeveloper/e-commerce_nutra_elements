@@ -17,6 +17,8 @@ export interface CatalogEntry {
   price: number;
   finalPrice: number;
   inStock: boolean;
+  /** URL de la primera foto real del producto, si tiene (se muestra en el carrito). */
+  imageUrl?: string | null;
 }
 
 export function toCatalogEntry(p: Product): CatalogEntry {
@@ -28,6 +30,7 @@ export function toCatalogEntry(p: Product): CatalogEntry {
     price: p.price,
     finalPrice: p.finalPrice,
     inStock: p.inStock,
+    imageUrl: p.images[0]?.url || null,
   };
 }
 

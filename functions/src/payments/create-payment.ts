@@ -17,8 +17,8 @@ import { buildPaymentUrl, FlowApiError, FlowStatus, type FlowClient } from "./fl
 export const MIN_FLOW_TIMEOUT_SECONDS = 60;
 
 export interface CreatePaymentDeps extends Deps {
-  getFlow: () => FlowClient;
-  getConfig: () => FlowConfig;
+  getFlow: () => FlowClient | Promise<FlowClient>;
+  getConfig: () => FlowConfig | Promise<FlowConfig>;
 }
 
 export interface CreateFlowPaymentResponse {
@@ -36,7 +36,7 @@ async function decideAttempt(deps: CreatePaymentDeps, order: OrderDoc): Promise<
   let status: number | null | undefined = flow.lastStatus;
   if (status === null || status === undefined) {
     try {
-      const fresh = await deps.getFlow().getStatus(flow.token);
+      const fresh = await (await deps.getFlow()).getStatus(flow.token);
       status = fresh.status;
       if (fresh.status === FlowStatus.PAID) {
         // Ya está pagado en Flow aunque la confirmación no haya llegado: se aplica el pago y no se cobra otra vez.
@@ -78,8 +78,8 @@ export async function handleCreateFlowPayment(deps: CreatePaymentDeps, data: unk
   let config: FlowConfig;
   let client: FlowClient;
   try {
-    config = deps.getConfig();
-    client = deps.getFlow();
+    config = await deps.getConfig();
+    client = await deps.getFlow();
   } catch (err) {
     logger.error("Configuración de Flow no válida", { errorName: err instanceof Error ? err.name : typeof err });
     throw appError("FLOW_UNAVAILABLE");

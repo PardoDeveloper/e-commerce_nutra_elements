@@ -90,6 +90,8 @@ Errores comunes a todas las callables
 | 21 | `onSettingsPublicWritten` | trigger `settings/public` | system | 256 MiB / 30 s / 2 |
 | 22 | `deleteProducts` | callable | admin + App Check | 256 MiB / 60 s / 2 |
 | 23 | `restoreProducts` | callable | admin + App Check | 256 MiB / 60 s / 2 |
+| 24 | `getFlowCredentialsStatus` | callable | admin + App Check | 256 MiB / 30 s / 2 |
+| 25 | `setFlowCredentials` | callable | admin + App Check | 256 MiB / 30 s / 2 |
 
 Los nombres son los que el frontend usa con `httpsCallable(functions, "createOrder")`. El cliente se configura con la región `us-east4`. `flowConfirm` no lo llama el frontend.
 
@@ -549,6 +551,27 @@ type RestoreProductsResponse = BatchReport;
 
 ---
 
+### 5.10 `getFlowCredentialsStatus` y `setFlowCredentials` (credenciales de Flow desde Ajustes, D-035)
+
+Callables, `admin`, `enforceAppCheck`, 256 MiB / 30 s / 2 instancias. **Sin** `secrets: [...]` enlazados: hablan con la API de Secret Manager. Los valores **solo** viven en Secret Manager (`FLOW_API_KEY`, `FLOW_SECRET_KEY`): no se guardan en Firestore, no se devuelven al cliente y no se registran en los logs.
+
+```ts
+interface SetFlowCredentialsRequest { apiKey?: string; secretKey?: string }  // al menos una; trim; 8..200 caracteres ASCII imprimibles sin espacios; objeto estricto
+interface FlowCredentialStatus { configured: boolean; updatedAt: string | null } // ISO de la última versión habilitada
+interface FlowCredentialsStatus {
+  apiKey: FlowCredentialStatus & { hint: string | null }  // últimos 4 caracteres de la apiKey
+  secretKey: FlowCredentialStatus                         // la secretKey nunca se muestra, ni parcial
+}
+// getFlowCredentialsStatus: {} -> FlowCredentialsStatus
+// setFlowCredentials: SetFlowCredentialsRequest -> FlowCredentialsStatus
+```
+- **Efecto de `setFlowCredentials`**: agrega una **versión nueva** a cada secreto recibido (no deshabilita ni destruye las anteriores). Registra en el log `uid` y nombres de los secretos, nunca los valores.
+- **Lectura en las funciones de pago**: en la nube, `createFlowPayment`, `flowConfirm`, `getOrderStatus` y `releaseExpiredReservations` leen la **última versión** con caché de 60 s por instancia; si Secret Manager falla, usan el último valor leído y, si no hay, la versión fijada en el despliegue. En `local` solo se usa la versión fijada (`functions/.secret.local`). La guarda de ambiente (3.3.1) sigue igual: credenciales de producción con `APP_ENV=staging` no sirven porque la base sigue siendo el sandbox.
+- **Errores** (`failed-precondition`): `FLOW_SECRETS_LOCAL` (emulador, o sin proyecto), `FLOW_SECRET_MISSING` (el secreto no existe en Secret Manager), `FLOW_SECRET_FORBIDDEN` (falta IAM). Más los comunes (sin sesión, sin claim, App Check, `INVALID_INPUT`).
+- **IAM requerido** (lo configura devops con confirmación de Carlos): la cuenta de servicio de Functions necesita, sobre ambos secretos, `roles/secretmanager.secretAccessor` y `roles/secretmanager.secretVersionManager`.
+
+---
+
 ## 6. Métricas
 
 - No hay función propia: las actualiza la transacción que marca un pedido como `paid` (`flowConfirm`, `getOrderStatus` por reconciliación, `confirmTransferPayment`, `resolvePaymentReview`), con `FieldValue.increment`, en `metrics/daily/days/{fecha en America/Santiago}` y `metrics/products/items/{sku}`. Como la transición solo ocurre una vez, no se cuenta doble. `recordManualRefund` **ajusta** las métricas en su propia transacción (4.6, regla D-025): `revenue -= refund.amount`, `refundsCount += 1`, `refundedAmount += refund.amount`, y unidades (diarias y por SKU) solo si `refund.restocked == true`; `ordersCount` y `merchandise` no cambian. También ocurre una sola vez.
@@ -563,7 +586,7 @@ type RestoreProductsResponse = BatchReport;
 
 | Nombre | Tipo | local (emuladores) | staging / production (proyecto `nutraelements`) |
 |---|---|---|---|
-| `FLOW_API_KEY` | **secreto** | `functions/.secret.local` (no versionado; VERIFICAR) o `.env` | Secret Manager (`defineSecret`). Lo carga Carlos. En staging: credencial sandbox; en production: credencial de producción |
+| `FLOW_API_KEY` | **secreto** | `functions/.secret.local` (no versionado; VERIFICAR) o `.env` | Secret Manager (`defineSecret`). Lo carga Carlos, o un admin desde Ajustes (5.10, D-035). En staging: credencial sandbox; en production: credencial de producción |
 | `FLOW_SECRET_KEY` | **secreto** | igual | Secret Manager |
 | `REVALIDATE_SECRET` | **secreto** | igual (cualquier valor aleatorio local) | Secret Manager |
 | `ADMIN_EMAILS` | parámetro (no secreto) | `functions/.env.local` | lista de correos de admins iniciales (minúsculas, separados por comas); `functions/.env.<alias>` o pregunta del CLI |

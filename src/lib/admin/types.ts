@@ -254,3 +254,22 @@ export interface MetricsSummary {
   refundedAmount: Clp;
   top: TopProduct[];
 }
+
+/** Estado de una credencial de Flow en Secret Manager (D-035). Nunca incluye el valor. */
+export interface FlowCredentialStatus {
+  configured: boolean;
+  /** Fecha ISO de la última versión, o null. */
+  updatedAt: string | null;
+}
+
+export interface FlowCredentialsStatus {
+  /** `hint`: últimos 4 caracteres de la apiKey, para reconocerla. */
+  apiKey: FlowCredentialStatus & { hint: string | null };
+  secretKey: FlowCredentialStatus;
+}
+
+/** Entrada de `setFlowCredentials`: un campo vacío o ausente no cambia esa credencial. */
+export interface FlowCredentialsInput {
+  apiKey?: string;
+  secretKey?: string;
+}

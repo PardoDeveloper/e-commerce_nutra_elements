@@ -1,10 +1,11 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
-import { callableSecurityOptions } from "../common/auth.js";
-import { toHttpsError } from "../common/errors.js";
+import { assertAdmin, callableSecurityOptions } from "../common/auth.js";
+import { appError, toHttpsError } from "../common/errors.js";
 import { clientIpFrom } from "../orders/client-ip.js";
 import { handleCreateFlowPayment } from "./create-payment.js";
+import { handleGetFlowCredentialsStatus, handleSetFlowCredentials, type FlowCredentialsStatus, type SecretStore } from "./credentials.js";
 import { handleFlowConfirm } from "./flow-confirm.js";
-import { FLOW_SECRETS, getDeps, getFlowRuntime, requireFlowApiClient } from "./runtime.js";
+import { FLOW_SECRETS, getDeps, getFlowRuntime, getSecretStore, invalidateFlowSecrets, requireFlowApiClient } from "./runtime.js";
 
 // Funciones de Flow expuestas (functions.md 3.2 y 3.3). Región us-east4 por `setGlobalOptions`.
 
@@ -15,7 +16,7 @@ export const createFlowPayment = onCall(
     try {
       const deps = getDeps();
       return await handleCreateFlowPayment(
-        { ...deps, getFlow: () => getFlowRuntime().client, getConfig: () => getFlowRuntime().config },
+        { ...deps, getFlow: async () => (await getFlowRuntime()).client, getConfig: async () => (await getFlowRuntime()).config },
         request.data,
       );
     } catch (err) {
@@ -40,3 +41,33 @@ export const flowConfirm = onRequest(
     res.status(result.status).send();
   },
 );
+
+// Credenciales de Flow editables desde el admin (D-035). Solo admin + App Check. Los valores van
+// directo a Secret Manager; ninguna de las dos funciones devuelve un secreto.
+const CREDENTIALS_OPTIONS = { ...callableSecurityOptions(), memory: "256MiB" as const, timeoutSeconds: 30, maxInstances: 2 };
+
+function requireSecretStore(): SecretStore {
+  const store = getSecretStore();
+  if (!store) throw appError("FLOW_SECRETS_LOCAL");
+  return store;
+}
+
+/** Estado de las credenciales: si existen, cuándo cambiaron y los últimos 4 caracteres de la apiKey. */
+export const getFlowCredentialsStatus = onCall(CREDENTIALS_OPTIONS, async (request): Promise<FlowCredentialsStatus> => {
+  try {
+    assertAdmin(request);
+    return await handleGetFlowCredentialsStatus(requireSecretStore());
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+/** Guarda una versión nueva de FLOW_API_KEY y/o FLOW_SECRET_KEY. Entrada `{ apiKey?, secretKey? }`. */
+export const setFlowCredentials = onCall(CREDENTIALS_OPTIONS, async (request): Promise<FlowCredentialsStatus> => {
+  try {
+    const uid = assertAdmin(request);
+    return await handleSetFlowCredentials(requireSecretStore(), request.data, uid, invalidateFlowSecrets);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});

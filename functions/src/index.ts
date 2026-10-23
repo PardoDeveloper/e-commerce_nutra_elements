@@ -19,5 +19,5 @@ export * from "./triggers/index.js";
 // orders/: createOrder, getOrderStatus, confirmTransferPayment, resolvePaymentReview, cancelOrder,
 // updateFulfillment, recordManualRefund, releaseExpiredReservations.
 export * from "./orders/index.js";
-// payments/: createFlowPayment, flowConfirm.
+// payments/: createFlowPayment, flowConfirm, getFlowCredentialsStatus, setFlowCredentials.
 export * from "./payments/index.js";
