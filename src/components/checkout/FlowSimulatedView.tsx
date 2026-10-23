@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { OrderServiceError, getOrderService } from "@/lib/checkout";
+import { OrderServiceError, getMockOrderService } from "@/lib/checkout";
 import styles from "./checkout.module.css";
 
 /** Pantalla que representa la página de pago de Flow. No cobra nada (D-028). */
@@ -32,7 +32,7 @@ export function FlowSimulatedView() {
     setBusy(result);
     setError(null);
     try {
-      await getOrderService().simulateFlowResult({ orderNumber, accessToken }, result);
+      await getMockOrderService().simulateFlowResult({ orderNumber, accessToken }, result);
       const query = new URLSearchParams({ t: accessToken });
       router.push(`/pedido/${orderNumber}?${query.toString()}`);
     } catch (e) {

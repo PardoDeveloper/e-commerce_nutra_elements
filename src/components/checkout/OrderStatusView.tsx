@@ -2,15 +2,22 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/Button";
 import {
   OrderServiceError,
+  browserStorage,
   getOrderService,
+  isExternalUrl,
+  recallOrderToken,
+  rememberOrderToken,
+  resolvePaymentsMode,
   type FulfillmentStatus,
   type GetOrderStatusResponse,
   type PaymentStatus,
 } from "@/lib/checkout";
+import { isTestBank } from "@/lib/bank";
+import type { DataSource } from "@/lib/data-source";
 import { formatClp } from "@/lib/format";
 import styles from "./checkout.module.css";
 
@@ -35,44 +42,87 @@ const FULFILLMENT_LABEL: Record<FulfillmentStatus, string> = {
   delivered: "Entregado",
 };
 
+const NO_TOKEN_MESSAGE =
+  "Para ver este pedido ábrelo desde el navegador donde lo compraste, o con el enlace completo que se mostró al comprar.";
+
 const dateFormat = new Intl.DateTimeFormat("es-CL", {
   dateStyle: "long",
   timeStyle: "short",
   timeZone: "America/Santiago",
 });
 
-export function OrderStatusView({ orderNumber }: { orderNumber: string }) {
+/** Tras volver de Flow la confirmación puede tardar: se consulta cada 4 s, hasta 90 s (functions.md 3.3.1). */
+const POLL_INTERVAL_MS = 4000;
+const POLL_WINDOW_MS = 90_000;
+
+/** Token del pedido: el de la URL (?t=) o, al volver de Flow, el guardado en este navegador (A2). */
+function useOrderToken(orderNumber: string): string | null {
+  const fromUrl = useSearchParams().get("t") ?? "";
+  // En el servidor no hay almacenamiento: `null` hasta hidratar. En el navegador, "" si no hay token guardado.
+  const stored = useSyncExternalStore(
+    noopSubscribe,
+    () => {
+      const storage = browserStorage();
+      return (storage && recallOrderToken(storage, orderNumber)) || "";
+    },
+    () => null,
+  );
+  useEffect(() => {
+    const storage = browserStorage();
+    if (fromUrl && storage) rememberOrderToken(storage, orderNumber, fromUrl);
+  }, [orderNumber, fromUrl]);
+  return fromUrl || stored;
+}
+
+const noopSubscribe = () => () => undefined;
+
+export function OrderStatusView({ orderNumber, dataSource = "demo" }: { orderNumber: string; dataSource?: DataSource }) {
   const router = useRouter();
-  const token = useSearchParams().get("t") ?? "";
-  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  // null = aún no se sabe; "" = no hay token en este navegador.
+  const token = useOrderToken(orderNumber);
+  const mode = resolvePaymentsMode(dataSource);
+  const [loaded, setState] = useState<LoadState>({ kind: "loading" });
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const pollUntil = useRef(0);
+  const state: LoadState = token === "" ? { kind: "error", message: NO_TOKEN_MESSAGE } : loaded;
 
   useEffect(() => {
+    if (!token) return;
     let cancelled = false;
-    getOrderService()
-      .getOrderStatus({ orderNumber, accessToken: token })
-      .then((order) => {
-        if (!cancelled) setState({ kind: "ready", order });
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setState({
-          kind: "error",
-          message: e instanceof OrderServiceError ? e.message : "Ocurrió un error inesperado. Intenta de nuevo.",
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    pollUntil.current = Date.now() + POLL_WINDOW_MS;
+    const load = () =>
+      getOrderService(dataSource)
+        .getOrderStatus({ orderNumber, accessToken: token })
+        .then((order) => {
+          if (cancelled) return;
+          setState({ kind: "ready", order });
+          const waitingForFlow = dataSource === "firebase" && order.paymentMethod === "flow" && order.paymentStatus === "pending_payment";
+          if (waitingForFlow && Date.now() < pollUntil.current) timer = setTimeout(load, POLL_INTERVAL_MS);
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setState({
+            kind: "error",
+            message: e instanceof OrderServiceError ? e.message : "Ocurrió un error inesperado. Intenta de nuevo.",
+          });
         });
-      });
+    void load();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [orderNumber, token]);
+  }, [orderNumber, token, dataSource]);
 
   async function pay() {
+    if (!token) return;
     setRetrying(true);
     setRetryError(null);
     try {
-      const payment = await getOrderService().createFlowPayment({ orderNumber, accessToken: token });
-      router.push(payment.redirectUrl);
+      const payment = await getOrderService(dataSource).createFlowPayment({ orderNumber, accessToken: token });
+      if (isExternalUrl(payment.redirectUrl)) window.location.assign(payment.redirectUrl);
+      else router.push(payment.redirectUrl);
     } catch (e) {
       setRetrying(false);
       setRetryError(e instanceof OrderServiceError ? e.message : "Ocurrió un error inesperado. Intenta de nuevo.");
@@ -94,9 +144,11 @@ export function OrderStatusView({ orderNumber }: { orderNumber: string }) {
       <div className={`${styles.notice} ${styles.noticeDanger}`} role="alert">
         <p className={styles.noticeTitle}>No pudimos mostrar el pedido {orderNumber}</p>
         <p>{state.message}</p>
-        <p className={styles.muted}>
-          En este prototipo los pedidos se guardan solo en este navegador: ábrelo desde el mismo equipo donde lo creaste.
-        </p>
+        {mode === "simulated" ? (
+          <p className={styles.muted}>
+            En este prototipo los pedidos se guardan solo en este navegador: ábrelo desde el mismo equipo donde lo creaste.
+          </p>
+        ) : null}
         <Button href="/productos" variant="outline">
           Ver productos
         </Button>
@@ -132,7 +184,7 @@ export function OrderStatusView({ orderNumber }: { orderNumber: string }) {
 
         {order.paymentStatus === "paid" ? (
           <div className={`${styles.notice} ${styles.noticeSuccess}`} role="status">
-            <p>Recibimos tu pago (simulado). Estamos preparando tu pedido.</p>
+            <p>Recibimos tu pago{mode === "simulated" ? " (simulado)" : ""}. Estamos preparando tu pedido.</p>
           </div>
         ) : null}
 
@@ -162,10 +214,12 @@ export function OrderStatusView({ orderNumber }: { orderNumber: string }) {
 
         {pending && order.paymentMethod === "transfer" && order.transferInstructions ? (
           <>
-            <div className={`${styles.notice} ${styles.noticeWarning}`}>
-              <p className={styles.noticeTitle}>Datos bancarios de prueba</p>
-              <p>No son una cuenta real: no transfieras dinero.</p>
-            </div>
+            {mode === "simulated" || isTestBank(order.transferInstructions) ? (
+              <div className={`${styles.notice} ${styles.noticeWarning}`}>
+                <p className={styles.noticeTitle}>Datos bancarios de prueba</p>
+                <p>No son una cuenta real: no transfieras dinero.</p>
+              </div>
+            ) : null}
             <dl className={styles.bank}>
               <div>
                 <dt>Banco</dt>

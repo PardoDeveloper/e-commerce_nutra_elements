@@ -389,3 +389,21 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
   3. Desplegar las funciones de pagos y pedidos, y las dos callables nuevas; agregar el permiso público de invocación (`roles/run.invoker`) solo a las dos callables, como en D-033.
   4. Desplegar el frontend (App Hosting desde `main`).
 - **Pendiente:** QA (qa-reviewer) antes de subir; política de limpieza de versiones antiguas de los secretos (hoy se acumulan).
+
+## D-036 · 2026-10-23 · Flow en producción y checkout real — vigente (pedido de Carlos)
+- **Decisión:** Carlos pidió "hacer todos los cambios para estar en producción" con Flow. Se dejó listo el código y la configuración versionada; **ningún despliegue se hizo** (cada uno requiere su confirmación, D-030).
+- **Cambios:**
+  - **Checkout real:** el carrito, el checkout y la página del pedido usan las Cloud Functions (`createOrder`, `createFlowPayment`, `getOrderStatus`) cuando la fuente es `firebase`. El simulado queda solo para `demo`; `/checkout/flow-simulado` da 404 con Firebase. Cierra la parte de frontend de 2C.3.
+  - **A2 resuelto:** `urlReturn` lleva solo el número de pedido. El token de acceso se guarda en `localStorage` del comprador (`ne.orderAccess.v1`, solo número y token). `Referrer-Policy: no-referrer` en `/checkout*` y `/pedido/*`. Contrato functions.md 3.3.1 (v1.5).
+  - **`/checkout/retorno`:** route handler GET/POST que responde 303 a `/pedido/<número>` (número validado; si no, a `/`). La página del pedido consulta el estado cada 4 s durante 90 s mientras el pago con Flow está pendiente.
+  - **Avisos:** `NEXT_PUBLIC_FLOW_ENV` (`apphosting.yaml` = `production`) decide los avisos. En producción no hay aviso de "pagos de prueba"; el admin muestra "Producción: los pagos con Flow son reales". Si la variable falta, el sitio nunca afirma que el pago sea de prueba.
+  - **Functions:** `APP_ENV=production`, `FLOW_API_BASE=https://www.flow.cl/api`, `FLOW_CONFIRMATION_URL=https://us-east4-nutraelements.cloudfunctions.net/flowConfirm` en `functions/.env.nutraelements` (no versionado; lo agrega Carlos).
+- **Desviación aceptada por Carlos:** se pasa a Flow real **sin la prueba de punta a punta en sandbox** que pedían D-021, D-030 y D-032, y **sin las pruebas contra Firestore real**. Mitigación: primera compra real de bajo monto hecha por Carlos, verificada en el admin y en el panel de Flow, y reembolsada a mano.
+- **Sigue fuera de este cambio:** quitar el noindex (`SITE_INDEXABLE`), el dominio y Search Console (PR.7b, 2D.4).
+- **Siguen pendientes de D-031** (Carlos): contraseña fuerte y correo propio del admin, MFA, datos bancarios reales (con Firebase la transferencia no se ofrece hasta que exista una función que informe el banco), y limpiar los pedidos de prueba y `counters/orders`.
+
+## D-037 · 2026-10-23 · Sitio indexable — vigente (pedido de Carlos)
+- **Decisión:** `SITE_INDEXABLE=true` en `apphosting.yaml` para que Google encuentre los productos. Se activan robots.txt con `Allow` (bloquea `/admin/` y `/api/`), el sitemap y quitar el `X-Robots-Tag: noindex` global. Carrito, checkout, pedido y admin mantienen su propio `noindex`.
+- **Desviación:** el contrato SEO y PR.7b pedían indexar recién con el dominio `nutraelements.cl` y tras la auditoría del seo-specialist (pendiente, D-034). Hoy la URL canónica es la de App Hosting (`SITE_URL`).
+- **Riesgo:** Google indexa `*.hosted.app`. Al pasar al dominio hay que cambiar `SITE_URL`, verificar el dominio en Search Console y redirigir 301 desde `hosted.app` para no partir el posicionamiento.
+- **Efecto:** solo al publicar `main` en App Hosting (con confirmación de Carlos).
