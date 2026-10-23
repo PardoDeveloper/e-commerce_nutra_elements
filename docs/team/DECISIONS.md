@@ -407,3 +407,9 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **Desviación:** el contrato SEO y PR.7b pedían indexar recién con el dominio `nutraelements.cl` y tras la auditoría del seo-specialist (pendiente, D-034). Hoy la URL canónica es la de App Hosting (`SITE_URL`).
 - **Riesgo:** Google indexa `*.hosted.app`. Al pasar al dominio hay que cambiar `SITE_URL`, verificar el dominio en Search Console y redirigir 301 desde `hosted.app` para no partir el posicionamiento.
 - **Efecto:** solo al publicar `main` en App Hosting (con confirmación de Carlos).
+
+## D-038 · 2026-10-23 · Dominio nutraelements.cl como SITE_URL y número de pedido solo tras pagar — vigente (pedido de Carlos)
+- **Causa del error "No pudimos conectar con Flow":** `SITE_URL` estaba vacío en `functions/.env.nutraelements`, así que `createFlowPayment` rechazaba la configuración (`FlowConfigError`) sin llamar a Flow. Ahora el log incluye `problems` (solo nombres de variables).
+- **SITE_URL = `https://nutraelements.cl`** en Functions y en `apphosting.yaml`. El dominio ya sirve el sitio. Debe ser el mismo origen en ambos: Flow devuelve al comprador a `SITE_URL` y el token del pedido vive en el `localStorage` de ese origen. También corrige las canónicas y el sitemap.
+- **Número de pedido:** con Flow no se muestra hasta que el pago se recibe (`paid`, `payment_review`, `refunded`). Si no se puede iniciar el pago, el comprador se queda en el checkout con el carrito intacto y reintenta sobre el mismo pedido. Con transferencia sí se muestra al crear el pedido, porque es la glosa.
+- **Pendiente:** redirigir 301 `*.hosted.app` → `nutraelements.cl` y configurar `www`.
