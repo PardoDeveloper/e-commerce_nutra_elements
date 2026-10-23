@@ -15,6 +15,7 @@ import {
   subscribeSidebar,
 } from "@/lib/admin/sidebar";
 import { isDemoLoginAvailable } from "@/lib/admin/mode";
+import { resolvePaymentsMode } from "@/lib/checkout/payments-mode";
 import { getAuthSnapshot, getServerAuthSnapshot, signOutAdmin, subscribeAuth, type AuthState } from "@/lib/auth/admin-auth";
 import { resetAdminService, useDataSource, useIsPersistent } from "./AdminProvider";
 import { DataGate } from "./DataGate";
@@ -40,6 +41,7 @@ const NAV: readonly { href: string; label: string; icon: AdminIconName }[] = [
 
 const LOGIN_PATH = "/admin/login";
 export const STAGING_BANNER_TEXT = "Staging: Flow en sandbox";
+export const PRODUCTION_BANNER_TEXT = "Producción: los pagos con Flow son reales";
 
 /** Sesión vista por el shell, igual para demo y Firebase. */
 type SessionView = { status: "loading" } | { status: "out" } | { status: "in"; email: string };
@@ -114,7 +116,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   const banner = (
     <div className={styles.banner} role="status">
-      {demo ? (persistent ? DEMO_BANNER_PERSISTENT_TEXT : DEMO_BANNER_TEXT) : STAGING_BANNER_TEXT}
+      {demo ? (persistent ? DEMO_BANNER_PERSISTENT_TEXT : DEMO_BANNER_TEXT) : resolvePaymentsMode(dataSource) === "sandbox" ? STAGING_BANNER_TEXT : PRODUCTION_BANNER_TEXT}
     </div>
   );
 

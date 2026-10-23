@@ -1,6 +1,6 @@
 # Configuración de Firebase App Hosting para Nutra Elements.
 # Aplica al backend conectado a la rama main (proyecto prod = nutraelements).
-# Estado actual: staging (D-021 y D-031): noindex, Flow sandbox y sin dominio.
+# Estado actual (D-036, D-037): Flow en producción e indexable, aún sin dominio.
 # Este archivo es público: aquí NO van secretos. Los secretos se referencian
 # por nombre y viven en Secret Manager.
 
@@ -24,9 +24,10 @@ env:
 
   # Interruptor único de indexación (D-021, D-023). Solo "true" permite indexar;
   # cualquier otro valor emite noindex y robots.txt bloqueando todo.
-  # CAMBIAR a "true" únicamente en el lanzamiento, con confirmación del usuario.
+  # "true" desde D-037 (pedido de Carlos). Carrito, checkout, pedido y admin
+  # siguen con su propio noindex.
   - variable: SITE_INDEXABLE
-    value: "false"
+    value: "true"
     availability:
       - BUILD
       - RUNTIME
@@ -80,6 +81,15 @@ env:
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
     value: "48808849043"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Ambiente de Flow que ven las pantallas (avisos de "pagos de prueba"). Debe
+  # coincidir con APP_ENV/FLOW_API_BASE de las Functions: "sandbox" o "production".
+  # Si falta, el sitio NO dice que los pagos sean de prueba (D-036).
+  - variable: NEXT_PUBLIC_FLOW_ENV
+    value: production
     availability:
       - BUILD
       - RUNTIME

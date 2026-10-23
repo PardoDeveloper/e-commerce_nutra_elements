@@ -51,7 +51,7 @@ describe("createFlowPayment (3.2)", () => {
       amount: 32762, // sale de order.total
       email: "ana@example.com",
       urlConfirmation: "https://flowconfirm-test.a.run.app/",
-      urlReturn: `https://nutra-staging.web.app/checkout/retorno?o=NE-000001&t=${TOKEN}`,
+      urlReturn: "https://nutra-staging.web.app/checkout/retorno?o=NE-000001",
       timeoutSeconds: 1800,
     });
     expect(orderOf(env)["flow"]).toMatchObject({

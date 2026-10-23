@@ -12,10 +12,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { AdminProvider } from "./AdminProvider";
-import { AdminShell, STAGING_BANNER_TEXT } from "./AdminShell";
+import { AdminShell, PRODUCTION_BANNER_TEXT, STAGING_BANNER_TEXT } from "./AdminShell";
 import { LoginForm } from "./LoginForm";
 
-afterEach(() => setActiveDataSource("demo"));
+afterEach(() => {
+  setActiveDataSource("demo");
+  vi.unstubAllEnvs();
+});
 
 // Mismo componente, con `children` opcional para poder pasarlo como argumento de createElement.
 const Provider = AdminProvider as ComponentType<{ dataSource: DataSource; seed: null; children?: ReactNode }>;
@@ -61,11 +64,19 @@ describe("login con demo", () => {
 });
 
 describe("banner del admin", () => {
-  it("con Firebase dice «Staging: Flow en sandbox» y no «Modo demostración»", () => {
+  it("con Firebase y NEXT_PUBLIC_FLOW_ENV=sandbox dice «Staging: Flow en sandbox» y no «Modo demostración»", () => {
+    vi.stubEnv("NEXT_PUBLIC_FLOW_ENV", "sandbox");
     const html = render("firebase", shell());
     expect(STAGING_BANNER_TEXT).toBe("Staging: Flow en sandbox");
     expect(html).toContain("Staging: Flow en sandbox");
     expect(html).not.toMatch(/Modo demostración/);
+  });
+
+  it("con Firebase en producción avisa que los pagos son reales", () => {
+    vi.stubEnv("NEXT_PUBLIC_FLOW_ENV", "production");
+    const html = render("firebase", shell());
+    expect(html).toContain(PRODUCTION_BANNER_TEXT);
+    expect(html).not.toContain(STAGING_BANNER_TEXT);
   });
 
   it("con demo conserva el aviso de demostración", () => {

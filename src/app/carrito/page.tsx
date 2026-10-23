@@ -3,6 +3,8 @@ import { CartView } from "@/components/checkout/CartView";
 import { PrototypeBanner } from "@/components/checkout/PrototypeBanner";
 import styles from "@/components/checkout/checkout.module.css";
 import { Container } from "@/components/Container";
+import { resolvePaymentsMode } from "@/lib/checkout/payments-mode";
+import { resolveDataSource } from "@/lib/data-source";
 import { loadCheckoutData } from "@/lib/checkout/server";
 
 // Carrito: dinámico y sin indexar (D-022).
@@ -16,7 +18,7 @@ export default async function CartPage() {
   const { catalog, settings } = await loadCheckoutData();
   return (
     <>
-      <PrototypeBanner />
+      <PrototypeBanner mode={resolvePaymentsMode(resolveDataSource())} />
       <Container className={styles.page}>
         <h1 className={styles.title}>Carrito</h1>
         <CartView

@@ -97,7 +97,7 @@ export async function handleCreateFlowPayment(deps: CreatePaymentDeps, data: unk
       amount: order.total,
       email: order.customer.email,
       urlConfirmation: config.confirmationUrl,
-      urlReturn: buildReturnUrl(config.siteUrl, orderNumber, accessToken),
+      urlReturn: buildReturnUrl(config.siteUrl, orderNumber),
       timeoutSeconds: Math.max(MIN_FLOW_TIMEOUT_SECONDS, remainingSeconds),
     });
   } catch (err) {

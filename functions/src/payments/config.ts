@@ -92,7 +92,11 @@ export function resolveFlowConfig(env: FlowEnvInput, scope: "api" | "full" = "fu
   };
 }
 
-/** `urlReturn` que Flow usa para redirigir al comprador (functions.md 3.3.1). El token va codificado. */
-export function buildReturnUrl(siteUrl: string, orderNumber: string, accessToken: string): string {
-  return `${siteUrl}/checkout/retorno?o=${encodeURIComponent(orderNumber)}&t=${encodeURIComponent(accessToken)}`;
+/**
+ * `urlReturn` que Flow usa para redirigir al comprador (functions.md 3.3.1). A2 (QA, D-036): lleva
+ * SOLO el número de pedido; el token de acceso nunca sale hacia Flow. El navegador del comprador
+ * ya lo tiene guardado desde `createOrder` y la página del pedido lo lee de ahí.
+ */
+export function buildReturnUrl(siteUrl: string, orderNumber: string): string {
+  return `${siteUrl}/checkout/retorno?o=${encodeURIComponent(orderNumber)}`;
 }

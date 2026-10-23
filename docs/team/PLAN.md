@@ -101,7 +101,7 @@ Paralelo posible: 2B.4/2B.5 y 2B.6/2B.7 tocan archivos distintos de /functions, 
 |---|-------|-------|------------------|------------|--------|
 | 2C.1 | Proyecto Next.js (App Router, TS estricto), layout y clientes de Firebase | nextjs-frontend | `npm run build` y lint en verde | 0.7 | hecha (build, lint y 5 tests en verde, verificado por el tech-lead) |
 | 2C.2 | Páginas públicas con el SEO técnico | nextjs-frontend | Cumple contracts/seo | 2A.3, 2B.2 | pendiente |
-| 2C.3 | Carrito, checkout y página de confirmación | nextjs-frontend | Compra end-to-end en los emuladores | 2B.3, 2B.4 | pendiente |
+| 2C.3 | Carrito, checkout y página de confirmación | nextjs-frontend | Compra end-to-end en los emuladores | 2B.3, 2B.4 | código hecho (D-036); falta la compra de punta a punta en la nube |
 | 2C.4 | Admin: productos e imágenes, Excel, descuentos, pedidos, métricas y ajustes | nextjs-frontend | Flujos probados en los emuladores | 2B.7, 2B.8 | pendiente |
 
 

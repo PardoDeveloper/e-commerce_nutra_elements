@@ -8,14 +8,19 @@ import { cartActions, toOrderItems, useCart } from "@/lib/cart";
 import {
   OrderServiceError,
   computeSummary,
+  browserStorage,
   getOrderService,
+  isExternalUrl,
+  rememberOrderToken,
   validateCheckout,
   type CatalogEntry,
   type CheckoutFormValues,
   type FieldErrors,
   type FieldKey,
   type MockSettings,
+  type OrderErrorCode,
 } from "@/lib/checkout";
+import type { DataSource } from "@/lib/data-source";
 import { formatClp } from "@/lib/format";
 import styles from "./checkout.module.css";
 import formStyles from "./forms.module.css";
@@ -26,6 +31,8 @@ interface CheckoutFormProps {
   settings: MockSettings;
   /** Falso con firebase si el banco es de prueba o no hay datos bancarios. */
   transferAvailable?: boolean;
+  /** "firebase": pedidos y pagos reales con las Cloud Functions; "demo": el simulado. */
+  dataSource?: DataSource;
 }
 
 const INITIAL: CheckoutFormValues = {
@@ -57,6 +64,9 @@ const FIELD_LABELS: Record<FieldKey, string> = {
 /** Id del control a enfocar para cada campo con error. */
 const fieldId = (key: FieldKey) => `field-${key}`;
 const FIELD_ORDER: FieldKey[] = ["firstName", "lastName", "email", "phone", "rut", "deliveryType", "communeCode", "address", "notes", "paymentMethod"];
+
+/** Errores pasajeros de `createOrder`: el reintento reutiliza la clave de idempotencia (functions.md 3.1). */
+const TRANSIENT_ERRORS: ReadonlySet<OrderErrorCode> = new Set(["INTERNAL", "CONTENTION", "RATE_LIMITED"]);
 
 interface TextFieldProps {
   name: FieldKey;
@@ -117,7 +127,7 @@ function TextField({ name, label, value, error, onChange, disabled, type = "text
   );
 }
 
-export function CheckoutForm({ catalog, settings, transferAvailable = true }: CheckoutFormProps) {
+export function CheckoutForm({ catalog, settings, transferAvailable = true, dataSource = "demo" }: CheckoutFormProps) {
   const router = useRouter();
   const cart = useCart();
   const [values, setValues] = useState<CheckoutFormValues>(INITIAL);
@@ -201,28 +211,21 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true }: Ch
     setErrors({});
     setPhase("submitting");
 
+    const service = getOrderService(dataSource, { catalog, settings });
+    let order;
     try {
-      const service = getOrderService({ catalog, settings });
-      const order = await service.createOrder({
+      order = await service.createOrder({
         clientRequestId: requestId,
         items,
         paymentMethod: result.paymentMethod,
         customer: result.customer,
         delivery: result.delivery,
       });
-      // Pedido creado: se vacía el carrito y se sigue al pago.
-      setPhase("redirecting");
-      cartActions.clear();
-      const query = new URLSearchParams({ t: order.accessToken });
-      if (order.next === "pay_with_flow") {
-        const payment = await service.createFlowPayment({ orderNumber: order.orderNumber, accessToken: order.accessToken });
-        router.push(payment.redirectUrl);
-      } else {
-        router.push(`/pedido/${order.orderNumber}?${query.toString()}`);
-      }
     } catch (error) {
       setPhase("form");
-      setRequestId(crypto.randomUUID());
+      // Un fallo pasajero (red, contención, límite) pudo haber creado el pedido igual: se reintenta con la
+      // MISMA clave de idempotencia para no duplicarlo. Ante un rechazo de negocio se abre un intento nuevo.
+      if (!(error instanceof OrderServiceError) || !TRANSIENT_ERRORS.has(error.code)) setRequestId(crypto.randomUUID());
       if (error instanceof OrderServiceError) {
         if (error.code === "INVALID_RUT") setErrors({ rut: "Revisa tu RUT. Ejemplo: 12.345.678-5." });
         setFormError(error.message);
@@ -230,6 +233,26 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true }: Ch
         setFormError("Ocurrió un error inesperado. Intenta de nuevo.");
       }
       focusSummary();
+      return;
+    }
+
+    // Pedido creado: se guarda el token en este navegador (A2), se vacía el carrito y se sigue al pago.
+    setPhase("redirecting");
+    cartActions.clear();
+    const storage = browserStorage();
+    if (storage) rememberOrderToken(storage, order.orderNumber, order.accessToken);
+    const orderUrl = `/pedido/${order.orderNumber}?${new URLSearchParams({ t: order.accessToken }).toString()}`;
+    if (order.next !== "pay_with_flow") {
+      router.push(orderUrl);
+      return;
+    }
+    try {
+      const payment = await service.createFlowPayment({ orderNumber: order.orderNumber, accessToken: order.accessToken });
+      if (isExternalUrl(payment.redirectUrl)) window.location.assign(payment.redirectUrl);
+      else router.push(payment.redirectUrl);
+    } catch {
+      // El pedido ya existe y su stock está reservado: se lleva al comprador a su pedido, donde puede reintentar el pago.
+      router.push(orderUrl);
     }
   }
 

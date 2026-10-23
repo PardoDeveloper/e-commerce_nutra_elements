@@ -66,8 +66,8 @@ describe("resolveFlowConfig", () => {
 });
 
 describe("buildReturnUrl", () => {
-  it("codifica número y token", () => {
-    expect(buildReturnUrl("https://nutra.cl", "NE-000123", "a_b-c")).toBe("https://nutra.cl/checkout/retorno?o=NE-000123&t=a_b-c");
-    expect(buildReturnUrl("https://nutra.cl", "NE-000123", "a&b=c")).toBe("https://nutra.cl/checkout/retorno?o=NE-000123&t=a%26b%3Dc");
+  it("A2: solo lleva el número de pedido, nunca el token de acceso", () => {
+    expect(buildReturnUrl("https://nutra.cl", "NE-000123")).toBe("https://nutra.cl/checkout/retorno?o=NE-000123");
+    expect(buildReturnUrl("https://nutra.cl", "NE&1")).toBe("https://nutra.cl/checkout/retorno?o=NE%261");
   });
 });
