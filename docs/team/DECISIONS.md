@@ -374,3 +374,18 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **Alternativas:** mantener el texto visible sobre o bajo el banner (descartada por Carlos).
 - **Por qué:** decisión de diseño de Carlos. El H1 oculto mantiene la señal semántica para buscadores y lectores de pantalla.
 - **Pendiente:** antes del lanzamiento, el seo-specialist debe confirmar o actualizar el contrato 01 y auditar la home (no estaba disponible en esta sesión).
+
+## D-035 · 2026-10-23 · Credenciales de Flow editables desde Ajustes del admin — vigente (pedido de Carlos)
+- **Decisión:** en Ajustes del admin, un usuario con el claim `admin` puede escribir la **API Key** y la **Secret Key** de Flow. Dos callables nuevas (contrato functions.md 5.10): `getFlowCredentialsStatus` y `setFlowCredentials`. El "token" de Flow no se configura: lo genera Flow en cada pago (Carlos confirmó que solo son API Key y Secret Key).
+- **Dónde se guardan:** solo en **Secret Manager**, como versiones nuevas de `FLOW_API_KEY` y `FLOW_SECRET_KEY` (complementa D-013, no la contradice). Nunca en Firestore, nunca vuelven al navegador (solo "configurada", la fecha y los 4 últimos caracteres de la API Key) y nunca en los logs.
+- **Cómo se aplican sin redesplegar:** el despliegue fija una versión de cada secreto; por eso, en la nube, las funciones de pago leen además la **última versión** con caché de 60 s por instancia. La versión fijada queda como respaldo. En local se sigue usando `functions/.secret.local`.
+- **Alternativas:** guardarlas en un documento privado de Firestore (descartada por Carlos: contradice D-013 y deja las claves en la base de datos).
+- **Riesgos y mitigaciones:**
+  - Una cuenta admin comprometida puede redirigir los pagos a otra cuenta de Flow. Refuerza los bloqueos de D-031 (contraseña fuerte y MFA para el admin). Cada cambio queda en el log con el `uid`.
+  - La guarda de ambiente sigue: con `APP_ENV=staging` la base es el sandbox, así que unas credenciales de producción no cobran de verdad.
+- **Requisitos antes de usarlo en `nutraelements`** (devops, con confirmación de Carlos para cada acción):
+  1. Que existan los secretos `FLOW_API_KEY` y `FLOW_SECRET_KEY` en Secret Manager.
+  2. Dar a la cuenta de servicio de Functions `roles/secretmanager.secretAccessor` y `roles/secretmanager.secretVersionManager` sobre ambos secretos.
+  3. Desplegar las funciones de pagos y pedidos, y las dos callables nuevas; agregar el permiso público de invocación (`roles/run.invoker`) solo a las dos callables, como en D-033.
+  4. Desplegar el frontend (App Hosting desde `main`).
+- **Pendiente:** QA (qa-reviewer) antes de subir; política de limpieza de versiones antiguas de los secretos (hoy se acumulan).

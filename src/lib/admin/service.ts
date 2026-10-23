@@ -13,6 +13,8 @@ import type {
   CatalogRow,
   DailyMetric,
   DeleteReport,
+  FlowCredentialsInput,
+  FlowCredentialsStatus,
   FulfillmentStatus,
   PriceRow,
   ProductContentPatch,
@@ -107,4 +109,10 @@ export interface AdminService {
   seedInitialSettings?(): Promise<{ created: ("public" | "private")[] }>;
   /** Solo Firebase: crea las categorías iniciales (D-023) que no existen, en transacción. Devuelve los slugs creados. */
   seedInitialCategories?(): Promise<{ created: string[] }>;
+
+  // --- Credenciales de Flow (functions.md 5.10, D-035): solo Firebase, solo admin, van a Secret Manager ---
+  /** Si cada credencial existe y cuándo cambió. Nunca devuelve los valores. */
+  getFlowCredentialsStatus?(): Promise<FlowCredentialsStatus>;
+  /** Guarda una versión nueva de la apiKey y/o la secretKey. Devuelve el estado actualizado. */
+  setFlowCredentials?(input: FlowCredentialsInput): Promise<FlowCredentialsStatus>;
 }

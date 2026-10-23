@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AdminServiceError } from "./errors";
-import { createCatalogCallables, createOrderCallables, FUNCTION_UNAVAILABLE_MESSAGE, mapCallableError } from "./firebase-callables";
+import { createCatalogCallables, createFlowCredentialsCallables, createOrderCallables, FUNCTION_UNAVAILABLE_MESSAGE, mapCallableError } from "./firebase-callables";
 
 const report = {
   importId: "i1",
@@ -119,5 +119,35 @@ describe("callables de pedidos", () => {
       throw mapCallableError({ code: "functions/not-found" });
     });
     await expect(o.cancelOrder({ orderNumber: "NE-000001", reason: "x" })).rejects.toThrow(FUNCTION_UNAVAILABLE_MESSAGE);
+  });
+});
+
+describe("callables de credenciales de Flow (D-035)", () => {
+  const status = {
+    apiKey: { configured: true, updatedAt: "2026-10-23T12:00:00.000Z", hint: "EE3B" },
+    secretKey: { configured: false, updatedAt: null },
+  };
+
+  it("envía solo las credenciales con valor, recortadas", async () => {
+    const invoke = vi.fn(async () => status);
+    const c = createFlowCredentialsCallables(invoke);
+    await c.setFlowCredentials({ apiKey: "  ABCD-1234-EE3B ", secretKey: "   " });
+    expect(invoke).toHaveBeenCalledWith("setFlowCredentials", { apiKey: "ABCD-1234-EE3B" });
+  });
+
+  it("interpreta el estado y tolera respuestas incompletas", async () => {
+    const c = createFlowCredentialsCallables(vi.fn(async () => status));
+    expect(await c.getFlowCredentialsStatus()).toEqual(status);
+    const partial = createFlowCredentialsCallables(vi.fn(async () => ({})));
+    expect(await partial.getFlowCredentialsStatus()).toEqual({
+      apiKey: { configured: false, updatedAt: null, hint: null },
+      secretKey: { configured: false, updatedAt: null },
+    });
+  });
+
+  it("los errores de Secret Manager llegan con mensaje en español", () => {
+    const e = mapCallableError({ code: "functions/failed-precondition", message: "x", details: { code: "FLOW_SECRET_MISSING" } });
+    expect(e.code).toBe("FLOW_SECRET_MISSING");
+    expect(e.message).toContain("Secret Manager");
   });
 });

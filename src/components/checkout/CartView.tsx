@@ -72,7 +72,7 @@ export function CartView({ catalog, settings }: CartViewProps) {
             return (
               <li key={line.sku} className={styles.line}>
                 <div className={styles.thumb}>
-                  <ProductImage name={name} categoryId={line.categoryId} alt="" />
+                  <ProductImage name={name} categoryId={line.categoryId} alt="" image={entry?.imageUrl ? { url: entry.imageUrl, alt: "" } : null} />
                 </div>
                 <div className={styles.lineBody}>
                   {missing ? (

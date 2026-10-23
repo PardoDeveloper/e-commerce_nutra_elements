@@ -6,6 +6,7 @@ import { buildInitialCategories } from "@/lib/admin/firebase-seed";
 import { errorMessage } from "@/lib/admin/errors";
 import type { AdminSettings } from "@/lib/admin/types";
 import { useAdminService, useAdminState } from "./AdminProvider";
+import { FlowCredentialsSettings } from "./FlowCredentialsSettings";
 import { ResetDemoCatalog } from "./ResetDemoCatalog";
 import ui from "./admin.module.css";
 import { sim } from "@/lib/admin/mode";
@@ -256,6 +257,7 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
           ) : null}
         </div>
       </form>
+      <FlowCredentialsSettings />
       <ResetDemoCatalog />
     </div>
   );

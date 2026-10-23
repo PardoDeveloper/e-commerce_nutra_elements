@@ -16,7 +16,7 @@ import { FlowApiError, type FlowClient } from "./flow-client.js";
 
 export interface FlowConfirmDeps extends Deps {
   /** Cliente de Flow (solo `getStatus`); puede lanzar si la configuración no es válida (se responde 500). */
-  getFlow: () => FlowClient;
+  getFlow: () => FlowClient | Promise<FlowClient>;
 }
 
 export interface HttpRequestLike {
@@ -56,7 +56,7 @@ export async function handleFlowConfirm(deps: FlowConfirmDeps, req: HttpRequestL
       logger.warn("flowConfirm sin IP: no se aplica el límite por IP");
     }
 
-    const status = await deps.getFlow().getStatus(token);
+    const status = await (await deps.getFlow()).getStatus(token);
     const result = await applyFlowStatus(deps, token, status);
     if (result.kind === "order_not_found") {
       logger.warn("Confirmación de Flow para un pedido desconocido");

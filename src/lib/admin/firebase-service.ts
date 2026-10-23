@@ -6,6 +6,7 @@
 //  - Precio, stock, publicar, eliminar/restaurar, importaciones, descuentos, crear: callables (firebase-callables.ts).
 //  - Imágenes: compresión a WebP en el navegador, `uploadBytes` a Storage y `updateDoc` de contenido con `images`.
 //  - Pedidos: callables del contrato. Ajustes: escritura directa en settings/public y settings/private.
+//  - Credenciales de Flow: callables solo-admin que escriben en Secret Manager (D-035); nunca se leen los valores.
 import { FirebaseError } from "firebase/app";
 import {
   collection,
@@ -26,7 +27,14 @@ import { deleteObject, ref, uploadBytes, type FirebaseStorage } from "firebase/s
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase/client";
 import { MAX_BYTES } from "./image";
 import { planApplyDiscount, planImportCatalog, planImportPrices, planImportStock, type BatchPlan } from "./batch";
-import { createCatalogCallables, createFirebaseInvoker, createOrderCallables, FUNCTION_UNAVAILABLE_MESSAGE, type CallableInvoker } from "./firebase-callables";
+import {
+  createCatalogCallables,
+  createFirebaseInvoker,
+  createFlowCredentialsCallables,
+  createOrderCallables,
+  FUNCTION_UNAVAILABLE_MESSAGE,
+  type CallableInvoker,
+} from "./firebase-callables";
 import {
   buildContentUpdate,
   buildSettingsWrites,
@@ -94,6 +102,7 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
   const { db, storage, invoke, bucket } = deps;
   const catalog = createCatalogCallables(invoke);
   const orderCalls = createOrderCallables(invoke);
+  const flowCredentials = createFlowCredentialsCallables(invoke);
 
   // ---------- Estado ----------
   let state: AdminState = { products: [], orders: [], settings: DEFAULT_SETTINGS, status: "loading", metrics: null };
@@ -382,6 +391,10 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
       }
       return { created };
     },
+
+    // Credenciales de Flow: callables solo-admin (D-035).
+    getFlowCredentialsStatus: () => flowCredentials.getFlowCredentialsStatus(),
+    setFlowCredentials: (input) => flowCredentials.setFlowCredentials(input),
 
     async seedInitialCategories() {
       const created: string[] = [];
