@@ -5,20 +5,24 @@
 // Tras iniciar sesión (correo/contraseña o Google) se verifica el claim `admin` (ver admin-claim.ts).
 // Sin el claim se cierra la sesión y se deja un aviso. No hay registro público.
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updatePassword,
   type User,
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { getFirebaseAuth, getFirebaseFunctions } from "@/lib/firebase/client";
 import { ensureAdmin, type AdminCheck } from "./admin-claim";
 import { authErrorMessage, errorCode, isSilentResetError, RESET_SENT_MESSAGE } from "./messages";
+import { NO_PASSWORD_ACCOUNT_MESSAGE, PASSWORD_CHANGED_MESSAGE, passwordChangeErrorMessage, validatePasswordChange, type PasswordChangeInput } from "./password";
 
 export interface AuthNotice {
   kind: "denied" | "error";
@@ -175,4 +179,25 @@ export { RESET_SENT_MESSAGE };
 export async function signOutAdmin(): Promise<void> {
   await signOut(getFirebaseAuth());
   setState({ status: "signed-out", notice: null });
+}
+
+/**
+ * Cambia la contraseña del usuario con sesión. Firebase exige un inicio de sesión reciente: por eso
+ * primero se reautentica con la contraseña actual (y así se comprueba que la conoce) y después se cambia.
+ */
+export async function changeOwnPassword(input: PasswordChangeInput): Promise<ActionResult & { message?: string }> {
+  const invalid = validatePasswordChange(input);
+  if (invalid) return { ok: false, message: invalid.message };
+  const user = getFirebaseAuth().currentUser;
+  if (!user) return { ok: false, message: "Tu sesión expiró. Vuelve a iniciar sesión." };
+  if (!user.email || !user.providerData.some((p) => p.providerId === EmailAuthProvider.PROVIDER_ID)) {
+    return { ok: false, message: NO_PASSWORD_ACCOUNT_MESSAGE };
+  }
+  try {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, input.current));
+    await updatePassword(user, input.next);
+    return { ok: true, message: PASSWORD_CHANGED_MESSAGE };
+  } catch (error) {
+    return { ok: false, message: passwordChangeErrorMessage(error) };
+  }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ensureAdmin } from "./admin-claim";
 import { authErrorMessage, AUTH_NOT_ENABLED_MESSAGE, INVALID_CREDENTIALS_MESSAGE, isSilentResetError, NOT_ADMIN_MESSAGE } from "./messages";
+import { PASSWORD_MAX_LENGTH, passwordChangeErrorMessage, validatePasswordChange, WRONG_CURRENT_PASSWORD_MESSAGE } from "./password";
 
 const fbError = (code: string) => Object.assign(new Error(code), { code });
 
@@ -78,5 +79,35 @@ describe("ensureAdmin (claimAdmin + refresco del token)", () => {
       },
     });
     expect(result).toMatchObject({ ok: false, reason: "unavailable" });
+  });
+});
+
+describe("cambio de la propia contraseña", () => {
+  const ok = { current: "actual-123", next: "nueva-12345", confirm: "nueva-12345" };
+
+  it("acepta un cambio válido", () => {
+    expect(validatePasswordChange(ok)).toBeNull();
+  });
+
+  it.each([
+    [{ ...ok, current: "" }, "current"],
+    [{ ...ok, next: "", confirm: "" }, "next"],
+    [{ ...ok, next: "corta", confirm: "corta" }, "next"],
+    [{ ...ok, next: "x".repeat(PASSWORD_MAX_LENGTH + 1), confirm: "x".repeat(PASSWORD_MAX_LENGTH + 1) }, "next"],
+    [{ ...ok, next: ok.current, confirm: ok.current }, "next"],
+    [{ ...ok, confirm: "nueva-1234" }, "confirm"],
+  ] as const)("rechaza %o en el campo %s", (input, field) => {
+    expect(validatePasswordChange(input)?.field).toBe(field);
+  });
+
+  it("no recorta espacios: la confirmación debe ser idéntica", () => {
+    expect(validatePasswordChange({ ...ok, confirm: `${ok.next} ` })?.field).toBe("confirm");
+  });
+
+  it("una contraseña actual incorrecta da un mensaje claro", () => {
+    expect(passwordChangeErrorMessage(fbError("auth/invalid-credential"))).toBe(WRONG_CURRENT_PASSWORD_MESSAGE);
+    expect(passwordChangeErrorMessage(fbError("auth/wrong-password"))).toBe(WRONG_CURRENT_PASSWORD_MESSAGE);
+    expect(passwordChangeErrorMessage(fbError("auth/weak-password"))).toMatch(/débil/);
+    expect(passwordChangeErrorMessage(new Error("boom"))).toMatch(/Inténtalo de nuevo/);
   });
 });

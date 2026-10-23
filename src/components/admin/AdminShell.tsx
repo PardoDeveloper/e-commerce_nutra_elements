@@ -35,6 +35,7 @@ const NAV: readonly { href: string; label: string; icon: AdminIconName }[] = [
   { href: "/admin/descuentos", label: "Descuentos", icon: "tag" },
   { href: "/admin/pedidos", label: "Pedidos", icon: "orders" },
   { href: "/admin/ajustes", label: "Ajustes", icon: "settings" },
+  { href: "/admin/perfil", label: "Mi perfil", icon: "user" },
 ];
 
 const LOGIN_PATH = "/admin/login";
