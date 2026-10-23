@@ -1,4 +1,4 @@
-import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
+import type { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { SecretStoreError, type FlowSecretName, type SecretStore } from "./credentials.js";
 
 // Implementación real de `SecretStore` sobre Secret Manager (D-035). La cuenta de servicio de
@@ -22,14 +22,21 @@ function translate(err: unknown): unknown {
 }
 
 export function createSecretManagerStore(projectId: string): SecretStore {
-  let client: SecretManagerServiceClient | undefined;
-  const sm = () => (client ??= new SecretManagerServiceClient());
+  // Import diferido: la librería (gRPC) es pesada y cargarla al iniciar el módulo alarga el análisis del
+  // despliegue, que tiene un límite de 10 s. Solo se carga la primera vez que se usa.
+  let client: Promise<SecretManagerServiceClient> | undefined;
+  const loadClient = () =>
+    (client ??= import("@google-cloud/secret-manager").then((m) => new m.SecretManagerServiceClient()).catch((err: unknown) => {
+      client = undefined;
+      throw err;
+    }));
+  const sm = loadClient;
   const secretPath = (name: FlowSecretName) => `projects/${projectId}/secrets/${name}`;
 
   return {
     async accessLatest(name) {
       try {
-        const [version] = await sm().accessSecretVersion({ name: `${secretPath(name)}/versions/latest` });
+        const [version] = await (await sm()).accessSecretVersion({ name: `${secretPath(name)}/versions/latest` });
         const data = version.payload?.data;
         const value = data === null || data === undefined ? "" : Buffer.from(data).toString("utf8");
         return value.length > 0 ? value : undefined;
@@ -41,7 +48,7 @@ export function createSecretManagerStore(projectId: string): SecretStore {
 
     async latestCreatedAt(name) {
       try {
-        const [version] = await sm().getSecretVersion({ name: `${secretPath(name)}/versions/latest` });
+        const [version] = await (await sm()).getSecretVersion({ name: `${secretPath(name)}/versions/latest` });
         if (version.state !== "ENABLED") return null;
         const seconds = Number(version.createTime?.seconds ?? 0);
         return seconds > 0 ? new Date(seconds * 1000).toISOString() : null;
@@ -53,7 +60,7 @@ export function createSecretManagerStore(projectId: string): SecretStore {
 
     async addVersion(name, value) {
       try {
-        await sm().addSecretVersion({ parent: secretPath(name), payload: { data: Buffer.from(value, "utf8") } });
+        await (await sm()).addSecretVersion({ parent: secretPath(name), payload: { data: Buffer.from(value, "utf8") } });
       } catch (err) {
         throw translate(err);
       }
