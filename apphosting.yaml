@@ -33,11 +33,10 @@ env:
       - RUNTIME
 
   # Origen canónico del sitio (sitemap, JSON-LD, metadatos), sin barra final.
-  # PENDIENTE: se fija con la URL real del backend una vez creado (formato
-  # https://<backend>--nutraelements.us-east4.hosted.app) y luego con el dominio
-  # definitivo. Descomentar y completar tras crear el backend.
+  # Dominio definitivo (D-038). Debe coincidir con SITE_URL de las Functions:
+  # Flow devuelve al comprador a este origen y su navegador guarda ahí el pedido.
   - variable: SITE_URL
-    value: https://nutra-web--nutraelements.us-east4.hosted.app
+    value: https://nutraelements.cl
     availability:
       - BUILD
       - RUNTIME
