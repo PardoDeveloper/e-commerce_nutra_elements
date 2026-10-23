@@ -153,7 +153,7 @@ interface CreateOrderResponse {
   | `failed-precondition` | `PRODUCT_UNAVAILABLE` | "Un producto ya no está disponible." (con `sku`) |
   | `failed-precondition` | `OUT_OF_STOCK` | "No hay stock suficiente de un producto." (con `sku`, `available`) |
   | `failed-precondition` | `ZERO_TOTAL` / `ORDER_TOO_LARGE` | "No se puede procesar este pedido." |
-  | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos. Intenta de nuevo en unos minutos." |
+  | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos o pedidos sin pagar con este correo. Intenta de nuevo en unos minutos." |
   | `aborted` | `CONTENTION` | "El sistema está ocupado, intenta de nuevo." (la transacción agotó los reintentos) |
 - Idempotencia: el cliente genera `clientRequestId` una vez por intento de compra y lo reutiliza si hay un fallo de red o un reintento. Si `idempotencyKeys/...` ya existe, se devuelve el pedido ya creado (sin descontar de nuevo ni consumir otro número). **Desde la v1.4 el token se deriva del `clientRequestId`, así que el reintento devuelve el MISMO token y no escribe nada en el pedido** (el que el cliente ya recibió sigue válido). Si el pedido ya no está `pending_payment`, `ORDER_NOT_PAYABLE`. Para cualquier otra llamada con ese `clientRequestId` pero con carrito distinto (o con otro RUT) → `INVALID_INPUT`.
 - Efectos y revalidación: cambia `stock` de los productos → el trigger `onProductWritten` revalida las fichas solo si cambió `inStock` (ver 8).

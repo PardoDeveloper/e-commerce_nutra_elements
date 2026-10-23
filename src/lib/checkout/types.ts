@@ -120,7 +120,7 @@ export const ORDER_ERROR_MESSAGES: Record<OrderErrorCode, string> = {
   OUT_OF_STOCK: "No hay stock suficiente de un producto.",
   ZERO_TOTAL: "No se puede procesar este pedido.",
   ORDER_TOO_LARGE: "No se puede procesar este pedido.",
-  RATE_LIMITED: "Demasiados intentos. Intenta de nuevo en unos minutos.",
+  RATE_LIMITED: "Demasiados intentos o pedidos sin pagar con este correo. Intenta de nuevo en unos minutos.",
   CONTENTION: "El sistema está ocupado, intenta de nuevo.",
   ORDER_NOT_FOUND: "No encontramos el pedido. Revisa el número y el enlace.",
   ORDER_NOT_PAYABLE: "Este pedido ya no se puede pagar.",

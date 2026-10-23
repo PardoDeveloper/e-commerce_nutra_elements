@@ -106,7 +106,7 @@ export async function handleCreateFlowPayment(deps: CreatePaymentDeps, data: unk
     });
   } catch (err) {
     if (err instanceof FlowApiError) {
-      logger.error("payment/create falló", { orderNumber, kind: err.kind, httpStatus: err.httpStatus, flowCode: err.flowCode });
+      logger.error("payment/create falló", { orderNumber, kind: err.kind, httpStatus: err.httpStatus, flowCode: err.flowCode, flowMessage: err.flowMessage });
       throw appError("FLOW_UNAVAILABLE");
     }
     throw err;

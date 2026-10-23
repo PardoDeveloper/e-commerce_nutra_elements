@@ -54,6 +54,8 @@ export class FlowApiError extends Error {
     readonly kind: "client" | "unavailable",
     readonly httpStatus?: number,
     readonly flowCode?: number,
+    /** Texto de error que devuelve Flow (sin datos sensibles; truncado). Solo para logs. */
+    readonly flowMessage?: string,
   ) {
     super(`Flow ${kind}${httpStatus !== undefined ? ` (HTTP ${httpStatus})` : ""}`);
     this.name = "FlowApiError";
@@ -110,7 +112,7 @@ const statusResponseSchema = z.object({
   amount: z.union([z.number(), z.string()]).transform((v) => Number(v)),
   currency: z.string(),
 });
-const errorBodySchema = z.object({ code: z.coerce.number().optional() });
+const errorBodySchema = z.object({ code: z.coerce.number().optional(), message: z.string().optional() });
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -157,12 +159,15 @@ export function createFlowClient(opts: {
 
     if (res.status < 200 || res.status >= 300) {
       let flowCode: number | undefined;
+      let flowMessage: string | undefined;
       try {
-        flowCode = errorBodySchema.parse(JSON.parse(bodyText)).code;
+        const body = errorBodySchema.parse(JSON.parse(bodyText));
+        flowCode = body.code;
+        flowMessage = body.message?.slice(0, 200);
       } catch {
         flowCode = undefined;
       }
-      throw new FlowApiError(classify(res.status), res.status, flowCode);
+      throw new FlowApiError(classify(res.status), res.status, flowCode, flowMessage);
     }
     try {
       return JSON.parse(bodyText);

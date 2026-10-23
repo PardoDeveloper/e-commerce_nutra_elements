@@ -118,7 +118,7 @@ describe("createPayment", () => {
   });
 
   it("errores 400/401 son 'client' (con código de Flow); 429 y 5xx son 'unavailable'", async () => {
-    await expect(client(fakeFetch(400, { code: 105, message: "x" })).createPayment(params)).rejects.toMatchObject({ kind: "client", httpStatus: 400, flowCode: 105 });
+    await expect(client(fakeFetch(400, { code: 105, message: "x" })).createPayment(params)).rejects.toMatchObject({ kind: "client", httpStatus: 400, flowCode: 105, flowMessage: "x" });
     await expect(client(fakeFetch(401, { code: 1620, message: "x" })).createPayment(params)).rejects.toMatchObject({ kind: "client", httpStatus: 401 });
     await expect(client(fakeFetch(429, "")).createPayment(params)).rejects.toMatchObject({ kind: "unavailable" });
     await expect(client(fakeFetch(503, "")).createPayment(params)).rejects.toMatchObject({ kind: "unavailable" });
