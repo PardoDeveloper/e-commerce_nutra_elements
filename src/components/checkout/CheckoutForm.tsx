@@ -42,12 +42,12 @@ const INITIAL: CheckoutFormValues = {
   lastName: "",
   email: "",
   phone: "",
-  rut: "",
   deliveryType: "shipping",
   communeCode: "",
   address: "",
   notes: "",
-  paymentMethod: "",
+  // Flow queda elegido por defecto; el comprador puede cambiar a transferencia.
+  paymentMethod: "flow",
 };
 
 const FIELD_LABELS: Record<FieldKey, string> = {
@@ -55,7 +55,6 @@ const FIELD_LABELS: Record<FieldKey, string> = {
   lastName: "Apellido",
   email: "Correo",
   phone: "Teléfono",
-  rut: "RUT",
   deliveryType: "Entrega",
   communeCode: "Comuna",
   address: "Dirección",
@@ -65,7 +64,7 @@ const FIELD_LABELS: Record<FieldKey, string> = {
 
 /** Id del control a enfocar para cada campo con error. */
 const fieldId = (key: FieldKey) => `field-${key}`;
-const FIELD_ORDER: FieldKey[] = ["firstName", "lastName", "email", "phone", "rut", "deliveryType", "communeCode", "address", "notes", "paymentMethod"];
+const FIELD_ORDER: FieldKey[] = ["firstName", "lastName", "email", "phone", "deliveryType", "communeCode", "address", "notes", "paymentMethod"];
 
 /** Errores pasajeros de `createOrder`: el reintento reutiliza la clave de idempotencia (functions.md 3.1). */
 const TRANSIENT_ERRORS: ReadonlySet<OrderErrorCode> = new Set(["INTERNAL", "CONTENTION", "RATE_LIMITED"]);
@@ -244,7 +243,6 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
       // MISMA clave de idempotencia para no duplicarlo. Ante un rechazo de negocio se abre un intento nuevo.
       if (!(error instanceof OrderServiceError) || !TRANSIENT_ERRORS.has(error.code)) setRequestId(crypto.randomUUID());
       if (error instanceof OrderServiceError) {
-        if (error.code === "INVALID_RUT") setErrors({ rut: "Revisa tu RUT. Ejemplo: 12.345.678-5." });
         setFormError(error.message);
       } else {
         setFormError("Ocurrió un error inesperado. Intenta de nuevo.");
@@ -330,19 +328,6 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
               <TextField name="lastName" label="Apellido" autoComplete="family-name" maxLength={60} value={values.lastName} error={errors.lastName} onChange={onChange} disabled={busy} />
               <TextField name="email" label="Correo" type="email" autoComplete="email" inputMode="email" maxLength={254} value={values.email} error={errors.email} onChange={onChange} disabled={busy} />
               <TextField name="phone" label="Teléfono" type="tel" autoComplete="tel" inputMode="tel" hint="Ej: +56 9 1234 5678" maxLength={20} value={values.phone} error={errors.phone} onChange={onChange} disabled={busy} />
-              <TextField
-                name="rut"
-                label="RUT"
-                autoComplete="off"
-                inputMode="text"
-                autoCapitalize="characters"
-                hint="Obligatorio. Con o sin puntos y guion, por ejemplo 12.345.678-5. No se muestra en la confirmación."
-                maxLength={12}
-                value={values.rut}
-                error={errors.rut}
-                onChange={onChange}
-                disabled={busy}
-              />
             </div>
           </fieldset>
 

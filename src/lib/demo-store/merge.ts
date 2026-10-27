@@ -5,9 +5,9 @@ import type { Product } from "@/lib/data/types";
 import { demoImageUrlFromPath } from "./config";
 import type { StoredProduct, StoredProductInput } from "./types";
 
-/** ¿Se muestra en la tienda? (D-029: un producto eliminado nunca; además debe estar publicado y activo). */
+/** ¿Se muestra en la tienda? (D-029: un producto eliminado nunca; además debe estar publicado, activo y con slug). */
 export function isVisible(s: StoredProduct): boolean {
-  return s.deletedAt === null && s.published && s.active && s.slug !== null && s.categoryId !== null;
+  return s.deletedAt === null && s.published && s.active && s.slug !== null;
 }
 
 /**
@@ -15,7 +15,7 @@ export function isVisible(s: StoredProduct): boolean {
  * (eliminado, despublicado, inactivo): la ficha da 404 y no aparece en listados.
  */
 export function mergeStoredIntoProduct(base: Product, s: StoredProduct): Product | null {
-  if (!isVisible(s) || s.slug === null || s.categoryId === null) return null;
+  if (!isVisible(s) || s.slug === null) return null;
   return {
     ...base,
     name: s.name,
@@ -33,7 +33,6 @@ export function mergeStoredIntoProduct(base: Product, s: StoredProduct): Product
     inStock: s.stock > 0,
     format: s.format,
     unitsPerPack: s.unitsPerPack,
-    family: s.family,
     seo: s.seo,
   };
 }
@@ -61,8 +60,8 @@ export function applyStoredToAdmin(base: AdminProduct, s: StoredProduct): AdminP
     published: s.published,
     format: s.format,
     unitsPerPack: s.unitsPerPack,
-    family: s.family,
     seo: s.seo,
+    commissionPerUnit: s.commissionPerUnit !== undefined ? s.commissionPerUnit : base.commissionPerUnit,
     deletedAt: s.deletedAt,
     deletedBy: s.deletedBy,
   };
@@ -84,8 +83,8 @@ export function toStoredProduct(p: AdminProduct): StoredProduct {
     published: p.published,
     format: p.format,
     unitsPerPack: p.unitsPerPack,
-    family: p.family,
     seo: p.seo,
+    commissionPerUnit: p.commissionPerUnit,
     deletedAt: p.deletedAt,
     deletedBy: p.deletedBy,
   };

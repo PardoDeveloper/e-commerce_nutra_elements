@@ -1,5 +1,5 @@
 // Propuestas a partir del NOMBRE de la planilla (functions.md 5.1). Son solo sugerencias: el admin
-// corrige el nombre, la familia y el formato después.
+// corrige el nombre y el formato después.
 
 const LOWER_WORDS = new Set(["de", "del", "la", "las", "el", "los", "y", "con", "en", "para", "por", "x"]);
 const UNITS = new Set(["mg", "mcg", "g", "ui", "ml", "kg"]);
@@ -39,17 +39,15 @@ export function slugify(text: string, maxLength = 80): string {
 export interface PackInfo {
   unitsPerPack: number | null;
   format: string | null;
-  family: string | null;
 }
 
-/** Extrae "X 90 CAPS" del nombre: unidades por envase, formato y familia (nombre sin el sufijo). */
+/** Extrae "X 90 CAPS" del nombre: unidades por envase y formato. */
 export function extractPackInfo(sourceName: string): PackInfo {
   const match = /\bX\s*(\d{1,4})\b/i.exec(sourceName);
-  if (!match) return { unitsPerPack: null, format: null, family: null };
+  if (!match) return { unitsPerPack: null, format: null };
   const units = Number(match[1]);
-  if (units < 1 || units > 1000) return { unitsPerPack: null, format: null, family: null };
+  if (units < 1 || units > 1000) return { unitsPerPack: null, format: null };
   const rest = sourceName.slice((match.index ?? 0) + match[0].length);
   const format = /\bCAPS(ULAS)?\b|\bCÁPSULAS\b/i.test(rest) ? "capsulas" : null;
-  const family = slugify(sourceName.slice(0, match.index ?? 0));
-  return { unitsPerPack: units, format, family: family.length > 0 ? family : null };
+  return { unitsPerPack: units, format };
 }

@@ -62,7 +62,8 @@ const customerSchema = z.strictObject({
   lastName: text(1, 60),
   email: emailSchema,
   phone: phoneSchema,
-  rut: rutSchema,
+  // Opcional desde D-039: el checkout ya no lo pide. Si llega, se valida y normaliza.
+  rut: rutSchema.optional(),
 });
 
 const deliverySchema = z.discriminatedUnion("type", [
@@ -94,7 +95,7 @@ export type CreateOrderRequest = z.output<typeof createOrderRequestSchema>;
 
 /**
  * Valida el cuerpo de `createOrder`. Lanza `HttpsError`:
- *  - `INVALID_RUT` si el único problema es el RUT (falta, formato o dígito verificador);
+ *  - `INVALID_RUT` si el único problema es el RUT recibido (formato o dígito verificador);
  *  - `INVALID_INPUT` con `fields` (sin valores recibidos) en cualquier otro caso.
  */
 export function parseCreateOrderRequest(data: unknown): CreateOrderRequest {

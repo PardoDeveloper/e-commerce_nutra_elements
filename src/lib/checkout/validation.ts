@@ -1,7 +1,6 @@
 // Validación del formulario de checkout (cliente) y del servicio simulado. Lógica pura.
 // Mismas reglas que el contrato functions.md 3.1; el servidor real las vuelve a validar.
 
-import { normalizeRut } from "@/lib/rut";
 import type { CreateOrderRequest, PaymentMethod } from "./types";
 
 export interface CheckoutFormValues {
@@ -9,7 +8,6 @@ export interface CheckoutFormValues {
   lastName: string;
   email: string;
   phone: string;
-  rut: string;
   deliveryType: "shipping" | "pickup";
   communeCode: string;
   address: string;
@@ -59,10 +57,6 @@ export function validateCheckout(values: CheckoutFormValues, ctx: ValidationCont
   if (values.phone.trim().length === 0) errors.phone = "Ingresa tu teléfono.";
   else if (phone === null) errors.phone = "Ingresa un teléfono de 8 a 15 dígitos, por ejemplo +56 9 1234 5678.";
 
-  const rut = normalizeRut(values.rut);
-  if (values.rut.trim().length === 0) errors.rut = "Ingresa tu RUT.";
-  else if (rut === null) errors.rut = "Revisa tu RUT. Ejemplo: 12.345.678-5.";
-
   let delivery: CreateOrderRequest["delivery"] | null = null;
   if (values.deliveryType === "pickup") {
     if (!ctx.pickupEnabled) errors.deliveryType = "El retiro en tienda no está disponible.";
@@ -89,12 +83,12 @@ export function validateCheckout(values: CheckoutFormValues, ctx: ValidationCont
     errors.paymentMethod = "Elige un medio de pago.";
   }
 
-  if (Object.keys(errors).length > 0 || rut === null || phone === null || delivery === null || values.paymentMethod === "") {
+  if (Object.keys(errors).length > 0 || phone === null || delivery === null || values.paymentMethod === "") {
     return { ok: false, errors };
   }
   return {
     ok: true,
-    customer: { firstName, lastName, email, phone, rut },
+    customer: { firstName, lastName, email, phone },
     delivery,
     paymentMethod: values.paymentMethod,
   };

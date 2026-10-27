@@ -31,11 +31,14 @@ describe("mapProduct", () => {
     expect(p.seo).toEqual({ title: "T" });
     for (const key of ["stock", "reserved", "sourceName", "barcode"]) expect(p).not.toHaveProperty(key);
   });
-  it("omite documentos sin slug, nombre, categoría o precio válidos", () => {
+  it("omite documentos sin slug, nombre o precio válidos", () => {
     expect(mapProduct("x", { ...doc, slug: null }, toUrl)).toBeNull();
     expect(mapProduct("x", { ...doc, slug: "Mal Slug" }, toUrl)).toBeNull();
-    expect(mapProduct("x", { ...doc, categoryId: null }, toUrl)).toBeNull();
     expect(mapProduct("x", { ...doc, price: 0 }, toUrl)).toBeNull();
+  });
+  it("la categoría es opcional (D-040)", () => {
+    expect(mapProduct("x", { ...doc, categoryId: null }, toUrl)?.categoryId).toBeNull();
+    expect(mapProduct("x", { ...doc, categoryId: "Mal Slug" }, toUrl)?.categoryId).toBeNull();
   });
   it("inStock solo es true si el documento lo dice", () => {
     expect(mapProduct("x", { ...doc, inStock: undefined }, toUrl)!.inStock).toBe(false);

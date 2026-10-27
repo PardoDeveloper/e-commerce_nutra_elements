@@ -57,32 +57,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "deletedAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "family",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "unitsPerPack",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "products",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "published",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "stock",
           "order": "ASCENDING"
         }
@@ -152,6 +126,24 @@
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "fulfillmentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "fulfillmentStatus",
           "order": "ASCENDING"

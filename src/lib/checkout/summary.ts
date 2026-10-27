@@ -26,7 +26,8 @@ export function toCatalogEntry(p: Product): CatalogEntry {
     sku: p.sku,
     name: p.name,
     slug: p.slug,
-    categoryId: p.categoryId,
+    // Solo elige el color del marcador de imagen; "" = sin categoría (D-040).
+    categoryId: p.categoryId ?? "",
     price: p.price,
     finalPrice: p.finalPrice,
     inStock: p.inStock,

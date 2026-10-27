@@ -53,7 +53,7 @@ export async function SiteFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/preguntas-frecuentes" className={styles.link}>
+              <Link href="/#preguntas-frecuentes" className={styles.link}>
                 Preguntas frecuentes
               </Link>
             </li>

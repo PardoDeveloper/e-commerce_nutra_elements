@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { FULFILLMENT_LABELS, METHOD_LABELS, PAYMENT_LABELS } from "@/lib/admin/labels";
+import { countByClosedStatus, isActiveOrder } from "@/lib/admin/order-history";
 import { formatClp } from "@/lib/format";
 import { useAdminState, useDataSource } from "./AdminProvider";
 import { OrderStatusBadge, orderFilterKey } from "./OrderStatusBadge";
 import { formatDateTime } from "./format";
 import ui from "./admin.module.css";
+import styles from "./orders.module.css";
 
 const PAGE = 25;
 
@@ -17,10 +19,6 @@ const FILTERS: Array<{ value: string; label: string }> = [
   { value: "preparing", label: FULFILLMENT_LABELS.preparing },
   { value: "ready_for_pickup", label: FULFILLMENT_LABELS.ready_for_pickup },
   { value: "on_route", label: FULFILLMENT_LABELS.on_route },
-  { value: "delivered", label: FULFILLMENT_LABELS.delivered },
-  { value: "refunded", label: PAYMENT_LABELS.refunded },
-  { value: "cancelled", label: PAYMENT_LABELS.cancelled },
-  { value: "expired", label: PAYMENT_LABELS.expired },
   { value: "payment_review", label: PAYMENT_LABELS.payment_review },
 ];
 
@@ -32,7 +30,10 @@ function normalize(text: string): string {
 }
 
 export function OrdersView() {
-  const { orders } = useAdminState();
+  const { orders: allOrders } = useAdminState();
+  // Solo los activos: entregados, cancelados, reembolsados y expirados viven en el Historial.
+  const orders = useMemo(() => allOrders.filter(isActiveOrder), [allOrders]);
+  const closedCount = useMemo(() => Object.values(countByClosedStatus(allOrders)).reduce((a, b) => a + b, 0), [allOrders]);
   const demo = useDataSource() === "demo";
   const id = useId();
   const [status, setStatus] = useState("all");
@@ -57,10 +58,10 @@ export function OrdersView() {
     <div className={ui.page}>
       <div>
         <h1>Pedidos</h1>
-        <p className={ui.lead}>{orders.length} {demo ? "pedidos de demostración" : orders.length === 1 ? "pedido (los más recientes)" : "pedidos (los más recientes)"}.</p>
+        <p className={ui.lead}>{orders.length} {orders.length === 1 ? "pedido activo" : "pedidos activos"}{demo ? " de demostración" : ""}: pendientes de pago, en revisión, en preparación, listos para retirar o en ruta.</p>
       </div>
 
-      <form className={ui.toolbar} role="search" aria-label="Filtrar pedidos" onSubmit={(e) => e.preventDefault()}>
+      <form className={styles.toolbar} role="search" aria-label="Filtrar pedidos" onSubmit={(e) => e.preventDefault()}>
         <div className={ui.field}>
           <label className={ui.label} htmlFor={`${id}-q`}>
             Buscar por número, cliente o correo
@@ -96,6 +97,15 @@ export function OrdersView() {
             ))}
           </select>
         </div>
+        <Link href="/admin/pedidos/historial" className={styles.historyButton}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+            <path d="M3.5 4.5V9H8" />
+            <path d="M12 7.5V12l3 2" />
+          </svg>
+          Historial de pedidos
+          <span className={styles.historyCount}>{closedCount}</span>
+        </Link>
       </form>
 
       <p className={ui.help} role="status">
@@ -103,7 +113,7 @@ export function OrdersView() {
       </p>
 
       {filtered.length === 0 ? (
-        <p className={ui.empty}>No hay pedidos con ese estado o búsqueda.</p>
+        <p className={ui.empty}>{orders.length === 0 ? "No hay pedidos activos. Revisa el Historial de pedidos para ver los cerrados." : "No hay pedidos con ese estado o búsqueda."}</p>
       ) : (
         <>
           <div className={ui.tableWrap} role="region" aria-label="Tabla de pedidos" tabIndex={0}>

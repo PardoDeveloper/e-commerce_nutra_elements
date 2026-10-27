@@ -65,7 +65,7 @@
   --tap-min: 44px;
   --content-max: 76rem;
   --content-narrow: 46rem;
-  --header-h: 4rem;
+  --header-h: 5rem;
 }
 
 *,
@@ -202,26 +202,6 @@ svg {
 @media (min-width: 1100px) {
   .product-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-/* Rejilla de categorías: 2, 3 y 6 columnas */
-.category-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-@media (min-width: 640px) {
-  .category-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (min-width: 1100px) {
-  .category-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 

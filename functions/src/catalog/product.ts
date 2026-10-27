@@ -1,6 +1,7 @@
 import { computeFinalPrice, type ProductDiscount } from "../common/pricing.js";
 import { MAX_PRICE, MAX_STOCK } from "./cells.js";
 import type { ProductData } from "./types.js";
+import { readCommissionPerUnit } from "../common/commission.js";
 
 // Lectura defensiva de `products/{sku}`. Un documento dañado (precio no entero, stock negativo...)
 // no se modifica en un lote: la fila sale inválida `INVALID_PRODUCT_DATA` y se revisa a mano.
@@ -62,6 +63,7 @@ export function readProduct(sku: string, d: Record<string, unknown>): ProductDat
     barcode: strOrNull(d["barcode"]),
     barcodeValid: d["barcodeValid"] === true,
     gtin: strOrNull(d["gtin"]),
+    commissionPerUnit: readCommissionPerUnit(d["commissionPerUnit"]),
     deleted: d["deletedAt"] !== null && d["deletedAt"] !== undefined,
     deletedFieldsMissing: d["deletedAt"] === undefined,
   };

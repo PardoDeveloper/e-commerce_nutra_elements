@@ -33,7 +33,8 @@ export function AddToCartButton({ product, qty = 1, size = "md", fullWidth = fal
         sku: product.sku,
         name: product.name,
         slug: product.slug,
-        categoryId: product.categoryId,
+        // Solo elige el color del marcador de imagen; "" = sin categoría (D-040).
+        categoryId: product.categoryId ?? "",
         unitPrice: product.price,
         finalPrice: product.finalPrice,
       },

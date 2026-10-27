@@ -96,7 +96,10 @@ describe("validación de productos", () => {
     expect(validateProductInput({ ...valid(), sku: "../x" }).ok).toBe(false);
     expect(validateProductInput({ ...valid(), sku: "a".repeat(33) }).ok).toBe(false);
     expect(validateProductInput({ ...valid(), slug: "Con Mayúsculas" }).ok).toBe(false);
-    expect(validateProductInput({ ...valid(), categoryId: "otra" }).ok).toBe(false);
+    expect(validateProductInput({ ...valid(), categoryId: "Mal Slug" }).ok).toBe(false);
+    // Las categorías las crea el admin (D-040): cualquier slug válido sirve, y también ninguna.
+    expect(validateProductInput({ ...valid(), categoryId: "proteinas" }).ok).toBe(true);
+    expect(validateProductInput({ ...valid(), categoryId: null }).ok).toBe(true);
   });
 
   it("valida el descuento contra el precio", () => {
@@ -113,7 +116,7 @@ describe("validación de productos", () => {
     expect(validateProductInput({ ...valid(), images: nine }).ok).toBe(false);
   });
 
-  it("exige coherencia: eliminado no puede estar publicado; publicado requiere activo, slug y categoría", () => {
+  it("exige coherencia: eliminado no puede estar publicado; publicado requiere activo y slug", () => {
     const deleted = { deletedAt: "2026-10-19T10:00:00.000Z", deletedBy: "demo-admin" };
     expect(validateProductInput({ ...valid(), ...deleted }).ok).toBe(false);
     expect(validateProductInput({ ...valid(), ...deleted, published: false }).ok).toBe(true);

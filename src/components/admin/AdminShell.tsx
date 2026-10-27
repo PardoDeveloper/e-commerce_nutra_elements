@@ -19,6 +19,9 @@ import { resolvePaymentsMode } from "@/lib/checkout/payments-mode";
 import { getAuthSnapshot, getServerAuthSnapshot, signOutAdmin, subscribeAuth, type AuthState } from "@/lib/auth/admin-auth";
 import { resetAdminService, useDataSource, useIsPersistent } from "./AdminProvider";
 import { DataGate } from "./DataGate";
+import { resetMessagesStore } from "@/lib/admin/messages-store";
+import { countMessages } from "@/lib/admin/messages";
+import { useMessagesState } from "./useMessages";
 import { AdminIcon, type AdminIconName } from "./AdminIcons";
 import {
   demoLogout,
@@ -31,10 +34,11 @@ import styles from "./AdminShell.module.css";
 
 const NAV: readonly { href: string; label: string; icon: AdminIconName }[] = [
   { href: "/admin", label: "Resumen", icon: "home" },
+  { href: "/admin/ventas", label: "Ventas", icon: "sales" },
   { href: "/admin/productos", label: "Productos", icon: "box" },
-  { href: "/admin/importar", label: "Importar Excel", icon: "upload" },
   { href: "/admin/descuentos", label: "Descuentos", icon: "tag" },
   { href: "/admin/pedidos", label: "Pedidos", icon: "orders" },
+  { href: "/admin/mensajes", label: "Mensajes", icon: "mail" },
   { href: "/admin/ajustes", label: "Ajustes", icon: "settings" },
   { href: "/admin/perfil", label: "Mi perfil", icon: "user" },
 ];
@@ -111,7 +115,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   // Al cerrar la sesión real se descartan los listeners de Firestore y los datos en memoria.
   useEffect(() => {
-    if (!demo && session.status === "out") resetAdminService();
+    if (!demo && session.status === "out") {
+      resetAdminService();
+      resetMessagesStore();
+    }
   }, [demo, session.status]);
 
   const banner = (
@@ -223,6 +230,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   >
                     <AdminIcon name={item.icon} />
                     <span className={styles.label}>{item.label}</span>
+                    {item.href === "/admin/mensajes" ? <UnreadBadge /> : null}
                   </Link>
                 </li>
               ))}
@@ -251,5 +259,18 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Mensajes de contacto sin leer (sin contar archivados). Solo se monta con la sesión iniciada. */
+function UnreadBadge() {
+  const { messages } = useMessagesState();
+  const unread = countMessages(messages).unread;
+  if (unread === 0) return null;
+  return (
+    <span className={styles.navBadge}>
+      {unread > 99 ? "99+" : unread}
+      <span className="visually-hidden"> sin leer</span>
+    </span>
   );
 }

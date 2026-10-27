@@ -115,6 +115,17 @@ const privateSettings = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const contactMessage = {
+  name: "Ana Pérez",
+  email: "ana@example.com",
+  phone: null,
+  message: "Hola, ¿tienen stock de magnesio?",
+  read: false,
+  archived: false,
+  createdAt: ts(),
+  updatedAt: ts(),
+};
+
 // Copia del objeto sin una clave (para probar campos obligatorios ausentes).
 const omit = (o: Record<string, unknown>, key: string) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== key));
 
@@ -153,6 +164,7 @@ beforeEach(async () => {
     await fs.doc("idempotencyKeys/abc").set({ orderNumber: "NE-000001", createdAt: ts(), expiresAt: ts() });
     await fs.doc("rateLimits/abc").set({ count: 1, windowStart: ts(), expiresAt: ts() });
     await fs.doc("otraColeccion/x").set({ a: 1 });
+    await fs.doc("contactMessages/m1").set(contactMessage);
   });
 });
 
@@ -258,17 +270,16 @@ describe("products como admin", () => {
         images: [{ path: "products/2427831/k3f9a1b2c3.webp", alt: "Frasco" }],
         format: "capsulas",
         unitsPerPack: 90,
-        family: "citrato-de-magnesio",
         seo: { title: "Título", description: "Descripción" },
         updatedAt: serverNow(),
       }),
     );
   });
 
-  it("permite poner descripción, descripción corta, formato, familia y seo en null", async () => {
+  it("permite poner descripción, descripción corta, formato, categoría y seo en null", async () => {
     await assertSucceeds(
       db("admin").doc("products/2427831").update({
-        description: null, shortDescription: null, format: null, unitsPerPack: null, family: null, seo: null,
+        description: null, shortDescription: null, format: null, unitsPerPack: null, categoryId: null, seo: null,
         updatedAt: serverNow(),
       }),
     );
@@ -331,7 +342,7 @@ describe("products como admin", () => {
     await assertFails(db("admin").doc("products/2427831").update({ name: "Nuevo", updatedAt: ts() }));
   });
 
-  it("valida nombre, textos, imágenes, unitsPerPack, family y seo", async () => {
+  it("valida nombre, textos, imágenes, unitsPerPack y seo; family ya no se escribe (D-040)", async () => {
     const upd = (data: Record<string, unknown>) => db("admin").doc("products/2427831").update({ ...data, updatedAt: serverNow() });
     await assertFails(upd({ name: "" }));
     await assertFails(upd({ name: "x".repeat(121) }));
@@ -347,7 +358,8 @@ describe("products como admin", () => {
     await assertFails(upd({ unitsPerPack: 1001 }));
     await assertFails(upd({ unitsPerPack: 1.5 }));
     await assertFails(upd({ unitsPerPack: "90" }));
-    await assertFails(upd({ family: "Mal Slug" }));
+    await assertFails(upd({ family: "citrato-de-magnesio" }));
+    await assertFails(upd({ family: null }));
     await assertFails(upd({ format: "" }));
     await assertFails(upd({ format: "x".repeat(41) }));
     await assertSucceeds(upd({ format: "x".repeat(40) }));
@@ -458,9 +470,16 @@ describe("categories como admin", () => {
     await assertFails(db("admin").doc("categories/magnesio").update({ name: "" , updatedAt: serverNow() }));
   });
 
-  it("no borra", async () => {
-    await assertFails(db("admin").doc("categories/magnesio").delete());
-    await assertFails(db("admin").doc("categories/borrador").delete());
+  it("borra categorías (D-040)", async () => {
+    await assertSucceeds(db("admin").doc("categories/magnesio").delete());
+    await assertSucceeds(db("admin").doc("categories/borrador").delete());
+  });
+
+  it("deja un producto sin categoría y borra la categoría en el mismo lote", async () => {
+    const batch = db("admin").batch();
+    batch.update(db("admin").doc("products/2427831"), { categoryId: null, updatedAt: serverNow() });
+    batch.delete(db("admin").doc("categories/magnesio"));
+    await assertSucceeds(batch.commit());
   });
 });
 
@@ -506,6 +525,45 @@ describe("orders como admin", () => {
     await assertFails(db("admin").doc("orders/NE-000001").update({ total: 1 }));
     await assertFails(db("admin").doc("orders/NE-000002").set({ ...order, orderNumber: "NE-000002" }));
     await assertFails(db("admin").doc("orders/NE-000001").delete());
+  });
+});
+
+// ===========================================================================
+// contactMessages: solo el servidor crea; el admin lee, marca, archiva y elimina
+// ===========================================================================
+
+describe.each(NON_ADMIN_PROFILES)("contactMessages como %s", (profile) => {
+  it("no lee, ni lista, ni crea, ni edita, ni borra", async () => {
+    await assertFails(db(profile).doc("contactMessages/m1").get());
+    await assertFails(db(profile).collection("contactMessages").get());
+    await assertFails(db(profile).doc("contactMessages/m2").set({ ...contactMessage, createdAt: serverNow(), updatedAt: serverNow() }));
+    await assertFails(db(profile).doc("contactMessages/m1").update({ read: true, updatedAt: serverNow() }));
+    await assertFails(db(profile).doc("contactMessages/m1").delete());
+  });
+});
+
+describe("contactMessages como admin", () => {
+  it("lee y lista por fecha", async () => {
+    await assertSucceeds(db("admin").doc("contactMessages/m1").get());
+    await assertSucceeds(db("admin").collection("contactMessages").orderBy("createdAt", "desc").limit(500).get());
+  });
+
+  it("marca leído y archiva con updatedAt del servidor", async () => {
+    await assertSucceeds(db("admin").doc("contactMessages/m1").update({ read: true, updatedAt: serverNow() }));
+    await assertSucceeds(db("admin").doc("contactMessages/m1").update({ archived: true, read: false, updatedAt: serverNow() }));
+  });
+
+  it("no edita el contenido, ni usa tipos inválidos, ni omite updatedAt, ni crea", async () => {
+    await assertFails(db("admin").doc("contactMessages/m1").update({ message: "otro", updatedAt: serverNow() }));
+    await assertFails(db("admin").doc("contactMessages/m1").update({ email: "x@y.cl", updatedAt: serverNow() }));
+    await assertFails(db("admin").doc("contactMessages/m1").update({ read: "si", updatedAt: serverNow() }));
+    await assertFails(db("admin").doc("contactMessages/m1").update({ read: true }));
+    await assertFails(db("admin").doc("contactMessages/m1").update({ read: true, updatedAt: clientNow() }));
+    await assertFails(db("admin").doc("contactMessages/m2").set({ ...contactMessage, createdAt: serverNow(), updatedAt: serverNow() }));
+  });
+
+  it("elimina", async () => {
+    await assertSucceeds(db("admin").doc("contactMessages/m1").delete());
   });
 });
 

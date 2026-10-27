@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categorize, displayName, familyOf, rowToProduct, slugify, unitsPerPack } from "./catalog-rules";
+import { categorize, displayName, rowToProduct, slugify, unitsPerPack } from "./catalog-rules";
 
 describe("reglas del catálogo de la demo", () => {
   it("genera el nombre para mostrar en formato título", () => {
@@ -15,7 +15,6 @@ describe("reglas del catálogo de la demo", () => {
     const slug = slugify("Cúrcuma con Pimienta x 90 cápsulas");
     expect(slug).toBe("curcuma-con-pimienta-90-capsulas");
     expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
-    expect(familyOf(slug)).toBe("curcuma-con-pimienta");
     expect(unitsPerPack("Omega 3 x 90 cápsulas")).toBe(90);
   });
 

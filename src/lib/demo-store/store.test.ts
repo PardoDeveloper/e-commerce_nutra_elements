@@ -50,7 +50,6 @@ function input(sku: string, over: Partial<StoredProductInput> = {}): StoredProdu
     published: true,
     format: p.format,
     unitsPerPack: p.unitsPerPack,
-    family: p.family,
     seo: null,
     deletedAt: null,
     deletedBy: null,

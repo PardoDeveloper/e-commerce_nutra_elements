@@ -1,10 +1,8 @@
 // Validación estricta de lo que llega al servidor (D-030). Funciones puras, con tests.
 import { validateDiscount } from "@/lib/admin/pricing";
-import type { CategoryId } from "@/lib/data/types";
 import { IMAGE_PATH_RE, MAX_IMAGE_BYTES, SKU_RE } from "./config";
 import type { StoredProductInput } from "./types";
 
-const CATEGORIES: readonly CategoryId[] = ["vitaminas", "magnesio", "minerales", "omega-3", "belleza", "bienestar"];
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // ---------- Imágenes ----------
@@ -44,9 +42,11 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const isInt = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
 const isStr = (v: unknown, min: number, max: number): v is string => typeof v === "string" && v.length >= min && v.length <= max;
 
+// `family` ya no existe (D-040), pero se acepta y se ignora para no rechazar lo guardado antes.
 const FIELDS = [
   "sku", "name", "slug", "description", "shortDescription", "categoryId", "images", "price", "discount", "stock",
   "active", "published", "format", "unitsPerPack", "family", "seo", "deletedAt", "deletedBy",
+  "commissionPerUnit",
 ] as const;
 
 /** Valida un producto del cuerpo de la petición. Rechaza campos desconocidos y tipos incorrectos. */
@@ -63,15 +63,15 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
   if (!(raw.slug === null || (isStr(raw.slug, 1, 80) && SLUG_RE.test(raw.slug)))) bad("slug", "solo admite minúsculas, números y guiones.");
   if (!(raw.description === null || isStr(raw.description, 0, 5000))) bad("description", "admite hasta 5000 caracteres.");
   if (!(raw.shortDescription === null || isStr(raw.shortDescription, 0, 300))) bad("shortDescription", "admite hasta 300 caracteres.");
-  if (!(raw.categoryId === null || (typeof raw.categoryId === "string" && (CATEGORIES as readonly string[]).includes(raw.categoryId)))) bad("categoryId", "no es una categoría válida.");
+  if (!(raw.categoryId === null || (isStr(raw.categoryId, 1, 60) && SLUG_RE.test(raw.categoryId)))) bad("categoryId", "no es una categoría válida.");
   if (!isInt(raw.price, 1, 10_000_000)) bad("price", "debe ser un entero entre 1 y 10.000.000.");
   if (!isInt(raw.stock, 0, 1_000_000)) bad("stock", "debe ser un entero entre 0 y 1.000.000.");
   if (typeof raw.active !== "boolean") bad("active", "debe ser booleano.");
   if (typeof raw.published !== "boolean") bad("published", "debe ser booleano.");
   if (!(raw.format === null || isStr(raw.format, 0, 60))) bad("format", "admite hasta 60 caracteres.");
   if (!(raw.unitsPerPack === null || isInt(raw.unitsPerPack, 1, 10_000))) bad("unitsPerPack", "debe ser un entero entre 1 y 10.000.");
-  if (!(raw.family === null || isStr(raw.family, 0, 80))) bad("family", "admite hasta 80 caracteres.");
   if (!(raw.deletedBy === null || isStr(raw.deletedBy, 1, 64))) bad("deletedBy", "no es válido.");
+  if (!(raw.commissionPerUnit === undefined || raw.commissionPerUnit === null || isInt(raw.commissionPerUnit, 0, 10_000_000))) bad("commissionPerUnit", "debe ser un entero entre 0 y 10.000.000.");
   if (!(raw.deletedAt === null || (isStr(raw.deletedAt, 10, 40) && !Number.isNaN(Date.parse(raw.deletedAt))))) bad("deletedAt", "debe ser una fecha ISO.");
 
   let discount: StoredProductInput["discount"] = null;
@@ -109,10 +109,10 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
     if (new Set(images.map((i) => i.path)).size !== images.length) bad("images", "tiene rutas repetidas.");
   }
 
-  // Coherencia (D-029 y reglas de publicación): eliminado => despublicado; publicado => activo, con slug y categoría.
+  // Coherencia (D-029 y reglas de publicación): eliminado => despublicado; publicado => activo y con slug (la categoría es opcional).
   if (raw.deletedAt !== null && raw.published === true) bad("published", "no puede ser verdadero en un producto eliminado.");
   if (raw.published === true && raw.active !== true) bad("published", "requiere que el producto esté activo.");
-  if (raw.published === true && (raw.slug === null || raw.categoryId === null)) bad("published", "requiere slug y categoría.");
+  if (raw.published === true && raw.slug === null) bad("published", "requiere slug.");
 
   if (errors.length > 0) return { ok: false, errors };
   return {
@@ -123,7 +123,7 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
       slug: raw.slug as string | null,
       description: raw.description as string | null,
       shortDescription: raw.shortDescription as string | null,
-      categoryId: raw.categoryId as CategoryId | null,
+      categoryId: raw.categoryId as string | null,
       images,
       price: raw.price as number,
       discount,
@@ -132,10 +132,10 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
       published: raw.published as boolean,
       format: raw.format as string | null,
       unitsPerPack: raw.unitsPerPack as number | null,
-      family: raw.family as string | null,
       seo,
       deletedAt: raw.deletedAt as string | null,
       deletedBy: raw.deletedBy as string | null,
+      ...(raw.commissionPerUnit !== undefined ? { commissionPerUnit: raw.commissionPerUnit as number | null } : {}),
     },
   };
 }

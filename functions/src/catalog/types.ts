@@ -80,6 +80,8 @@ export interface ProductData {
   barcode: string | null;
   barcodeValid: boolean;
   gtin: string | null;
+  /** Comisión del químico en CLP por unidad vendida, o null si aún no se define. */
+  commissionPerUnit: number | null;
   /** `deletedAt != null` (eliminación lógica, D-029). */
   deleted: boolean;
   /** El documento no trae `deletedAt` (dato antiguo): se completa con `null` al escribirlo. */
@@ -99,6 +101,7 @@ export interface ProductPatch {
   barcode?: string | null;
   barcodeValid?: boolean;
   gtin?: string | null;
+  commissionPerUnit?: number | null;
 }
 
 export interface NewProductFields {
@@ -113,7 +116,6 @@ export interface NewProductFields {
   gtin: string | null;
   unitsPerPack: number | null;
   format: string | null;
-  family: string | null;
   source: "controlfarma-xls" | "manual";
 }
 

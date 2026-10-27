@@ -17,8 +17,8 @@ export interface CreateOrderRequest {
     lastName: string;
     email: string;
     phone: string;
-    /** Obligatorio (D-024). El servidor valida el módulo 11 y lo normaliza. */
-    rut: string;
+    /** Opcional desde D-039: el checkout ya no lo pide. Si llega, el servidor valida el módulo 11. */
+    rut?: string;
   };
   delivery: { type: "shipping"; communeCode: string; address: string; notes?: string } | { type: "pickup" };
 }

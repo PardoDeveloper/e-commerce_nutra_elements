@@ -4,6 +4,7 @@
 // del SKU y no de la cantidad real).
 import type { Product } from "@/lib/data/types";
 import { computeRutDv } from "@/lib/rut";
+import { lineCommission } from "./commission";
 import { computeFinalPrice } from "./pricing";
 import type { AdminOrder, AdminProduct, AdminSettings, FulfillmentStatus, OrderItem, StatusHistoryEntry } from "./types";
 
@@ -32,6 +33,9 @@ function hashString(text: string): number {
 }
 
 /** Convierte el producto público (sin stock) en producto de admin con un stock ficticio estable. */
+/** Demostración: comisiones ficticias por unidad (CLP). */
+const DEMO_COMMISSIONS = [500, 800, 1000, 1500];
+
 export function toAdminProduct(p: Product): AdminProduct {
   const stock = p.inStock ? 4 + (hashString(p.sku) % 57) : 0;
   return {
@@ -53,9 +57,10 @@ export function toAdminProduct(p: Product): AdminProduct {
     published: true,
     format: p.format,
     unitsPerPack: p.unitsPerPack,
-    family: p.family,
     seo: p.seo,
     source: "controlfarma-xls",
+    // Demostración: comisión ficticia y determinista para ver el cálculo en Ventas.
+    commissionPerUnit: DEMO_COMMISSIONS[hashString(p.sku) % DEMO_COMMISSIONS.length]!,
     deletedAt: null,
     deletedBy: null,
   };
@@ -124,9 +129,11 @@ function makeItems(rng: () => number, pool: AdminProduct[]): OrderItem[] {
       unitFinalPrice: p.finalPrice,
       qty,
       lineTotal: p.finalPrice * qty,
+      commissionPerUnit: p.commissionPerUnit,
+      commission: lineCommission(qty, p.commissionPerUnit),
     });
   }
-  return items.length > 0 ? items : [{ sku: pool[0]!.sku, name: pool[0]!.name, unitPrice: pool[0]!.price, discount: pool[0]!.discount, unitFinalPrice: pool[0]!.finalPrice, qty: 1, lineTotal: pool[0]!.finalPrice }];
+  return items.length > 0 ? items : [{ sku: pool[0]!.sku, name: pool[0]!.name, unitPrice: pool[0]!.price, discount: pool[0]!.discount, unitFinalPrice: pool[0]!.finalPrice, qty: 1, lineTotal: pool[0]!.finalPrice, commissionPerUnit: pool[0]!.commissionPerUnit, commission: lineCommission(1, pool[0]!.commissionPerUnit) }];
 }
 
 /** Pedidos ficticios, del más antiguo al más reciente (número ascendente). */

@@ -115,7 +115,6 @@ export function productFixture(sku: string, overrides: Record<string, unknown> =
     gtin: null,
     format: null,
     unitsPerPack: null,
-    family: null,
     seo: null,
     source: "controlfarma-xls",
     importedAt: null,

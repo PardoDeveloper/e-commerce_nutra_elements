@@ -1,16 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Fragment } from "react";
 import { Button } from "@/components/Button";
 import { CategoryCard } from "@/components/CategoryCard";
 import { Container } from "@/components/Container";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
+import { CategoryCarousel } from "@/components/store/CategoryCarousel";
+import { HeroCarousel } from "@/components/store/HeroCarousel";
+import { HomeFaq } from "@/components/store/HomeFaq";
 import { JsonLd } from "@/components/store/JsonLd";
 import styles from "@/components/store/store.module.css";
 import { getCategories, getProducts, getPublicSettings } from "@/lib/data";
 import type { Product } from "@/lib/data";
 import { formatClp } from "@/lib/format";
-import { graph, organizationNode, pageMetadata, websiteNode } from "@/lib/seo";
+import { faqPageNode, graph, organizationNode, pageMetadata, websiteNode } from "@/lib/seo";
 
 export const revalidate = 3600;
 
@@ -43,45 +47,55 @@ export default async function HomePage() {
   ]);
   const featured = pickFeatured(products, categories.map((c) => c.slug));
   const counts = new Map<string, number>();
-  for (const p of products) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+  for (const p of products) if (p.categoryId) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
   const categoryNames = new Map(categories.map((c) => [c.slug as string, c.name]));
 
   return (
     <Container as="div" className={styles.page}>
-      <JsonLd data={graph(organizationNode(), websiteNode())} />
+      <JsonLd data={graph(organizationNode(), websiteNode(), faqPageNode())} />
 
       <section className={styles.hero} aria-labelledby="home-titulo">
         {/* El banner trae el logo y el lema dentro de la imagen. El H1 queda solo para lectores de pantalla y buscadores. */}
         <h1 id="home-titulo" className={styles.srOnly}>
           Nutra Elements: suplementos en cápsulas de marca propia
         </h1>
-        <Image
-          src="/banner.jpeg"
-          alt="Nutra Elements: productos naturales premium. Hojas verdes, mortero y frascos de vidrio ámbar."
-          width={1565}
-          height={629}
-          priority
-          fetchPriority="high"
-          quality={75}
-          sizes="100vw"
-          className={styles.heroImage}
+        <HeroCarousel
+          label="Destacados de Nutra Elements"
+          slides={[
+            <Fragment key="banner-1">
+              <Image
+                src="/banner_2.png"
+                alt="Nutra Elements: pureza en cada detalle. Manos sosteniendo romero fresco sobre mármol."
+                width={2006}
+                height={784}
+                priority
+                fetchPriority="high"
+                quality={75}
+                sizes="100vw"
+                className={`${styles.heroImage} ${styles.heroImageAlt}`}
+              />
+              <div className={styles.heroActions}>
+                <Button href="/productos" size="lg" className={styles.heroCta}>
+                  Ver catálogo
+                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                    <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Button>
+              </div>
+            </Fragment>,
+          ]}
         />
-        <div className={styles.heroActions}>
-          <Button href="/productos">
-            Ver catálogo
-          </Button>
-        </div>
       </section>
 
       <section className={styles.block} aria-labelledby="home-categorias">
         <SectionHeading id="home-categorias" title="Compra por categoría" />
-        <ul className="category-grid">
+        <CategoryCarousel label="Categorías">
           {categories.map((c) => (
             <li key={c.slug}>
               <CategoryCard category={c} productCount={counts.get(c.slug) ?? 0} />
             </li>
           ))}
-        </ul>
+        </CategoryCarousel>
       </section>
 
       <section className={styles.block} aria-labelledby="home-destacados">
@@ -97,7 +111,7 @@ export default async function HomePage() {
         <ul className="product-grid">
           {featured.map((p) => (
             <li key={p.sku}>
-              <ProductCard product={p} categoryName={categoryNames.get(p.categoryId)} />
+              <ProductCard product={p} categoryName={p.categoryId ? categoryNames.get(p.categoryId) : undefined} />
             </li>
           ))}
         </ul>
@@ -109,7 +123,7 @@ export default async function HomePage() {
           <p>
             Despachamos a toda la Región Metropolitana por {formatClp(settings.shippingFee)}. También puedes retirar tu
             pedido en {settings.pickup.address}: {settings.pickup.hours.toLowerCase()}. Más detalles en{" "}
-            <Link href="/preguntas-frecuentes">preguntas frecuentes</Link>.
+            <a href="#preguntas-frecuentes">preguntas frecuentes</a>.
           </p>
         </div>
       </section>
@@ -134,6 +148,8 @@ export default async function HomePage() {
           Conoce <Link href="/nosotros">quiénes somos</Link> o escríbenos desde <Link href="/contacto">contacto</Link>.
         </p>
       </section>
+
+      <HomeFaq />
     </Container>
   );
 }

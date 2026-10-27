@@ -1,5 +1,6 @@
 // Constructores de JSON-LD (contratos 01 a 06). Solo servidor.
 // Nada de teléfono, correo, redes ni logo: son PENDIENTE y se omiten (D-023).
+import { FAQ_SECTIONS } from "./content";
 import { SITE_NAME } from "@/lib/site";
 import { absoluteUrl } from "./metadata";
 
@@ -37,6 +38,17 @@ export function breadcrumbList(crumbs: Crumb[]): JsonLdNode {
 
 export function organizationNode(): JsonLdNode {
   return { "@type": "Organization", "@id": orgId(), name: SITE_NAME, url: absoluteUrl("/") };
+}
+
+/** FAQPage con todas las preguntas frecuentes (van al final de la página principal). */
+export function faqPageNode(): JsonLdNode {
+  return {
+    "@type": "FAQPage",
+    "@id": absoluteUrl("/#preguntas-frecuentes"),
+    mainEntity: FAQ_SECTIONS.flatMap((s) =>
+      s.items.map((i) => ({ "@type": "Question", name: i.q, acceptedAnswer: { "@type": "Answer", text: i.a } })),
+    ),
+  };
 }
 
 export function websiteNode(): JsonLdNode {
@@ -80,7 +92,8 @@ interface ProductNodeInput {
   slug: string;
   sku: string;
   description: string;
-  category: string;
+  /** Opcional (D-040): sin categoría se omite. */
+  category?: string;
   price: number;
   inStock: boolean;
   shippingFee: number;
@@ -101,7 +114,7 @@ export function productNode(p: ProductNodeInput): JsonLdNode {
     sku: p.sku,
     ...(p.gtin13 && isValidGtin13(p.gtin13) ? { gtin13: p.gtin13 } : {}),
     brand: { "@type": "Brand", name: SITE_NAME },
-    category: p.category,
+    ...(p.category ? { category: p.category } : {}),
     offers: {
       "@type": "Offer",
       url,

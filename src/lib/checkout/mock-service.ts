@@ -172,8 +172,7 @@ export function createMockOrderService(deps: MockServiceDeps): MockOrderService 
       });
       if (fields.length > 0) throw new OrderServiceError("INVALID_INPUT", { fields });
 
-      const rut = normalizeRut(request.customer.rut);
-      if (rut === null) throw new OrderServiceError("INVALID_RUT", { fields: [{ path: "customer.rut", message: "RUT inválido" }] });
+      if (request.customer.rut !== undefined && normalizeRut(request.customer.rut) === null) throw new OrderServiceError("INVALID_RUT", { fields: [{ path: "customer.rut", message: "RUT inválido" }] });
 
       let communeName = "";
       const delivery = request.delivery;

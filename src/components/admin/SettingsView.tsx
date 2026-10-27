@@ -2,7 +2,6 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { isTestBank } from "@/lib/bank";
-import { buildInitialCategories } from "@/lib/admin/firebase-seed";
 import { errorMessage } from "@/lib/admin/errors";
 import type { AdminSettings } from "@/lib/admin/types";
 import { useAdminService, useAdminState } from "./AdminProvider";
@@ -14,9 +13,10 @@ import { sim } from "@/lib/admin/mode";
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
 export function SettingsView() {
-  const { settings, settingsMissing, settingsPrivateMissing, initialCategoriesExisting } = useAdminState();
+  const { settings, settingsMissing, settingsPrivateMissing, categories, categoriesLoaded } = useAdminState();
   const needsSettings = settingsMissing === true || settingsPrivateMissing === true;
-  const needsCategories = initialCategoriesExisting !== undefined && initialCategoriesExisting < INITIAL_CATEGORIES_TOTAL;
+  // Las categorías se administran en Categorías (D-040): las iniciales solo se ofrecen si no hay ninguna.
+  const needsCategories = categoriesLoaded === true && categories.length === 0;
   return (
     <>
       {needsSettings ? (
@@ -30,8 +30,6 @@ export function SettingsView() {
     </>
   );
 }
-
-const INITIAL_CATEGORIES_TOTAL = buildInitialCategories().length;
 
 /** Botones de sembrado (solo Firebase): crean únicamente lo que falta, sin pisar nada. */
 function SeedInitialData({ needsSettings, needsCategories }: { needsSettings: boolean; needsCategories: boolean }) {

@@ -4,7 +4,7 @@ import styles from "./ProductImage.module.css";
 interface ProductImageProps {
   /** Nombre para mostrar del producto (se dibuja en la etiqueta del frasco). */
   name: string;
-  categoryId?: CategoryId | string;
+  categoryId?: CategoryId | null;
   /** Texto alternativo. Por defecto describe el marcador. */
   alt?: string;
   className?: string;

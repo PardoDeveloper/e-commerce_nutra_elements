@@ -28,7 +28,6 @@ const PRODUCT_VISIBLE_FIELDS = [
   "active",
   "format",
   "unitsPerPack",
-  "family",
   "seo",
   "gtin",
 ] as const;

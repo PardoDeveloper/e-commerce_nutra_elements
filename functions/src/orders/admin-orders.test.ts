@@ -293,7 +293,7 @@ describe("recordManualRefund (9b)", () => {
     expect(o(env)["refund"]).toMatchObject({ amount: 32762, method: "flow", restock: true, restocked: true, recordedBy: ADMIN_UID, note: "Devuelto desde el panel de Flow" });
     expect(productStock(env.db, "1001")).toEqual({ stock: 5, reserved: 0, inStock: true });
     expect(productStock(env.db, "1002")).toEqual({ stock: 3, reserved: 0, inStock: true });
-    expect(day(env)).toEqual({ date: "2026-10-20", ordersCount: 1, revenue: 0, merchandise: 28772, unitsSold: 0, refundsCount: 1, refundedAmount: 32762, updatedAt: env.clock() });
+    expect(day(env)).toEqual({ date: "2026-10-20", ordersCount: 1, revenue: 0, merchandise: 28772, unitsSold: 0, refundsCount: 1, refundedAmount: 32762, commission: 0, updatedAt: env.clock() });
     expect(env.db.peek("metrics/products/items/1001")).toMatchObject({ unitsSold: 0, revenue: 0 });
     expect(env.db.peek("metrics/products/items/1002")).toMatchObject({ unitsSold: 0, revenue: 0 });
   });

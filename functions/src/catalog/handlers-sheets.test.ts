@@ -58,7 +58,6 @@ describe("importCatalog: producto nuevo", () => {
       gtin: "4006381333931",
       unitsPerPack: 120,
       format: "capsulas",
-      family: "citrato-de-magnesio",
       source: "controlfarma-xls",
       deletedAt: null,
       deletedBy: null,

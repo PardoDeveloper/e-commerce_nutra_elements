@@ -160,14 +160,13 @@ describe("setProductsPublished", () => {
     store.seedProduct("b", ready("b", { slug: null }));
     store.seedProduct("c", ready("c", { slug: "Mal Slug" }));
     store.seedProduct("d", ready("d", { description: "  " }));
-    store.seedProduct("e", ready("e", { categoryId: null }));
     store.seedProduct("f", ready("f", { categoryId: "no-existe" }));
     store.seedProduct("g", ready("g", { categoryId: "oculta" }));
     store.seedProduct("h", ready("h", { images: [] }));
     store.seedProduct("i", ready("i", { images: [{ path: "products/otro/a.webp", alt: "x" }] }));
     store.seedProduct("j", ready("j", { images: [{ path: "products/j/a.webp", alt: " " }] }));
     store.seedProduct("k", ready("k", { name: "" }));
-    const skus = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
+    const skus = ["a", "b", "c", "d", "f", "g", "h", "i", "j", "k"];
     const report = await handleSetProductsPublished(store, { skus, published: true }, UID);
     expect(report.updated).toBe(0);
     expect(report.invalid.map((r) => r.code)).toEqual([
@@ -175,7 +174,6 @@ describe("setProductsPublished", () => {
       "MISSING_SLUG",
       "INVALID_SLUG",
       "MISSING_DESCRIPTION",
-      "INVALID_CATEGORY",
       "INVALID_CATEGORY",
       "INVALID_CATEGORY",
       "MISSING_IMAGE",
@@ -190,7 +188,15 @@ describe("setProductsPublished", () => {
     const store = seeded();
     store.seedProduct("1", productFixture("1"));
     const report = await handleSetProductsPublished(store, { skus: ["1"], published: true }, UID);
-    expect(report.invalid[0]?.message).toMatch(/slug.*descripción.*categoría.*imagen/);
+    expect(report.invalid[0]?.message).toMatch(/slug.*descripción.*imagen/);
+  });
+
+  it("publica un producto sin categoría: es opcional (D-040)", async () => {
+    const store = seeded();
+    store.seedProduct("1", ready("1", { categoryId: null }));
+    const report = await handleSetProductsPublished(store, { skus: ["1"], published: true }, UID);
+    expect(report).toMatchObject({ updated: 1, skipped: 0 });
+    expect(store.product("1")["published"]).toBe(true);
   });
 
   it("slug duplicado contra otro producto vigente de la base", async () => {
@@ -476,7 +482,7 @@ describe("updateProductCommerce", () => {
   it("cambia el precio y recalcula finalPrice conservando el descuento válido", async () => {
     const store = seeded();
     const r = await handleUpdateProductCommerce(store, { sku: "1", price: 20000 }, UID);
-    expect(r).toEqual({ sku: "1", price: 20000, finalPrice: 18000, stock: 3, discountRemoved: false });
+    expect(r).toEqual({ sku: "1", price: 20000, finalPrice: 18000, stock: 3, commissionPerUnit: null, discountRemoved: false });
     expect(store.imports[0]?.record).toMatchObject({ kind: "update", updated: 1 });
   });
 
@@ -485,6 +491,21 @@ describe("updateProductCommerce", () => {
     const r = await handleUpdateProductCommerce(store, { sku: "2", price: 900 }, UID);
     expect(r).toMatchObject({ price: 900, finalPrice: 900, discountRemoved: true });
     expect(store.product("2")["discount"]).toBeNull();
+  });
+
+  it("define y borra la comisión sin tocar precio ni stock", async () => {
+    const store = seeded();
+    const r = await handleUpdateProductCommerce(store, { sku: "1", commissionPerUnit: 1500 }, UID);
+    expect(r).toMatchObject({ price: 10000, stock: 3, commissionPerUnit: 1500 });
+    expect(store.product("1")["commissionPerUnit"]).toBe(1500);
+    await handleUpdateProductCommerce(store, { sku: "1", commissionPerUnit: null }, UID);
+    expect(store.product("1")["commissionPerUnit"]).toBeNull();
+  });
+
+  it("rechaza una comisión sobre el tope o con decimales", async () => {
+    const store = seeded();
+    await expect(handleUpdateProductCommerce(store, { sku: "1", commissionPerUnit: 10_000_001 }, UID)).rejects.toThrow();
+    await expect(handleUpdateProductCommerce(store, { sku: "1", commissionPerUnit: 1500.5 }, UID)).rejects.toThrow();
   });
 
   it("stock físico: guarda físico - reservado", async () => {

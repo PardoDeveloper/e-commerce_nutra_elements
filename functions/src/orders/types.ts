@@ -26,6 +26,9 @@ const itemSchema = z.object({
   unitFinalPrice: z.number(),
   qty: z.number().int().min(1),
   lineTotal: z.number(),
+  // Comisión congelada al crear el pedido (pedidos antiguos no la traen: 0).
+  commissionPerUnit: z.number().int().nullable().optional(),
+  commission: z.number().int().min(0).default(0),
 });
 
 const flowSchema = z.object({

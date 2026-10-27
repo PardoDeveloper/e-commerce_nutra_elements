@@ -9,6 +9,7 @@ import { DailyChart } from "./DailyChart";
 import { shortDay } from "./format";
 import ui from "./admin.module.css";
 
+
 export function MetricsView() {
   const { orders, products, metrics: aggregates } = useAdminState();
   const demo = useDataSource() === "demo";

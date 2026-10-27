@@ -1,5 +1,6 @@
 import * as logger from "firebase-functions/logger";
 import { z } from "zod";
+import { readCommissionPerUnit } from "../common/commission.js";
 import { ContentionError, paths, type DocData } from "../common/db.js";
 import { appError } from "../common/errors.js";
 import { computePricing, type PricingProduct } from "../common/pricing.js";
@@ -33,6 +34,7 @@ const pricingProductSchema = z.object({
   active: z.boolean(),
   stock: z.number(),
   deletedAt: z.unknown().optional(),
+  commissionPerUnit: z.unknown().optional(),
 });
 
 export interface CreateOrderContext {
@@ -100,6 +102,7 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
 
       // Productos: uno eliminado o ilegible se trata igual que uno no publicado (D-029).
       const pricingProducts = new Map<string, PricingProduct>();
+      const commissionPerUnits = new Map<string, number | null>();
       const stockProducts = new Map<string, StockProduct>();
       skus.forEach((sku, i) => {
         const raw = productDocs[i];
@@ -109,7 +112,9 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
           return;
         }
         if (parsed.data.deletedAt !== null && parsed.data.deletedAt !== undefined) return;
-        pricingProducts.set(sku, { sku, ...parsed.data });
+        const { commissionPerUnit, ...pricingFields } = parsed.data;
+        pricingProducts.set(sku, { sku, ...pricingFields });
+        commissionPerUnits.set(sku, readCommissionPerUnit(commissionPerUnit));
         const stockProduct = parseStockProduct(sku, raw);
         if (stockProduct) stockProducts.set(sku, stockProduct);
       });
@@ -132,6 +137,7 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
         now,
         reservedUntil,
         accessTokenHash: tokenHash,
+        commissionPerUnits,
       });
 
       // ---- Escrituras ----

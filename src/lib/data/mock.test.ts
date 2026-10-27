@@ -31,7 +31,7 @@ describe("capa de datos mock", () => {
     const all = await data.getProducts();
     const first = all[0];
     expect(first).toBeDefined();
-    const inCategory = await data.getProducts({ category: first?.categoryId });
+    const inCategory = await data.getProducts({ category: first?.categoryId ?? undefined });
     expect(inCategory.every((p) => p.categoryId === first?.categoryId)).toBe(true);
     const byText = await data.getProducts({ q: ` ${first?.name.toUpperCase()} ` });
     expect(byText.map((p) => p.sku)).toContain(first?.sku);

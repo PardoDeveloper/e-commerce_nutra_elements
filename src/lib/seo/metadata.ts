@@ -61,6 +61,15 @@ export function baseName(name: string): string {
   return displayName(name).replace(/\s+\d+\s+cápsulas$/i, "").trim();
 }
 
+/** Meta descripción a partir de la descripción del producto: una línea, hasta 160 caracteres sin cortar palabras. */
+export function metaDescriptionFrom(text: string, max = 160): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s.,;:]+$/, "")}…`;
+}
+
 /** Descripción plantilla de la ficha (contrato 04), sin precio ni declaraciones de salud. */
 export function productMetaDescription(name: string, units: number | null): string {
   const pack = units ? `frasco de ${units} cápsulas` : "cápsulas";

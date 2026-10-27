@@ -59,8 +59,9 @@ service cloud.firestore {
     // ---------------------------------------------------------------
 
     function productContentKeys() {
+      // `family` ya no existe (D-040): el admin no la escribe.
       return ['name', 'description', 'shortDescription', 'categoryId', 'images', 'slug',
-              'format', 'unitsPerPack', 'family', 'seo', 'updatedAt'];
+              'format', 'unitsPerPack', 'seo', 'updatedAt'];
     }
 
     function validProductContent(changed) {
@@ -79,7 +80,6 @@ service cloud.firestore {
         && (!changed.hasAny(['images']) || (newField('images') is list && newField('images').size() <= 8))
         && (!changed.hasAny(['format']) || newField('format') == null || isStr(newField('format'), 1, 40))
         && (!changed.hasAny(['unitsPerPack']) || newField('unitsPerPack') == null || isIntBetween(newField('unitsPerPack'), 1, 1000))
-        && (!changed.hasAny(['family']) || newField('family') == null || isSlug(newField('family'), 80))
         && (!changed.hasAny(['seo']) || validSeo(newField('seo')));
     }
 
@@ -102,7 +102,8 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------
     // categories/{categoryId}
-    // Lectura pública solo de publicadas. El admin crea y edita con validación; nadie borra.
+    // Lectura pública solo de publicadas. El admin crea y edita con validación, y puede borrar (D-040): el admin
+    // primero deja sin categoría a sus productos (la categoría de un producto es opcional).
     // ---------------------------------------------------------------
 
     function validCategory(id) {
@@ -136,7 +137,7 @@ service cloud.firestore {
         && request.resource.data.slug == resource.data.slug
         && request.resource.data.createdAt == resource.data.createdAt;
 
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     // ---------------------------------------------------------------
@@ -249,6 +250,22 @@ service cloud.firestore {
     match /paymentEvents/{flowToken} {
       allow get, list: if isAdmin();
       allow write: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // contactMessages/{id}: mensajes del formulario de /contacto (datos personales: nombre, correo, teléfono).
+    // Los crea solo el servidor (submitContactMessage). El admin lee, marca leído/no leído, archiva y elimina;
+    // el contenido del mensaje es inmutable.
+    // ---------------------------------------------------------------
+    match /contactMessages/{messageId} {
+      allow get, list: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'archived', 'updatedAt'])
+        && request.resource.data.read is bool
+        && request.resource.data.archived is bool
+        && updatedAtIsNow();
+      allow delete: if isAdmin();
     }
 
     // idempotencyKeys y rateLimits: sin acceso del cliente (ni lectura). No hace falta

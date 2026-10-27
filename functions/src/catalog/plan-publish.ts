@@ -44,9 +44,12 @@ export function publishProblems(product: ProductData, ctx: PublishContext): Publ
     problems.push({ code: "MISSING_DESCRIPTION", label: "falta la descripción" });
   }
 
-  const category = product.categoryId !== null ? ctx.categories.get(product.categoryId) : undefined;
-  if (!category || category["published"] !== true) {
-    problems.push({ code: "INVALID_CATEGORY", label: "falta una categoría publicada" });
+  // La categoría es opcional (D-040); si el producto tiene una, debe existir y estar publicada.
+  if (product.categoryId !== null) {
+    const category = ctx.categories.get(product.categoryId);
+    if (!category || category["published"] !== true) {
+      problems.push({ code: "INVALID_CATEGORY", label: "la categoría no existe o no está publicada" });
+    }
   }
 
   const prefix = `products/${product.sku}/`;

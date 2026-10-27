@@ -54,11 +54,11 @@ describe("proposeDisplayName", () => {
 
 describe("extractPackInfo y slugify", () => {
   it("extrae unidades, formato y familia", () => {
-    expect(extractPackInfo("CITRATO DE MAGNESIO X 120 CAPS")).toEqual({ unitsPerPack: 120, format: "capsulas", family: "citrato-de-magnesio" });
-    expect(extractPackInfo("ZINC X90")).toEqual({ unitsPerPack: 90, format: null, family: "zinc" });
+    expect(extractPackInfo("CITRATO DE MAGNESIO X 120 CAPS")).toEqual({ unitsPerPack: 120, format: "capsulas" });
+    expect(extractPackInfo("ZINC X90")).toEqual({ unitsPerPack: 90, format: null });
   });
   it("sin sufijo X n no propone nada", () => {
-    expect(extractPackInfo("SPIRULINA")).toEqual({ unitsPerPack: null, format: null, family: null });
+    expect(extractPackInfo("SPIRULINA")).toEqual({ unitsPerPack: null, format: null });
   });
   it("unidades fuera de 1..1000 no se proponen", () => {
     expect(extractPackInfo("ALGO X 5000 CAPS").unitsPerPack).toBeNull();

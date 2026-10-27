@@ -40,9 +40,10 @@ export interface AdminProduct {
   published: boolean;
   format: string | null;
   unitsPerPack: number | null;
-  family: string | null;
   seo: { title?: string; description?: string } | null;
   source: "controlfarma-xls" | "manual";
+  /** Comisión del químico en CLP por unidad vendida, o null si aún no se define. La escribe el servidor. */
+  commissionPerUnit: number | null;
   /** Eliminación lógica (D-029): fecha ISO de la eliminación o null si el producto está vigente. */
   deletedAt: string | null;
   deletedBy: string | null;
@@ -52,9 +53,18 @@ export interface AdminProduct {
 export type ProductContentPatch = Partial<
   Pick<
     AdminProduct,
-    "name" | "description" | "shortDescription" | "categoryId" | "images" | "slug" | "format" | "unitsPerPack" | "family" | "seo"
+    "name" | "description" | "shortDescription" | "categoryId" | "images" | "slug" | "format" | "unitsPerPack" | "seo"
   >
 >;
+
+// ---------- Categorías (data-model 2.2) ----------
+/** Categoría del catálogo. El slug es el ID del documento: se genera del nombre al crearla y no cambia. */
+export interface AdminCategory {
+  slug: CategoryId;
+  name: string;
+  order: number;
+  published: boolean;
+}
 
 // ---------- Pedidos ----------
 export type PaymentMethod = "flow" | "transfer";
@@ -71,6 +81,9 @@ export interface OrderItem {
   unitFinalPrice: Clp;
   qty: number;
   lineTotal: Clp;
+  /** Comisión congelada al crear el pedido (CLP por unidad y total de la línea). Pedidos antiguos: null y 0. */
+  commissionPerUnit: number | null;
+  commission: Clp;
 }
 
 export interface StatusHistoryEntry {
@@ -236,6 +249,8 @@ export interface DailyMetric {
   unitsSold: number;
   refundsCount: number;
   refundedAmount: Clp;
+  /** Comisiones devengadas el día (pagos) menos las revertidas por reembolsos. */
+  commission: Clp;
 }
 export interface TopProduct {
   sku: Sku;
@@ -252,6 +267,7 @@ export interface MetricsSummary {
   averageTicket: Clp;
   refundsCount: number;
   refundedAmount: Clp;
+  commission: Clp;
   top: TopProduct[];
 }
 

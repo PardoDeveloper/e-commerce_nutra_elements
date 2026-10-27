@@ -11,6 +11,10 @@ const noReferrer = [{ key: "Referrer-Policy", value: "no-referrer" }];
 const nextConfig: NextConfig = {
   trailingSlash: false,
   poweredByHeader: false,
+  // Las preguntas frecuentes se movieron al final de la página principal.
+  async redirects() {
+    return [{ source: "/preguntas-frecuentes", destination: "/#preguntas-frecuentes", permanent: true }];
+  },
   async headers() {
     return [
       { source: "/checkout/:path*", headers: noReferrer },

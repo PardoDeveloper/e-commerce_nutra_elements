@@ -8,7 +8,7 @@ import { JsonLd } from "@/components/store/JsonLd";
 import styles from "@/components/store/store.module.css";
 import { getCategories, getCategory, getProducts, getPublicSettings } from "@/lib/data";
 import { formatClp } from "@/lib/format";
-import { breadcrumbList, CATEGORY_SEO, collectionPageNode, graph, pageMetadata } from "@/lib/seo";
+import { breadcrumbList, categorySeo, collectionPageNode, graph, pageMetadata } from "@/lib/seo";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const category = await getCategory(slug);
   if (!category) return { title: "Categoría no encontrada", robots: { index: false, follow: false } };
   const products = await getProducts({ category: slug });
-  const seo = CATEGORY_SEO[category.slug];
+  const seo = categorySeo(category);
   return pageMetadata({
     title: seo.title,
     description: seo.description,
@@ -45,9 +45,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const products = await getProducts({ category: slug });
   if (products.length === 0) notFound();
 
-  const seo = CATEGORY_SEO[category.slug];
+  const seo = categorySeo(category);
   const packs = [...new Set(products.map((p) => p.unitsPerPack).filter((n): n is number => n !== null))].sort((a, b) => a - b);
-  const families = new Set(products.map((p) => p.family ?? p.sku));
   const siblings = categories.filter((c) => c.slug !== category.slug).slice(0, 3);
 
   return (
@@ -81,13 +80,13 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </ul>
       </section>
 
-      {families.size > 1 && packs.length > 0 ? (
+      {products.length > 1 && packs.length > 0 ? (
         <section className={styles.block} aria-labelledby="cat-formatos">
           <h2 id="cat-formatos">Formatos disponibles</h2>
           <div className={styles.text}>
             <p>
-              Esta categoría tiene {families.size} productos distintos, en frascos de {packs.join(", ")} cápsulas según
-              el caso. Cada tamaño tiene su propia ficha, con el detalle del rótulo.
+              Esta categoría tiene {products.length} productos, en presentaciones de {packs.join(", ")} unidades según
+              el caso. Cada uno tiene su propia ficha, con el detalle del rótulo.
             </p>
           </div>
         </section>
@@ -98,7 +97,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         <div className={styles.text}>
           <p>
             Despachamos a toda la RM por {formatClp(settings.shippingFee)} y puedes retirar en tienda en Puente Alto.
-            Revisa los detalles en <Link href="/preguntas-frecuentes">preguntas frecuentes</Link>.
+            Revisa los detalles en <Link href="/#preguntas-frecuentes">preguntas frecuentes</Link>.
           </p>
         </div>
       </section>

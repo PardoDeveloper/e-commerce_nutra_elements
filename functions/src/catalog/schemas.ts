@@ -123,8 +123,10 @@ export const updateCommerceSchema = z.strictObject({
   // Se aceptan como celda para reutilizar las reglas de las importaciones ("12.990", vacío, etc.).
   price: cell,
   stock: cell,
+  // Comisión en CLP por unidad vendida; null la borra.
+  commissionPerUnit: z.number().int().min(0).max(MAX_PRICE).nullable().optional(),
 });
-export type UpdateCommerceRequest = { sku: string; price?: Cell | undefined; stock?: Cell | undefined };
+export type UpdateCommerceRequest = { sku: string; price?: Cell | undefined; stock?: Cell | undefined; commissionPerUnit?: number | null | undefined };
 
 export function parseSingle<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);

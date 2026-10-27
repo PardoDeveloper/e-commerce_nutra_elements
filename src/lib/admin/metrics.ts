@@ -1,6 +1,7 @@
 // Métricas del panel (data-model.md 2.6, regla de reembolsos D-025). Puro y determinista:
 // calcula desde la lista de pedidos lo que en producción vendrá de `metrics/daily/days/*` y
 // `metrics/products/items/*`.
+import { orderCommission, refundedCommission } from "./commission";
 import type { AdminOrder, DailyMetric, MetricsSummary, TopProduct } from "./types";
 
 export const TIME_ZONE = "America/Santiago";
@@ -27,7 +28,7 @@ export function lastDays(todayKey: string, days: number): string[] {
 }
 
 function emptyDay(date: string): DailyMetric {
-  return { date, ordersCount: 0, revenue: 0, merchandise: 0, unitsSold: 0, refundsCount: 0, refundedAmount: 0 };
+  return { date, ordersCount: 0, revenue: 0, merchandise: 0, unitsSold: 0, refundsCount: 0, refundedAmount: 0, commission: 0 };
 }
 
 /**
@@ -50,6 +51,8 @@ export function computeMetrics(orders: readonly AdminOrder[], range: number, tod
     day.revenue += order.total;
     day.merchandise += order.subtotal;
     day.unitsSold += units;
+    const commission = orderCommission(order);
+    day.commission += commission;
     for (const it of order.items) {
       const row = bySku.get(it.sku) ?? { sku: it.sku, name: it.name, unitsSold: 0, revenue: 0 };
       row.unitsSold += it.qty;
@@ -60,6 +63,7 @@ export function computeMetrics(orders: readonly AdminOrder[], range: number, tod
       day.revenue -= order.refund.amount;
       day.refundsCount += 1;
       day.refundedAmount += order.refund.amount;
+      day.commission -= refundedCommission(commission, order.refund.amount, order.total);
       if (order.refund.restocked) {
         day.unitsSold -= units;
         for (const it of order.items) {
@@ -88,6 +92,7 @@ export function computeMetrics(orders: readonly AdminOrder[], range: number, tod
     averageTicket: ordersCount > 0 ? Math.round(sales / ordersCount) : 0,
     refundsCount: days.reduce((s, d) => s + d.refundsCount, 0),
     refundedAmount: days.reduce((s, d) => s + d.refundedAmount, 0),
+    commission: days.reduce((s, d) => s + d.commission, 0),
     top,
   };
 }
@@ -112,6 +117,18 @@ export function summarizeAggregates(
     averageTicket: orders > 0 ? Math.round(sales / orders) : 0,
     refundsCount: days.reduce((s, d) => s + d.refundsCount, 0),
     refundedAmount: days.reduce((s, d) => s + d.refundedAmount, 0),
+    commission: days.reduce((s, d) => s + d.commission, 0),
     top: aggregates.top.filter((p) => p.unitsSold > 0).slice(0, 10),
   };
+}
+
+/** `YYYY-MM` del mes anterior a `month`. */
+export function previousMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+/** Suma de comisiones de los días de un mes (`YYYY-MM`). */
+export function monthCommission(days: readonly DailyMetric[], month: string): number {
+  return days.reduce((s, d) => (d.date.startsWith(`${month}-`) ? s + d.commission : s), 0);
 }
