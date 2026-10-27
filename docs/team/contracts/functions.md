@@ -92,6 +92,7 @@ Errores comunes a todas las callables
 | 23 | `restoreProducts` | callable | admin + App Check | 256 MiB / 60 s / 2 |
 | 24 | `getFlowCredentialsStatus` | callable | admin + App Check | 256 MiB / 30 s / 2 |
 | 25 | `setFlowCredentials` | callable | admin + App Check | 256 MiB / 30 s / 2 |
+| 26 | `submitContactMessage` | callable | public + App Check | 256 MiB / 15 s / 5 |
 
 Los nombres son los que el frontend usa con `httpsCallable(functions, "createOrder")`. El cliente se configura con la región `us-east4`. `flowConfirm` no lo llama el frontend.
 
@@ -153,7 +154,7 @@ interface CreateOrderResponse {
   | `failed-precondition` | `PRODUCT_UNAVAILABLE` | "Un producto ya no está disponible." (con `sku`) |
   | `failed-precondition` | `OUT_OF_STOCK` | "No hay stock suficiente de un producto." (con `sku`, `available`) |
   | `failed-precondition` | `ZERO_TOTAL` / `ORDER_TOO_LARGE` | "No se puede procesar este pedido." |
-  | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos. Intenta de nuevo en unos minutos." |
+  | `resource-exhausted` | `RATE_LIMITED` | "Demasiados intentos o pedidos sin pagar con este correo. Intenta de nuevo en unos minutos." |
   | `aborted` | `CONTENTION` | "El sistema está ocupado, intenta de nuevo." (la transacción agotó los reintentos) |
 - Idempotencia: el cliente genera `clientRequestId` una vez por intento de compra y lo reutiliza si hay un fallo de red o un reintento. Si `idempotencyKeys/...` ya existe, se devuelve el pedido ya creado (sin descontar de nuevo ni consumir otro número). **Desde la v1.4 el token se deriva del `clientRequestId`, así que el reintento devuelve el MISMO token y no escribe nada en el pedido** (el que el cliente ya recibió sigue válido). Si el pedido ya no está `pending_payment`, `ORDER_NOT_PAYABLE`. Para cualquier otra llamada con ese `clientRequestId` pero con carrito distinto (o con otro RUT) → `INVALID_INPUT`.
 - Efectos y revalidación: cambia `stock` de los productos → el trigger `onProductWritten` revalida las fichas solo si cambió `inStock` (ver 8).
@@ -264,6 +265,14 @@ interface GetOrderStatusResponse {
 - **Reconciliación**: si `paymentMethod == "flow"`, `paymentStatus == "pending_payment"`, hay `flow.token` y `flow.lastCheckedAt` tiene más de 15 s, la función consulta `getStatus` y aplica **la misma rutina transaccional de `flowConfirm`** (es idempotente). Sirve si la confirmación de Flow se retrasa o si el túnel local no está activo. El resultado ya actualizado se devuelve en la misma respuesta.
 - Costo: 1 lectura del pedido (más ≤1 llamada a Flow cada 15 s) por consulta.
 - Pérdida del número o del token: sin correos (D-008) no hay recuperación; el número lo ve el cliente en pantalla. PREGUNTA ABIERTA F4.
+
+### 3.5 `submitContactMessage` (formulario de `/contacto`)
+
+- Entrada (`strictObject`): `{name, email, phone?, message, website?}`. `name` 2..100 (una línea), `email` válido ≤254 (se guarda en minúsculas), `phone` opcional (se quitan espacios, guiones y paréntesis; debe quedar `+?\d{8,15}`), `message` 10..2000. `website` es una **trampa para bots**: el formulario lo deja vacío y oculto; si viene con texto se responde `{ok: true}` sin guardar nada.
+- Efecto: crea `contactMessages/{id}` (data-model 2.10) con `read: false`, `archived: false`, `createdAt = updatedAt = ahora`.
+- Respuesta: `{ok: true}`. No devuelve el ID ni datos.
+- Errores: `INVALID_INPUT`; `RATE_LIMITED` con máx. **5 mensajes por 10 min por IP** (clave `submitContactMessage:<ip>` con hash en `rateLimits`). Sin IP no se limita (igual que 3.4).
+- El admin gestiona los mensajes con escrituras directas (reglas), no con Functions. No se envían correos (D-008).
 
 ---
 
@@ -475,7 +484,7 @@ type SetPublishedResponse = BatchReport;
 ```
 - Un SKU eliminado (`deletedAt != null`) es fila inválida `PRODUCT_DELETED`, tanto al publicar como al despublicar (ya está despublicado; restaurar primero, 5.9).
 - Despublicar: siempre permitido para productos vigentes.
-- Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `description` no vacía (`MISSING_DESCRIPTION`), `categoryId` existente y con `published == true` (`INVALID_CATEGORY`), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
+- Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `description` no vacía (`MISSING_DESCRIPTION`), `categoryId` opcional; si no es null, existente y con `published == true` (`INVALID_CATEGORY`, D-040), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
 - Un producto publicado sin stock sigue siendo público (se muestra "agotado"); no se despublica solo.
 - Idempotente. Revalidación: `onProductWritten` revalida ficha, categoría, `/productos`, `/` y el sitemap.
 
@@ -489,10 +498,10 @@ interface CreateProductResponse { sku: Sku; created: boolean }
 
 ### 5.7 `updateProductCommerce` (precio o stock de un producto)
 ```ts
-interface UpdateProductCommerceRequest { sku: Sku; price?: Cell; stock?: Cell /* físico, como en importStock; Cell para que un stock vacío dé EMPTY_STOCK */ }
-interface UpdateProductCommerceResponse { sku: Sku; price: Clp; finalPrice: Clp; stock: number /* DISPONIBLE guardado = físico - reservado */; discountRemoved: boolean /* v1.3 */ }
+interface UpdateProductCommerceRequest { sku: Sku; price?: Cell; stock?: Cell /* físico, como en importStock; Cell para que un stock vacío dé EMPTY_STOCK */; commissionPerUnit?: number | null /* CLP por unidad, 0..10.000.000; null la borra */ }
+interface UpdateProductCommerceResponse { sku: Sku; price: Clp; finalPrice: Clp; stock: number /* DISPONIBLE guardado = físico - reservado */; commissionPerUnit: number | null; discountRemoved: boolean /* v1.3 */ }
 ```
-- Al menos uno de los dos campos. Mismas reglas que las importaciones. Errores: `SKU_NOT_FOUND` (`not-found`), `PRODUCT_DELETED` (`failed-precondition`, el SKU está eliminado y no se modifica), `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK` (stock enviado vacío). Registra `imports` con `kind: "update"` (`rows: 1`) solo si algo cambió.
+- Al menos uno de los tres campos. `commissionPerUnit` es la comisión del químico en CLP por unidad (data-model 2.1); `createOrder` la congela en cada línea del pedido y las métricas diarias la acumulan al pagar. Mismas reglas que las importaciones. Errores: `SKU_NOT_FOUND` (`not-found`), `PRODUCT_DELETED` (`failed-precondition`, el SKU está eliminado y no se modifica), `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK` (stock enviado vacío). Registra `imports` con `kind: "update"` (`rows: 1`) solo si algo cambió.
 
 ### 5.8 `grantAdmin` / `revokeAdmin`
 ```ts

@@ -73,11 +73,15 @@ describe("createOrderRequestSchema: caso válido", () => {
 });
 
 describe("createOrderRequestSchema: RUT", () => {
-  it("RUT inválido, vacío o ausente (único error) -> INVALID_RUT", () => {
+  it("sin RUT es válido (D-039)", () => {
+    const r = parseCreateOrderRequest(withChange((x) => delete customerOf(x)["rut"]));
+    expect(r.customer.rut).toBeUndefined();
+  });
+
+  it("RUT inválido o vacío (único error) -> INVALID_RUT", () => {
     for (const rut of ["12345678-4", "", "abc"]) {
       expect(failure(withChange((x) => (customerOf(x)["rut"] = rut))).code).toBe("INVALID_RUT");
     }
-    expect(failure(withChange((x) => delete customerOf(x)["rut"])).code).toBe("INVALID_RUT");
     expect(failure(withChange((x) => (customerOf(x)["rut"] = 123456785))).code).toBe("INVALID_RUT");
   });
 

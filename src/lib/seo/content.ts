@@ -1,5 +1,6 @@
 // Textos y datos fijos de las páginas públicas. Sin declaraciones de salud (normativa chilena).
-import type { CategoryId } from "@/lib/data/types";
+import type { Category } from "@/lib/data/types";
+import { withBrand } from "./metadata";
 
 export const STORE_ADDRESS = {
   street: "Av. Concha y Toro 180",
@@ -11,8 +12,14 @@ export const STORE_ADDRESS = {
 export const MAPS_URL =
   "https://www.google.com/maps/search/?api=1&query=Av.+Concha+y+Toro+180%2C+Puente+Alto%2C+Chile";
 
-/** Plantillas del contrato SEO 03 más la introducción de cada categoría. */
-export const CATEGORY_SEO: Record<CategoryId, { title: string; description: string; intro: string }> = {
+interface CategorySeo {
+  title: string;
+  description: string;
+  intro: string;
+}
+
+/** Plantillas del contrato SEO 03 más la introducción de las 6 categorías iniciales (D-023). */
+export const CATEGORY_SEO: Record<string, CategorySeo> = {
   vitaminas: {
     title: "Vitaminas en cápsulas: B12, C, D y más | Nutra Elements",
     description:
@@ -56,6 +63,22 @@ export const CATEGORY_SEO: Record<CategoryId, { title: string; description: stri
       "Bienestar reúne los suplementos funcionales en cápsulas de Nutra Elements: spirulina, melena de león, cúrcuma con pimienta, cranberry con vitaminas C y E, y la línea Ultra (Light, Relax y Lax). Cada producto tiene su ficha con el detalle del rótulo, precio y disponibilidad. Son suplementos alimentarios: no reemplazan una alimentación variada. Lee el rótulo y consulta a un profesional de la salud antes de usarlos.",
   },
 };
+
+/**
+ * Textos SEO de una categoría. Las 6 iniciales usan las plantillas; las que crea el admin (D-040) salen de su
+ * nombre y descripción.
+ */
+export function categorySeo(category: Pick<Category, "slug" | "name" | "description" | "seo">): CategorySeo {
+  const fixed = CATEGORY_SEO[category.slug];
+  if (fixed) return fixed;
+  const intro = category.description ?? `Productos de ${category.name} de Nutra Elements. Cada producto tiene su propia ficha con precio y disponibilidad.`;
+  return {
+    title: category.seo?.title ?? withBrand(category.name),
+    description:
+      category.seo?.description ?? `${category.name} de Nutra Elements. Despacho en la RM y retiro en tienda en Puente Alto.`,
+    intro,
+  };
+}
 
 /** Preguntas frecuentes (contrato 05-C). Solo datos confirmados. Texto plano. */
 export const FAQ_SECTIONS: Array<{ title: string; items: Array<{ q: string; a: string }> }> = [

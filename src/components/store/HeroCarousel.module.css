@@ -1,0 +1,102 @@
+.carousel {
+  position: relative;
+}
+
+/* Desplazamiento horizontal con scroll-snap: cada diapositiva ocupa el ancho completo. */
+.track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.track::-webkit-scrollbar {
+  display: none;
+}
+
+.slide {
+  position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Pausa y puntos, abajo al centro sobre la imagen. */
+.controls {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-2);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.5);
+}
+
+.pause,
+.dot {
+  display: inline-grid;
+  place-items: center;
+  /* Área táctil de 24 px como mínimo (WCAG 2.5.8); el punto visible es más chico. */
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.pause {
+  font-size: 0.625rem;
+  letter-spacing: -1px;
+}
+
+.dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.55);
+  transition:
+    width 0.2s ease,
+    background-color 0.2s ease;
+}
+.dot[aria-current="true"]::before {
+  width: 18px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.pause:focus-visible,
+.dot:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* En móvil la imagen es baja y el botón ocupa la esquina: los controles van bajo la imagen. */
+@media (max-width: 639px) {
+  .controls {
+    position: static;
+    transform: none;
+    width: fit-content;
+    margin: var(--space-1) auto;
+    background: transparent;
+  }
+  .pause {
+    color: var(--color-text);
+  }
+  .dot::before {
+    background: var(--color-border-strong);
+  }
+  .dot[aria-current="true"]::before {
+    background: var(--color-primary);
+  }
+  .pause:focus-visible,
+  .dot:focus-visible {
+    outline-color: var(--color-focus);
+  }
+}

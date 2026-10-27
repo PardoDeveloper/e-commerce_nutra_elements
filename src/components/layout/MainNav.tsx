@@ -1,22 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./MainNav.module.css";
 
-interface MainNavProps {
-  categories: Array<{ slug: string; name: string }>;
-}
+const LINKS = [
+  { href: "/productos", label: "Productos" },
+  { href: "/nosotros", label: "Sobre nosotros" },
+  { href: "/contacto", label: "Contáctanos" },
+];
 
 /**
  * Navegación principal. En móvil es un panel desplegable (botón con aria-expanded,
  * cierra con Escape o al elegir un enlace); desde 1100 px es una barra en línea.
  * Incluye el buscador (formulario GET a /productos?q=, funciona sin JavaScript).
  */
-export function MainNav({ categories }: MainNavProps) {
+export function MainNav() {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!open) return;
@@ -74,15 +78,15 @@ export function MainNav({ categories }: MainNavProps) {
           </button>
         </form>
         <ul className={styles.list}>
-          <li>
-            <Link href="/productos" className={styles.link} onClick={close}>
-              Productos
-            </Link>
-          </li>
-          {categories.map((c) => (
-            <li key={c.slug}>
-              <Link href={`/categorias/${c.slug}`} className={styles.link} onClick={close}>
-                {c.name}
+          {LINKS.map((l) => (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                className={styles.link}
+                onClick={close}
+                aria-current={pathname === l.href || pathname.startsWith(`${l.href}/`) ? "page" : undefined}
+              >
+                {l.label}
               </Link>
             </li>
           ))}

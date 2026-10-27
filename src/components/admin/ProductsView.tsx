@@ -1,20 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { CATEGORY_LABELS } from "@/lib/admin/labels";
+import { categoryName } from "@/lib/admin/categories";
 import { errorMessage } from "@/lib/admin/errors";
 import { selectionState, toggleAllVisible, visibleSelection } from "@/lib/admin/selection";
 import { MAX_DELETE_SKUS } from "@/lib/admin/batch";
 import { formatClp } from "@/lib/format";
 import { useAdminService, useAdminState, useDataSource } from "./AdminProvider";
+import { CategoriesDialog } from "./CategoriesDialog";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
+import { ImportExcelDialog } from "./ImportExcelDialog";
 import { formatDate } from "./format";
 import ui from "./admin.module.css";
 import { sim } from "@/lib/admin/mode";
 
 type PublishFilter = "all" | "published" | "draft" | "inactive" | "deleted";
 type StockFilter = "all" | "with" | "without";
+type CommissionFilter = "all" | "with" | "without";
 
 function normalize(text: string): string {
   return text
@@ -24,7 +28,7 @@ function normalize(text: string): string {
 }
 
 export function ProductsView() {
-  const { products } = useAdminState();
+  const { products, categories } = useAdminState();
   const service = useAdminService();
   const canToggleActive = useDataSource() === "demo";
   const id = useId();
@@ -32,6 +36,8 @@ export function ProductsView() {
   const [category, setCategory] = useState("all");
   const [publish, setPublish] = useState<PublishFilter>("all");
   const [stock, setStock] = useState<StockFilter>("all");
+  // El Resumen enlaza aquí con ?comision=sin para completar las comisiones pendientes.
+  const [commission, setCommission] = useState<CommissionFilter>(useSearchParams().get("comision") === "sin" ? "without" : "all");
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -39,6 +45,10 @@ export function ProductsView() {
   const [dialogError, setDialogError] = useState<string | null>(null);
   const headerCheckRef = useRef<HTMLInputElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const categoriesButtonRef = useRef<HTMLButtonElement>(null);
+  const [showCategories, setShowCategories] = useState(false);
+  const importButtonRef = useRef<HTMLButtonElement>(null);
+  const [showImport, setShowImport] = useState(false);
   const resultRef = useRef<HTMLParagraphElement>(null);
   const showingDeleted = publish === "deleted";
 
@@ -49,16 +59,18 @@ export function ProductsView() {
         // Por defecto no se ven los eliminados; el filtro "Eliminados" muestra solo esos (D-029).
         if (showingDeleted !== (p.deletedAt !== null)) return false;
         if (q && !normalize(p.name).includes(q) && !p.sku.toLowerCase().includes(q)) return false;
-        if (category !== "all" && p.categoryId !== category) return false;
+        if (category === "none" ? p.categoryId !== null : category !== "all" && p.categoryId !== category) return false;
         if (publish === "published" && !(p.published && p.active)) return false;
         if (publish === "draft" && !(!p.published && p.active)) return false;
         if (publish === "inactive" && p.active) return false;
         if (stock === "with" && p.stock <= 0) return false;
         if (stock === "without" && p.stock > 0) return false;
+        if (commission === "with" && p.commissionPerUnit === null) return false;
+        if (commission === "without" && p.commissionPerUnit !== null) return false;
         return true;
       })
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
-  }, [products, query, category, publish, stock, showingDeleted]);
+  }, [products, query, category, publish, stock, commission, showingDeleted]);
 
   const visibleSkus = useMemo(() => filtered.map((p) => p.sku), [filtered]);
   // Solo cuenta lo que se ve: una selección oculta por un filtro nunca se opera.
@@ -169,12 +181,20 @@ export function ProductsView() {
             {activeCount} productos{deletedCount > 0 ? ` y ${deletedCount} eliminados` : ""}. Elige varios con las casillas para eliminarlos; se conservan para los pedidos y se pueden restaurar.
           </p>
         </div>
-        <Link href="/admin/productos/nuevo" className={ui.btn}>
-          Nuevo producto
-        </Link>
+        <div className={ui.actions}>
+          <button ref={categoriesButtonRef} type="button" className={`${ui.btn} ${ui.btnOutline}`} onClick={() => setShowCategories(true)}>
+            Categorías
+          </button>
+          <button ref={importButtonRef} type="button" className={`${ui.btn} ${ui.btnOutline}`} onClick={() => setShowImport(true)}>
+            Importar Excel
+          </button>
+          <Link href="/admin/productos/nuevo" className={ui.btn}>
+            Nuevo producto
+          </Link>
+        </div>
       </div>
 
-      <form className={ui.toolbar} role="search" aria-label="Buscar y filtrar productos" onSubmit={(e) => e.preventDefault()}>
+      <form className={`${ui.toolbar} ${ui.toolbarWide}`} role="search" aria-label="Buscar y filtrar productos" onSubmit={(e) => e.preventDefault()}>
         <div className={ui.field}>
           <label className={ui.label} htmlFor={`${id}-q`}>
             Buscar por nombre o SKU
@@ -187,9 +207,10 @@ export function ProductsView() {
           </label>
           <select id={`${id}-cat`} className={ui.select} value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="all">Todas</option>
-            {Object.entries(CATEGORY_LABELS).map(([slug, label]) => (
-              <option key={slug} value={slug}>
-                {label}
+            <option value="none">Sin categoría</option>
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.name}
               </option>
             ))}
           </select>
@@ -214,6 +235,16 @@ export function ProductsView() {
             <option value="all">Todos</option>
             <option value="with">Con stock</option>
             <option value="without">Sin stock</option>
+          </select>
+        </div>
+        <div className={ui.field}>
+          <label className={ui.label} htmlFor={`${id}-commission`}>
+            Comisión
+          </label>
+          <select id={`${id}-commission`} className={ui.select} value={commission} onChange={(e) => setCommission(e.target.value as CommissionFilter)}>
+            <option value="all">Todas</option>
+            <option value="with">Con comisión</option>
+            <option value="without">Sin comisión</option>
           </select>
         </div>
       </form>
@@ -266,6 +297,9 @@ export function ProductsView() {
                 <th scope="col" className={ui.num}>
                   Stock
                 </th>
+                <th scope="col" className={ui.num}>
+                  Comisión
+                </th>
                 <th scope="col">Estado</th>
                 <th scope="col">Acciones</th>
               </tr>
@@ -286,7 +320,7 @@ export function ProductsView() {
                     <br />
                     <span className={ui.help}>SKU {p.sku}</span>
                   </td>
-                  <td>{p.categoryId ? CATEGORY_LABELS[p.categoryId] : <span className={ui.help}>Sin categoría</span>}</td>
+                  <td>{p.categoryId ? categoryName(categories, p.categoryId) : <span className={ui.help}>Sin categoría</span>}</td>
                   <td className={ui.num}>
                     {formatClp(p.finalPrice)}
                     {p.finalPrice < p.price ? (
@@ -297,6 +331,7 @@ export function ProductsView() {
                     ) : null}
                   </td>
                   <td className={ui.num}>{p.stock}</td>
+                  <td className={ui.num}>{p.commissionPerUnit === null ? <span className={ui.help}>—</span> : formatClp(p.commissionPerUnit)}</td>
                   <td>
                     {p.deletedAt ? (
                       <>
@@ -374,6 +409,27 @@ export function ProductsView() {
           </>
         ) : null}
       </div>
+      {showCategories ? (
+        <CategoriesDialog
+          onClose={() => {
+            setShowCategories(false);
+            categoriesButtonRef.current?.focus();
+          }}
+        />
+      ) : null}
+      {showImport ? (
+        <ImportExcelDialog
+          onClose={() => {
+            setShowImport(false);
+            importButtonRef.current?.focus();
+          }}
+          onApplied={(text) => {
+            setShowImport(false);
+            setMessage({ kind: "ok", text });
+            requestAnimationFrame(() => resultRef.current?.focus());
+          }}
+        />
+      ) : null}
     </div>
   );
 }

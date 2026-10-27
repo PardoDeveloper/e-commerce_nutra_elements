@@ -25,7 +25,7 @@ import { checkImageUpload, validateProductInput } from "./validate";
 export interface BaseRef {
   sku: string;
   slug: string;
-  categoryId: string;
+  categoryId: string | null;
 }
 
 export class DemoStoreError extends Error {

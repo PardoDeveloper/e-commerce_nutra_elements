@@ -203,7 +203,6 @@ export function planImportCatalog(items: readonly Item<CatalogRow>[], raw: RawPr
         gtin: barcode.gtin,
         unitsPerPack: pack.unitsPerPack,
         format: pack.format,
-        family: pack.family,
         source: "controlfarma-xls",
       };
       c.changes.push({ row, sku, name: fields.name, field: "create", from: null, to: price.value });

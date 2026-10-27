@@ -10,7 +10,6 @@ import { computeFinalPrice } from "@/lib/admin/pricing";
 import { mergeStoredIntoProduct, readStoreSync } from "@/lib/demo-store";
 import type {
   Category,
-  CategoryId,
   DataLayer,
   GetProductsOptions,
   Product,
@@ -22,12 +21,11 @@ interface CatalogRow {
   sku: string;
   name: string;
   slug: string;
-  categoryId: CategoryId;
+  categoryId: string | null;
   price: number;
   inStock: boolean;
   format: string | null;
   unitsPerPack: number | null;
-  family: string | null;
   discount?: ProductDiscount;
 }
 
@@ -58,7 +56,6 @@ function toProduct(row: CatalogRow): Product {
     inStock: row.inStock,
     format: row.format,
     unitsPerPack: row.unitsPerPack,
-    family: row.family,
     seo: null,
   };
 }
@@ -144,10 +141,9 @@ export const mockDataLayer: DataLayer = {
     const base = allProducts().find((p) => p.sku === sku);
     if (!base) return [];
     const others = allProducts().filter((p) => p.sku !== sku);
-    // Primero los otros tamaños de la misma familia, luego el resto de la categoría.
-    const sameFamily = others.filter((p) => base.family && p.family === base.family);
-    const sameCategory = others.filter((p) => p.categoryId === base.categoryId && !sameFamily.includes(p));
-    return [...sameFamily, ...sameCategory].slice(0, limit);
+    // Productos de la misma categoría (sin categoría no hay relacionados).
+    if (base.categoryId === null) return [];
+    return others.filter((p) => p.categoryId === base.categoryId).slice(0, limit);
   },
 
   async getPublicSettings() {

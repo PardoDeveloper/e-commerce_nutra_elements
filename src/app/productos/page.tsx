@@ -25,8 +25,11 @@ export default async function CatalogPage() {
   const groups = categories
     .map((c) => ({ category: c, items: products.filter((p) => p.categoryId === c.slug) }))
     .filter((g) => g.items.length > 0);
+  // La categoría es opcional (D-040): los productos sin categoría (o con una no publicada) van al final.
+  const known = new Set(categories.map((c) => c.slug));
+  const others = products.filter((p) => p.categoryId === null || !known.has(p.categoryId));
   // El ItemList sigue el orden visible (agrupado por categoría).
-  const ordered = groups.flatMap((g) => g.items);
+  const ordered = [...groups.flatMap((g) => g.items), ...others];
 
   return (
     <Container as="div" className={styles.page}>
@@ -67,6 +70,20 @@ export default async function CatalogPage() {
             </ul>
           </section>
         ))}
+        {others.length > 0 ? (
+          <section className={styles.block} aria-labelledby="cat-otros">
+            <div className={styles.groupHead}>
+              <h2 id="cat-otros">{groups.length > 0 ? "Otros productos" : "Productos"}</h2>
+            </div>
+            <ul className="product-grid">
+              {others.map((p) => (
+                <li key={p.sku}>
+                  <ProductCard product={p} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </CatalogBrowser>
     </Container>
   );

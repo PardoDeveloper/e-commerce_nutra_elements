@@ -1,8 +1,9 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { MAX_DISCOUNT_SKUS } from "@/lib/admin/batch";
 import { errorMessage } from "@/lib/admin/errors";
-import { CATEGORY_LABELS } from "@/lib/admin/labels";
+import { selectionState, toggleAllVisible } from "@/lib/admin/selection";
 import type { BatchReport, ProductDiscount } from "@/lib/admin/types";
 import { formatClp } from "@/lib/format";
 import { useAdminService, useAdminState } from "./AdminProvider";
@@ -24,7 +25,7 @@ function describe(d: ProductDiscount): string {
 }
 
 export function DiscountsView() {
-  const { products: allProducts } = useAdminState();
+  const { products: allProducts, categories } = useAdminState();
   const service = useAdminService();
   const id = useId();
   // Los productos eliminados no se ofrecen (D-029).
@@ -32,7 +33,9 @@ export function DiscountsView() {
   const [mode, setMode] = useState<Mode>("selection");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("vitaminas");
+  const [chosenCategory, setCategory] = useState<string | null>(null);
+  // Sin elección, la primera categoría (las categorías se cargan después en Firebase y pueden cambiar).
+  const category = chosenCategory !== null && categories.some((c) => c.slug === chosenCategory) ? chosenCategory : (categories[0]?.slug ?? "");
   const [skuText, setSkuText] = useState("");
   const [kind, setKind] = useState<Kind>("percent");
   const [value, setValue] = useState("10");
@@ -45,6 +48,18 @@ export function DiscountsView() {
     return products.filter((p) => !q || normalize(p.name).includes(q) || p.sku.toLowerCase().includes(q));
   }, [products, search]);
   const discounted = useMemo(() => products.filter((p) => p.discount !== null), [products]);
+  const visibleSkus = useMemo(() => visible.map((p) => p.sku), [visible]);
+  const headerState = selectionState(selected, visibleSkus);
+  const headerCheckRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headerCheckRef.current) headerCheckRef.current.indeterminate = headerState === "some";
+  }, [headerState]);
+
+  function toggleAll(on: boolean) {
+    clearPreview();
+    setSelected(toggleAllVisible(selected, visibleSkus, on));
+  }
 
   function clearPreview() {
     setPreview(null);
@@ -156,11 +171,54 @@ export function DiscountsView() {
               </label>
               <input id={`${id}-search`} type="search" className={ui.input} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <div className={ui.selectionInfo} role="status">
+              <span>
+                {selected.size === 0
+                  ? "Ningún producto seleccionado"
+                  : selected.size === 1
+                    ? "1 producto seleccionado"
+                    : `${selected.size} productos seleccionados`}
+              </span>
+              {visible.length > 0 && headerState !== "all" ? (
+                <button type="button" className={ui.linkButton} onClick={() => toggleAll(true)}>
+                  {search.trim() ? `Seleccionar los ${visible.length} encontrados` : `Seleccionar todos (${visible.length})`}
+                </button>
+              ) : null}
+              {selected.size > 0 ? (
+                <button
+                  type="button"
+                  className={ui.linkButton}
+                  onClick={() => {
+                    clearPreview();
+                    setSelected(new Set());
+                  }}
+                >
+                  Quitar selección
+                </button>
+              ) : null}
+            </div>
+            {selected.size > MAX_DISCOUNT_SKUS ? (
+              <p className={`${ui.alert} ${ui.alertWarn}`}>
+                Hay {selected.size} seleccionados y el máximo por operación es {MAX_DISCOUNT_SKUS}. Aplica el descuento en partes o usa «Por categoría».
+              </p>
+            ) : null}
             <div className={ui.scroll} role="region" aria-label="Productos para seleccionar" tabIndex={0}>
               <table className={ui.table}>
                 <thead>
                   <tr>
-                    <th scope="col">Elegir</th>
+                    <th scope="col" className={ui.checkCell}>
+                      <label className={ui.checkTarget}>
+                        <input
+                          ref={headerCheckRef}
+                          type="checkbox"
+                          className={ui.checkbox}
+                          checked={headerState === "all"}
+                          disabled={visible.length === 0}
+                          onChange={(e) => toggleAll(e.target.checked)}
+                        />
+                        <span className="visually-hidden">Seleccionar todos los productos de la lista ({visible.length})</span>
+                      </label>
+                    </th>
                     <th scope="col">Producto</th>
                     <th scope="col" className={ui.num}>
                       Precio final
@@ -210,9 +268,10 @@ export function DiscountsView() {
                 clearPreview();
               }}
             >
-              {Object.entries(CATEGORY_LABELS).map(([slug, label]) => (
-                <option key={slug} value={slug}>
-                  {label}
+              {categories.length === 0 ? <option value="">No hay categorías</option> : null}
+              {categories.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.name}
                 </option>
               ))}
             </select>

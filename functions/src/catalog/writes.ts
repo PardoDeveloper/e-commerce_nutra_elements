@@ -26,9 +26,10 @@ export function buildCreateData<T>(op: CreateOp, now: T): Record<string, unknown
     barcode: f.barcode,
     barcodeValid: f.barcodeValid,
     gtin: f.gtin,
+    // Comisión del químico: se define después desde el admin (updateProductCommerce).
+    commissionPerUnit: null,
     format: f.format,
     unitsPerPack: f.unitsPerPack,
-    family: f.family,
     seo: null,
     source: f.source,
     importedAt: op.imported ? now : null,

@@ -21,3 +21,5 @@ export * from "./triggers/index.js";
 export * from "./orders/index.js";
 // payments/: createFlowPayment, flowConfirm, getFlowCredentialsStatus, setFlowCredentials.
 export * from "./payments/index.js";
+// contact/: submitContactMessage (formulario de /contacto).
+export * from "./contact/index.js";

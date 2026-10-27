@@ -1,9 +1,9 @@
 // Conversión entre los documentos de Firestore y los tipos del admin (data-model.md 2.1, 2.3, 2.5, 2.6),
 // más la validación y el armado de las escrituras directas permitidas por las reglas.
 // Puro y sin el SDK de Firebase (los Timestamp se reconocen por `toDate()`), para probarlo en Node.
-import type { CategoryId } from "@/lib/data/types";
 import { AdminServiceError } from "./errors";
 import type {
+  AdminCategory,
   AdminImage,
   AdminOrder,
   AdminProduct,
@@ -74,6 +74,13 @@ function mapSeo(v: unknown): AdminProduct["seo"] {
   return seo;
 }
 
+/** Categoría del admin (incluye las no publicadas). Devuelve null si el documento no tiene nombre. */
+export function mapAdminCategory(id: string, d: Doc): AdminCategory | null {
+  const name = str(d.name);
+  if (!name) return null;
+  return { slug: id, name, order: int(d.order, 9999), published: bool(d.published) };
+}
+
 export function mapProduct(sku: string, d: Doc, bucket: string): AdminProduct {
   const price = int(d.price);
   const stock = int(d.stock);
@@ -84,7 +91,7 @@ export function mapProduct(sku: string, d: Doc, bucket: string): AdminProduct {
     slug: str(d.slug),
     description: str(d.description),
     shortDescription: str(d.shortDescription),
-    categoryId: (str(d.categoryId) as CategoryId | null) ?? null,
+    categoryId: str(d.categoryId),
     images: mapImages(d.images, bucket),
     price,
     discount: mapDiscount(d.discount),
@@ -96,12 +103,17 @@ export function mapProduct(sku: string, d: Doc, bucket: string): AdminProduct {
     published: bool(d.published),
     format: str(d.format),
     unitsPerPack: typeof d.unitsPerPack === "number" ? d.unitsPerPack : null,
-    family: str(d.family),
     seo: mapSeo(d.seo),
     source: d.source === "controlfarma-xls" ? "controlfarma-xls" : "manual",
+    commissionPerUnit: rate(d.commissionPerUnit),
     deletedAt: toIso(d.deletedAt),
     deletedBy: str(d.deletedBy),
   };
+}
+
+/** Comisión en CLP por unidad (entero 0..10.000.000) o null. */
+function rate(v: unknown): number | null {
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= 10_000_000 ? v : null;
 }
 
 // ---------- Pedidos ----------
@@ -118,6 +130,8 @@ function mapItems(v: unknown): OrderItem[] {
     unitFinalPrice: int(it.unitFinalPrice),
     qty: int(it.qty),
     lineTotal: int(it.lineTotal),
+    commissionPerUnit: rate(it.commissionPerUnit),
+    commission: int(it.commission),
   }));
 }
 
@@ -228,6 +242,7 @@ export function mapDailyMetric(d: Doc): DailyMetric | null {
     // Los documentos anteriores a D-025 no traen estos campos: valor por defecto 0.
     refundsCount: int(d.refundsCount),
     refundedAmount: int(d.refundedAmount),
+    commission: int(d.commission),
   };
 }
 
@@ -238,7 +253,7 @@ export function mapTopProduct(sku: string, d: Doc): TopProduct {
 // ---------- Contenido de producto (escritura directa permitida por las reglas) ----------
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-export const CONTENT_KEYS = ["name", "description", "shortDescription", "categoryId", "images", "slug", "format", "unitsPerPack", "family", "seo"] as const;
+export const CONTENT_KEYS = ["name", "description", "shortDescription", "categoryId", "images", "slug", "format", "unitsPerPack", "seo"] as const;
 
 /** Mismas validaciones que las reglas de Firestore, para dar un mensaje claro antes de escribir. */
 export function validateContentPatch(current: AdminProduct, patch: ProductContentPatch): void {
@@ -257,11 +272,10 @@ export function validateContentPatch(current: AdminProduct, patch: ProductConten
     if (current.published && patch.slug !== current.slug) bad("SLUG_LOCKED", "El slug no se puede cambiar mientras el producto está publicado.");
     if (patch.slug !== null && (!SLUG_PATTERN.test(patch.slug) || patch.slug.length > 80)) bad("INVALID_SLUG", "El slug solo admite minúsculas, números y guiones.");
   }
-  if (patch.format != null && (patch.format.length < 1 || patch.format.length > 40)) bad("INVALID_INPUT", "El formato admite de 1 a 40 caracteres.");
+  if (patch.format != null && (patch.format.length < 1 || patch.format.length > 40)) bad("INVALID_INPUT", "La forma farmacéutica admite de 1 a 40 caracteres.");
   if (patch.unitsPerPack != null && (!Number.isInteger(patch.unitsPerPack) || patch.unitsPerPack < 1 || patch.unitsPerPack > 1000)) {
-    bad("INVALID_INPUT", "Las unidades por envase deben ser un entero entre 1 y 1000.");
+    bad("INVALID_INPUT", "La presentación debe ser un entero entre 1 y 1000.");
   }
-  if (patch.family != null && (!SLUG_PATTERN.test(patch.family) || patch.family.length > 80)) bad("INVALID_INPUT", "La familia solo admite minúsculas, números y guiones.");
   if (patch.seo?.title && patch.seo.title.length > 70) bad("INVALID_INPUT", "El título SEO admite hasta 70 caracteres.");
   if (patch.seo?.description && patch.seo.description.length > 170) bad("INVALID_INPUT", "La descripción SEO admite hasta 170 caracteres.");
 }

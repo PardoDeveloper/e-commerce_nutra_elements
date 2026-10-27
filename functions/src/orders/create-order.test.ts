@@ -32,6 +32,27 @@ const create = (env: TestEnv, req: Record<string, unknown> = validCreateRequest(
 
 afterEach(() => vi.restoreAllMocks());
 
+describe("createOrder - comisiones", () => {
+  it("congela la comisión vigente del producto en cada línea y en el total", async () => {
+    const env = makeEnv();
+    env.db.seed("products/1001", { ...(env.db.peek("products/1001") as DocData), commissionPerUnit: 1500 });
+    await create(env);
+    const order = env.db.peek("orders/NE-000001") as DocData;
+    const [item] = order["items"] as DocData[];
+    // $1.500 por unidad × 2 unidades (no depende del precio ni del descuento)
+    expect(item).toMatchObject({ qty: 2, commissionPerUnit: 1500, commission: 3000 });
+    expect(order["commission"]).toBe(3000);
+  });
+
+  it("sin comisión definida la línea queda en 0", async () => {
+    const env = makeEnv();
+    await create(env);
+    const order = env.db.peek("orders/NE-000001") as DocData;
+    expect((order["items"] as DocData[])[0]).toMatchObject({ commissionPerUnit: null, commission: 0 });
+    expect(order["commission"]).toBe(0);
+  });
+});
+
 describe("createOrder - caso feliz", () => {
   it("crea el pedido con snapshot, reserva el stock y toma el primer número", async () => {
     const env = makeEnv();
@@ -217,12 +238,14 @@ describe("createOrder - validación del RUT (10b)", () => {
     expect(await codeOf(create(env, withRut(rut)))).toBe("INVALID_RUT");
     expect(env.db.paths("orders/")).toEqual([]);
   });
-  it("sin el campo rut -> INVALID_RUT", async () => {
+  it("sin el campo rut crea el pedido y no guarda RUT (D-039)", async () => {
     const env = makeEnv();
     const base = validCreateRequest();
     const { rut: _omit, ...customer } = base["customer"] as Record<string, unknown>;
     void _omit;
-    expect(await codeOf(create(env, { ...base, customer }))).toBe("INVALID_RUT");
+    await create(env, { ...base, customer });
+    const saved = (env.db.peek("orders/NE-000001") as DocData)["customer"] as Record<string, unknown>;
+    expect(saved).not.toHaveProperty("rut");
   });
 });
 

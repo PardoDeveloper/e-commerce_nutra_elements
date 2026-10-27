@@ -2,7 +2,7 @@
 // Nunca copia `stock`, `reserved` ni campos internos al tipo público.
 import { computeFinalPrice } from "@/lib/admin/pricing";
 import { DEFAULT_SETTINGS } from "./defaults";
-import type { Category, CategoryId, Product, ProductDiscount, ProductImage, PublicSettings } from "./types";
+import type { Category, Product, ProductDiscount, ProductImage, PublicSettings } from "./types";
 
 type Doc = Record<string, unknown>;
 export type UrlBuilder = (path: string) => string | undefined;
@@ -40,13 +40,13 @@ function mapImages(v: unknown, toUrl: UrlBuilder): ProductImage[] {
   return images;
 }
 
-/** Devuelve null si el documento no sirve para mostrarse (sin slug, nombre, categoría o precio válidos). */
+/** Devuelve null si el documento no sirve para mostrarse (sin slug, nombre o precio válidos). La categoría es opcional. */
 export function mapProduct(id: string, data: Doc, toUrl: UrlBuilder): Product | null {
   const slug = str(data.slug);
   const name = str(data.name);
   const categoryId = str(data.categoryId);
   const price = int(data.price);
-  if (!slug || !SLUG.test(slug) || !name || !categoryId || price === null || price < 1) return null;
+  if (!slug || !SLUG.test(slug) || !name || price === null || price < 1) return null;
   const discount = mapDiscount(data.discount);
   const unitsPerPack = int(data.unitsPerPack);
   return {
@@ -55,8 +55,7 @@ export function mapProduct(id: string, data: Doc, toUrl: UrlBuilder): Product | 
     slug,
     description: str(data.description),
     shortDescription: str(data.shortDescription),
-    // Las categorías las administra el admin: el tipo cubre las 6 iniciales, pero puede haber más.
-    categoryId: categoryId as CategoryId,
+    categoryId: categoryId !== null && SLUG.test(categoryId) ? categoryId : null,
     images: mapImages(data.images, toUrl),
     price,
     discount,
@@ -65,7 +64,6 @@ export function mapProduct(id: string, data: Doc, toUrl: UrlBuilder): Product | 
     inStock: data.inStock === true,
     format: str(data.format),
     unitsPerPack,
-    family: str(data.family),
     seo: mapSeo(data.seo),
   };
 }
@@ -75,7 +73,7 @@ export function mapCategory(id: string, data: Doc): Category | null {
   const name = str(data.name);
   if (!name || !SLUG.test(slug) || data.published !== true) return null;
   return {
-    slug: slug as CategoryId,
+    slug,
     name,
     description: str(data.description),
     order: int(data.order) ?? 9999,

@@ -97,11 +97,6 @@ export function unitsPerPack(name: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** Familia: el slug sin el tamaño ("vitamina-b12-90-capsulas" -> "vitamina-b12"). */
-export function familyOf(slug: string): string {
-  return slug.replace(/-\d{1,4}-capsulas$/, "");
-}
-
 /** Los productos del catálogo local. Nunca incluye la cantidad de stock. */
 export interface DemoCatalogProduct {
   sku: string;
@@ -113,7 +108,6 @@ export interface DemoCatalogProduct {
   inStock: boolean;
   format: "capsulas";
   unitsPerPack: number | null;
-  family: string;
 }
 
 export interface SourceRow {
@@ -144,6 +138,5 @@ export function rowToProduct(row: SourceRow): DemoCatalogProduct | null {
     inStock: Number.isFinite(stock) && stock > 0,
     format: "capsulas",
     unitsPerPack: unitsPerPack(name),
-    family: familyOf(slug),
   };
 }

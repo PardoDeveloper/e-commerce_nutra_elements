@@ -1,0 +1,143 @@
+/* Pedidos activos e historial. */
+
+/* Barra de Pedidos: búsqueda, estado y el botón alargado al historial. */
+.toolbar {
+  display: grid;
+  gap: var(--space-2) var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) {
+  .toolbar {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: end;
+  }
+}
+.historyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 46px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-navy);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-navy);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.historyButton:hover {
+  background: var(--color-navy);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.historyCount {
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-navy-soft);
+  color: var(--color-navy);
+  font-size: var(--text-xs);
+  line-height: 1.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.historyButton:hover .historyCount {
+  background: rgb(255 255 255 / 0.2);
+  color: #fff;
+}
+
+/* Historial */
+.back {
+  justify-self: start;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.back:hover {
+  text-decoration: underline;
+}
+
+.statusChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.chip:hover {
+  border-color: var(--color-navy);
+}
+.chip[aria-pressed="true"] {
+  background: var(--color-navy);
+  border-color: var(--color-navy);
+  color: #fff;
+}
+.chipCount {
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  line-height: 1.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] .chipCount {
+  background: rgb(255 255 255 / 0.2);
+  color: #fff;
+}
+
+.historyFilters {
+  display: grid;
+  gap: var(--space-2) var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.search,
+.clearCell {
+  grid-column: 1 / -1;
+}
+@media (min-width: 900px) {
+  .historyFilters {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+  }
+  .search,
+  .clearCell {
+    grid-column: auto;
+  }
+}
+
+.tableCard {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}

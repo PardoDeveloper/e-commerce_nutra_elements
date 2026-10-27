@@ -18,6 +18,7 @@ export function writeMetrics(tx: Tx, inc: MetricsIncrements, now: Date): void {
       unitsSold: increment(d.unitsSold),
       refundsCount: increment(d.refundsCount),
       refundedAmount: increment(d.refundedAmount),
+      commission: increment(d.commission),
       updatedAt: now,
     },
     { merge: true },

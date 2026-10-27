@@ -38,6 +38,7 @@ Convenciones
 | `paymentEvents/{flowToken}` | token que envía Flow | Idempotencia y auditoría de las confirmaciones de Flow | Solo servidor |
 | `idempotencyKeys/{sha256(clientRequestId)}` | hash hex | Idempotencia de `createOrder` | Solo servidor |
 | `rateLimits/{key}` | hash hex | Límite de intentos de las Functions públicas | Solo servidor |
+| `contactMessages/{id}` | ID aleatorio (base64url, 20) | Mensajes del formulario de `/contacto` | Servidor crea (`submitContactMessage`); admin directo marca, archiva y borra |
 
 Las reservas **no tienen colección propia**: viven en el pedido (`reservedUntil`, `stockState`, `items[]`). Menos escrituras y una sola transacción.
 
@@ -70,11 +71,12 @@ ID del documento = `sku`. Siempre texto (`"2427831"`), nunca número, para no pe
 | `publishedAt` | Timestamp \| null | no | primera publicación | Servidor |
 | `barcode` | string \| null | no | CODIGO_BARRA tal cual | Servidor, en importación |
 | `barcodeValid` | bool | sí | dígito verificador GTIN-8/12/13/14 correcto | Servidor, en importación |
+| `commissionPerUnit` | int \| null | no | Comisión del químico en **CLP por unidad vendida** (monto fijo, no porcentaje), 0..10.000.000. `null` = aún no definida. Se congela en cada pedido al crearlo | Servidor (`updateProductCommerce`); nuevo producto: null |
 | `gtin` | string \| null | no | solo si `barcodeValid` y **no** empieza con 978 o 979 (ISBN). El JSON-LD usa `gtin` y omite el campo si es null | Servidor, en importación |
 | `format` | string \| null | no | enum abierto, hoy `"capsulas"`. Si es string: **1 a 40 caracteres** (D-027) | Servidor propone al importar; admin directo |
 | `unitsPerPack` | int \| null | no | 1–1000 (30, 60, 90, 120…). Se extrae de "X 90" en el nombre | Servidor propone; admin directo |
-| `family` | string \| null | no | slug que agrupa los tamaños de un mismo producto (ej. `citrato-de-magnesio`). Cada tamaño es su propio producto y SKU. Sin variantes dentro de un producto | Servidor propone; admin directo |
-| `seo` | map \| null | no | `{title?: string ≤ 70, description?: string ≤ 170}` | Admin directo |
+| ~~`family`~~ | — | — | **Eliminado (D-040).** Ya no se escribe ni se lee; los documentos antiguos pueden conservarlo y se ignora | — |
+| `seo` | map \| null | no | `{title?: string ≤ 70, description?: string ≤ 170}`. Desde D-040 el admin no lo edita (lo deja en `null`): el título y la descripción SEO salen de `name` y `description` | Admin directo |
 | `source` | string | sí | `"controlfarma-xls"` o `"manual"` | Servidor |
 | `importedAt` | Timestamp \| null | no | última importación que lo tocó | Servidor |
 | `deletedAt` | Timestamp \| null | sí | `null` = producto vigente. Si no es null, el producto está **eliminado** (eliminación lógica, D-029). **Todo producto lo trae explícito** (`null` al crear); las reglas y las consultas públicas lo necesitan presente. Invariante: `deletedAt != null` ⇒ `published == false` | Solo servidor (`deleteProducts` / `restoreProducts`). El cliente nunca lo escribe, ni el admin |
@@ -169,7 +171,7 @@ interface ProductDoc {
 }
 ```
 
-Escrituras directas del admin sobre `products` (regla `update` con `diff().affectedKeys().hasOnly([...])`): solo `name`, `description`, `shortDescription`, `categoryId`, `images`, `slug` (si no está publicado), `format`, `unitsPerPack`, `family`, `seo` y `updatedAt`. **Todo lo demás (precio, descuento, stock, publicación, activo, `deletedAt`, `deletedBy`) solo lo cambian las Functions.** Límite de las reglas: no pueden validar cada elemento de `images` (no hay bucles); validan tipo y tamaño (≤ 8), y el admin es de confianza. La Function de publicación sí revisa cada imagen.
+Escrituras directas del admin sobre `products` (regla `update` con `diff().affectedKeys().hasOnly([...])`): solo `name`, `description`, `shortDescription`, `categoryId`, `images`, `slug` (si no está publicado), `format`, `unitsPerPack`, `seo` y `updatedAt` (`family` se quitó en D-040). **Todo lo demás (precio, descuento, stock, publicación, activo, `deletedAt`, `deletedBy`) solo lo cambian las Functions.** Límite de las reglas: no pueden validar cada elemento de `images` (no hay bucles); validan tipo y tamaño (≤ 8), y el admin es de confianza. La Function de publicación sí revisa cada imagen.
 
 ---
 
@@ -188,7 +190,7 @@ ID = slug (`^[a-z0-9]+(-[a-z0-9]+)*$`, máx. 60). Inmutable.
 | `seo` | map \| null | no | `{title?, description?}` como en productos | Admin directo |
 | `createdAt`, `updatedAt` | Timestamp | sí | `== request.time` al escribir | Admin directo |
 
-Valores iniciales (D-023), sembrados por el script de arranque. Un producto pertenece a **una sola** categoría. La asignación sale del NOMBRE de la planilla y de la tabla de familias de `contracts/seo/00-palabras-clave-y-prioridades.md` (secciones 1 y 2); el admin la confirma al publicar.
+Valores iniciales (D-023), sembrados por el script de arranque. Desde D-040 el admin **crea, renombra y elimina** categorías (el slug, que es el ID y la URL `/categorias/{slug}`, siempre sale del nombre: al renombrar se crea el documento con el slug nuevo, se mueven sus productos y se borra el anterior) y la categoría de un producto es **opcional** (`categoryId` puede ser `null`, también publicado). Al eliminar una categoría, el admin primero deja sus productos en `categoryId: null`. Un producto pertenece a **como máximo una** categoría. La asignación sale del NOMBRE de la planilla y de la tabla de familias de `contracts/seo/00-palabras-clave-y-prioridades.md` (secciones 1 y 2); el admin la confirma al publicar.
 
 | `slug` (ID) | `name` | `order` | Familias de la planilla |
 |---|---|---|---|
@@ -251,7 +253,10 @@ interface OrderItem {
   unitFinalPrice: Clp;     // precio efectivo por unidad
   qty: number;             // 1..10
   lineTotal: Clp;          // unitFinalPrice * qty
+  commissionPerUnit: Clp | null; // snapshot de products.commissionPerUnit al crear el pedido
+  commission: Clp;         // commissionPerUnit * qty; 0 sin comisión. Pedidos antiguos: ausente = 0
 }
+// El pedido guarda además `commission: Clp` = Σ items.commission (no depende del precio, del descuento ni del envío).
 ```
 
 Ejemplo (pago con Flow, despacho a domicilio, sin umbral de envío gratis configurado)
@@ -376,6 +381,7 @@ Agregados precalculados. Se actualizan con `FieldValue.increment` **en la misma 
 | `unitsSold` | int | unidades; baja solo por reembolsos con `refund.restocked == true` |
 | `refundsCount` | int | cantidad de pedidos reembolsados cuyo `paidAt` cae ese día. Inicio 0. Solo servidor |
 | `refundedAmount` | int | suma de `refund.amount` de esos reembolsos (CLP). Inicio 0. Solo servidor |
+| `commission` | int | comisiones del químico: `+ Σ items.commission` al pagar; en un reembolso `- round(commission × amount / total)` (proporcional; un reembolso total la revierte entera). Documentos antiguos: ausente = 0. Solo servidor |
 | `updatedAt` | Timestamp | |
 
 `refundsCount` y `refundedAmount` se asocian al día de `paidAt` (no al de `refundedAt`), para que `revenue` neto de ese día sea coherente. Los documentos diarios anteriores a D-025 no tienen estos campos: el cliente debe leerlos con valor por defecto 0. El servidor los crea en 0 al primer `increment`.
@@ -465,6 +471,23 @@ La idempotencia se apoya en **dos** cosas dentro de la misma transacción: este 
 `rateLimits/{sha256 hex de "<función>:<ip>"}`: `{count, windowStart, expiresAt}`. TTL sobre `expiresAt` (+1 día). No guardan datos personales en claro (la IP va con hash).
 Cliente: **sin acceso**. Costo: una lectura y una escritura por llamada a las Functions públicas; irrelevante al volumen esperado.
 
+### 2.10 `contactMessages/{id}` (formulario de contacto)
+
+Los crea **solo** `submitContactMessage` (functions.md 3.5). Contienen datos personales (nombre, correo, teléfono).
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `name` | string 2..100 | Una línea, sin caracteres de control |
+| `email` | string ≤254 | En minúsculas |
+| `phone` | string \| null | Opcional; normalizado `+?\d{8,15}` |
+| `message` | string 10..2000 | Admite saltos de línea |
+| `read` | bool | `false` al crear |
+| `archived` | bool | `false` al crear |
+| `createdAt` | timestamp | Hora del servidor; inmutable |
+| `updatedAt` | timestamp | `request.time` en cada edición del admin |
+
+El admin solo cambia `read`, `archived` y `updatedAt` (el contenido es inmutable) y puede **borrar** (definitivo). Lectura del panel: `orderBy(createdAt desc) limit(500)` con `onSnapshot`; filtros (leído, carpeta, fechas, texto) en el cliente. Índice de campo único, sin índice compuesto. Pendiente: definir un plazo de retención y mencionarlo en `/privacidad`.
+
 ---
 
 ## 3. Matriz de acceso de las reglas
@@ -483,6 +506,7 @@ Por defecto **todo denegado**. "Servidor" = Admin SDK (no pasa por reglas, por e
 | `imports/{id}` | **no** | sí | servidor | servidor | nadie |
 | `paymentEvents/{id}` | **no** | sí | servidor | servidor | nadie |
 | `idempotencyKeys/**`, `rateLimits/**` | **no** | **no** | servidor | servidor | nadie |
+| `contactMessages/{id}` | **no** | sí (`get` y `list`) | servidor | admin solo `read`, `archived`, `updatedAt == request.time` | admin |
 | cualquier otra ruta | **no** | **no** | **no** | **no** | **no** |
 
 Reglas que el contrato exige (cada una con su test, sección 9)
@@ -531,9 +555,16 @@ Los índices de un solo campo son automáticos. El estado `refunded` no necesita
 | `orders` | `paymentStatus ASC, reservedUntil ASC` | job de reservas vencidas |
 | `orders` | `paymentStatus ASC, createdAt DESC` | admin: pedidos por estado de pago |
 | `orders` | `fulfillmentStatus ASC, createdAt DESC` | admin: pedidos por estado logístico |
+| `orders` | `paymentStatus ASC, fulfillmentStatus ASC, createdAt DESC` | admin: historial, entregados (`paid` + `delivered`) |
 | `orders` | `paymentMethod ASC, paymentStatus ASC, createdAt DESC` | admin: transferencias por confirmar |
 
 Cambios de la v1.2 (D-029): las tres consultas públicas ganan el filtro `deletedAt == null`, así que sus índices **se reemplazan** por versiones con `deletedAt` (un índice sin ese campo ya no sirve a la consulta); `stock ASC, name ASC` se reemplaza por `deletedAt ASC, stock ASC, name ASC`; se agrega `deletedAt ASC, name ASC` para la lista normal del admin. El filtro "Eliminados" del admin usa `where("deletedAt","!=",null)` (opcionalmente `orderBy("deletedAt","desc")`), que es de un solo campo y usa el índice automático. Si el admin carga la lista normal completa (≤150 documentos) y filtra en cliente, el índice `deletedAt, name` no hace falta. Los índices viejos hay que **quitarlos** de `firestore.indexes.json` al aplicar esto (el despliegue lo hace devops, con confirmación en prod).
+
+Historial de pedidos (/admin/pedidos/historial, 2026-10-27; índice nuevo pendiente de desplegar): pide a Firestore **todos** los pedidos cerrados, de 25 en 25 con `startAfter` (no depende de los últimos 200 que escucha el admin), y cuenta con `getCountFromServer` sobre la misma consulta. Consultas, todas con `orderBy("createdAt","desc")` y, si hay fechas, `createdAt >= inicio de "desde"` y `< inicio del día siguiente a "hasta"` (America/Santiago; el rango va sobre el mismo campo del orden, así que no agrega índices):
+- Entregados: `paymentStatus == "paid" && fulfillmentStatus == "delivered"` → índice nuevo `paymentStatus ASC, fulfillmentStatus ASC, createdAt DESC`.
+- Cancelados, reembolsados, expirados: `paymentStatus == X` → `paymentStatus ASC, createdAt DESC` (ya existía).
+- Todos: `or(paymentStatus in ["cancelled","refunded","expired"], and(paid, delivered))`. Firestore la resuelve por disyunciones, cada una con uno de los dos índices anteriores.
+- Búsqueda: número exacto con `getDoc(orders/NE-…)`; correo completo con `customer.email == X` (sin `orderBy`, índice automático; máximo 100 pedidos) y el estado y las fechas se filtran en el cliente. No hay búsqueda por nombre con Firebase (Firestore no busca por subcadena).
 
 Sin índice compuesto: listar `orders orderBy createdAt desc`, `imports orderBy createdAt desc`, `slug == X`, `metrics/products/items orderBy unitsSold desc`.
 Política TTL (campo `expiresAt`) sobre `idempotencyKeys` y `rateLimits`: se declara como `fieldOverrides` con `ttl: true` en `firestore.indexes.json` (sintaxis por verificar al implementar).
@@ -559,6 +590,8 @@ Política TTL (campo `expiresAt`) sobre `idempotencyKeys` y `rateLimits`: se dec
       { "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "fulfillmentStatus", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "fulfillmentStatus", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "paymentMethod", "order": "ASCENDING" }, { "fieldPath": "paymentStatus", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] }
   ],

@@ -1,3 +1,4 @@
+import { lineCommission } from "../common/commission.js";
 import type { DocData } from "../common/db.js";
 import type { PricingResult } from "../common/pricing.js";
 import type { CreateOrderRequest } from "../common/schemas.js";
@@ -36,8 +37,24 @@ export function buildOrderDoc(input: {
   now: Date;
   reservedUntil: Date;
   accessTokenHash: string;
+  /** Comisión vigente de cada SKU (CLP por unidad o null). Se congela en el pedido. */
+  commissionPerUnits?: ReadonlyMap<string, number | null>;
 }): DocData {
   const { orderNumber, number, req, pricing, settings, now, reservedUntil, accessTokenHash } = input;
+  const items = pricing.lines.map((l) => {
+    const commissionPerUnit = input.commissionPerUnits?.get(l.sku) ?? null;
+    return {
+      sku: l.sku,
+      name: l.name,
+      unitPrice: l.unitPrice,
+      discount: l.discount,
+      unitFinalPrice: l.unitFinalPrice,
+      qty: l.qty,
+      lineTotal: l.lineTotal,
+      commissionPerUnit,
+      commission: lineCommission(l.qty, commissionPerUnit),
+    };
+  });
   const delivery: DocData =
     pricing.delivery.type === "shipping" && req.delivery.type === "shipping"
       ? {
@@ -62,19 +79,12 @@ export function buildOrderDoc(input: {
       lastName: req.customer.lastName,
       email: req.customer.email,
       phone: req.customer.phone,
-      rut: req.customer.rut,
+      ...(req.customer.rut !== undefined ? { rut: req.customer.rut } : {}),
     },
     delivery,
-    items: pricing.lines.map((l) => ({
-      sku: l.sku,
-      name: l.name,
-      unitPrice: l.unitPrice,
-      discount: l.discount,
-      unitFinalPrice: l.unitFinalPrice,
-      qty: l.qty,
-      lineTotal: l.lineTotal,
-    })),
+    items,
     subtotal: pricing.subtotal,
+    commission: items.reduce((acc, i) => acc + i.commission, 0),
     shipping: pricing.shipping,
     total: pricing.total,
     currency: "CLP",

@@ -5,7 +5,8 @@
 
 export type Sku = string;
 export type Clp = number;
-export type CategoryId = "vitaminas" | "magnesio" | "minerales" | "omega-3" | "belleza" | "bienestar";
+/** Slug de una categoría. Las categorías las administra el admin (crear, renombrar, eliminar): no es una lista fija. */
+export type CategoryId = string;
 
 export interface ProductDiscount {
   type: "percent" | "fixed";
@@ -29,7 +30,8 @@ export interface Product {
   slug: string;
   description: string | null;
   shortDescription: string | null;
-  categoryId: CategoryId;
+  /** La categoría es opcional: null = producto sin categoría. */
+  categoryId: CategoryId | null;
   images: ProductImage[];
   /** Precio de lista en CLP. */
   price: Clp;
@@ -39,8 +41,6 @@ export interface Product {
   inStock: boolean;
   format: string | null;
   unitsPerPack: number | null;
-  /** Slug que agrupa los tamaños de un mismo producto. */
-  family: string | null;
   seo: { title?: string; description?: string } | null;
 }
 

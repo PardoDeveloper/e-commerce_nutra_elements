@@ -74,7 +74,7 @@ describe("paymentIncrements (pasar a paid)", () => {
   it("suma el pedido completo en el día de paidAt", () => {
     expect(paymentIncrements(order)).toEqual({
       date: "2026-10-20",
-      daily: { ordersCount: 1, revenue: 32762, merchandise: 28772, unitsSold: 3, refundsCount: 0, refundedAmount: 0 },
+      daily: { ordersCount: 1, revenue: 32762, merchandise: 28772, unitsSold: 3, refundsCount: 0, refundedAmount: 0, commission: 0 },
       products: [
         { sku: "2427831", name: "Citrato de Magnesio x 120 cápsulas", unitsSold: 2, revenue: 19782 },
         { sku: "2427851", name: "Vitamina C x 60 cápsulas", unitsSold: 1, revenue: 8990 },
@@ -101,6 +101,7 @@ describe("refundIncrements (D-025, casos 9b del contrato)", () => {
       unitsSold: -3,
       refundsCount: 1,
       refundedAmount: 32762,
+      commission: 0,
     });
     expect(r.products).toEqual([
       { sku: "2427831", name: "Citrato de Magnesio x 120 cápsulas", unitsSold: -2, revenue: -19782 },
@@ -117,6 +118,7 @@ describe("refundIncrements (D-025, casos 9b del contrato)", () => {
       unitsSold: -3,
       refundsCount: 1,
       refundedAmount: 10000,
+      commission: 0,
     });
     expect(r.products.map((p) => [p.sku, p.unitsSold, p.revenue])).toEqual([
       ["2427831", -2, -19782],
@@ -133,6 +135,7 @@ describe("refundIncrements (D-025, casos 9b del contrato)", () => {
       unitsSold: 0,
       refundsCount: 1,
       refundedAmount: 32762,
+      commission: 0,
     });
     expect(r.products).toEqual([]);
   });
@@ -146,6 +149,7 @@ describe("refundIncrements (D-025, casos 9b del contrato)", () => {
       unitsSold: 0,
       refundsCount: 1,
       refundedAmount: 5000,
+      commission: 0,
     });
     expect(r.products).toEqual([]);
   });

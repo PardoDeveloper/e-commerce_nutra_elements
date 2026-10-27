@@ -10,8 +10,10 @@
 import { FirebaseError } from "firebase/app";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -19,12 +21,14 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
   type Firestore,
   type Unsubscribe,
 } from "firebase/firestore";
 import { deleteObject, ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
 import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase/client";
+import { createFirestoreOrderHistory } from "./firebase-order-history";
 import { MAX_BYTES } from "./image";
 import { planApplyDiscount, planImportCatalog, planImportPrices, planImportStock, type BatchPlan } from "./batch";
 import {
@@ -39,6 +43,7 @@ import {
   buildContentUpdate,
   buildSettingsWrites,
   DEFAULT_SETTINGS,
+  mapAdminCategory,
   mapDailyMetric,
   mapOrder,
   mapProduct,
@@ -48,6 +53,7 @@ import {
   validateContentPatch,
   type Doc,
 } from "./firebase-mappers";
+import { cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
 import { AdminServiceError } from "./errors";
 import { buildInitialCategories, buildInitialPrivateSettings, buildInitialPublicSettings } from "./firebase-seed";
 import { validateSettings } from "./demo-service";
@@ -105,7 +111,7 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
   const flowCredentials = createFlowCredentialsCallables(invoke);
 
   // ---------- Estado ----------
-  let state: AdminState = { products: [], orders: [], settings: DEFAULT_SETTINGS, status: "loading", metrics: null };
+  let state: AdminState = { products: [], categories: [], orders: [], settings: DEFAULT_SETTINGS, status: "loading", metrics: null };
   const listeners = new Set<() => void>();
   const loaded = { products: false, orders: false, settingsPublic: false, settingsPrivate: false };
   let rawPublic: Doc | null = null;
@@ -176,12 +182,11 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
       },
       (error) => fail("ajustes privados", error),
     ),
-    // Categorías: solo para saber si faltan las iniciales (no es crítico; si falla, el botón no se ofrece).
+    // Categorías (D-040): las administra el admin. No es crítico: si falla, el selector queda vacío.
     onSnapshot(
       collection(db, "categories"),
       (snap) => {
-        const initial = new Set(buildInitialCategories().map((c) => c.id));
-        commit({ initialCategoriesExisting: snap.docs.filter((d) => initial.has(d.id)).length });
+        commit({ categories: sortCategories(snap.docs.flatMap((d) => mapAdminCategory(d.id, d.data()) ?? [])), categoriesLoaded: true });
       },
       () => undefined,
     ),
@@ -259,11 +264,17 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
     return mapOrder(snap.id, snap.data());
   }
 
+  function keepExtraOrder(order: AdminOrder): void {
+    commit({ extraOrders: { ...state.extraOrders, [order.orderNumber]: order } });
+  }
+
   async function orderAction(call: () => Promise<{ changed: boolean; message?: string }>, orderNumber: string): Promise<OrderActionResponse> {
     try {
       const result = await call();
       // El pedido se relee del servidor: así la pantalla no depende de cuándo llegue el listener.
       const order = await freshOrder(orderNumber);
+      // Un pedido antiguo (fuera del listener) no se actualizaría solo en la pantalla.
+      if (state.extraOrders?.[orderNumber]) keepExtraOrder(order);
       return { order, changed: result.changed, message: result.message };
     } catch (error) {
       throw error instanceof AdminServiceError ? error : mapSdkError(error);
@@ -276,6 +287,18 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
+    },
+    createOrderHistory: () => createFirestoreOrderHistory(db),
+    async loadOrder(orderNumber) {
+      if (!/^NE-\d{6,}$/.test(orderNumber)) return null;
+      try {
+        const order = await freshOrder(orderNumber);
+        keepExtraOrder(order);
+        return order;
+      } catch (error) {
+        if (error instanceof AdminServiceError && error.code === "ORDER_NOT_FOUND") return null;
+        throw mapSdkError(error);
+      }
     },
     dispose() {
       disposed = true;
@@ -342,6 +365,88 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
     async setProductActive() {
       // `active` viene de la planilla (ACTIVO). El contrato no tiene una función para cambiarlo a mano.
       throw new AdminServiceError("FUNCTION_UNAVAILABLE", `${FUNCTION_UNAVAILABLE_MESSAGE} «Activo» se actualiza al importar la planilla de Control Farma.`);
+    },
+
+    // Categorías: escritura directa validada por `validCategory` de las reglas (D-040).
+    async createCategory({ name }) {
+      const clean = cleanCategoryName(name);
+      const slug = newCategorySlug(clean, state.categories);
+      const order = nextCategoryOrder(state.categories);
+      const categoryRef = doc(db, "categories", slug);
+      try {
+        // Transacción: si otra pestaña ya creó el mismo slug, no se pisa.
+        await runTransaction(db, async (tx) => {
+          if ((await tx.get(categoryRef)).exists()) throw new AdminServiceError("CATEGORY_EXISTS", "Ya existe una categoría con ese nombre.");
+          tx.set(categoryRef, { slug, name: clean, order, published: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        });
+      } catch (error) {
+        throw mapSdkError(error);
+      }
+      return { slug };
+    },
+
+    async updateCategory(slug, { name }) {
+      const clean = cleanCategoryName(name);
+      if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
+      const next = renamedCategorySlug(slug, clean, state.categories);
+      const oldRef = doc(db, "categories", slug);
+      try {
+        if (next === slug) {
+          await updateDoc(oldRef, { name: clean, updatedAt: serverTimestamp() });
+          return { slug };
+        }
+        // El slug es el ID (inmutable en las reglas): se crea la categoría con el ID nuevo, se mueven sus productos
+        // y se borra la anterior. La nueva debe existir antes de mover (la regla de productos lo comprueba).
+        const newRef = doc(db, "categories", next);
+        await runTransaction(db, async (tx) => {
+          const [old, taken] = [await tx.get(oldRef), await tx.get(newRef)];
+          if (!old.exists()) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
+          if (taken.exists()) throw new AdminServiceError("CATEGORY_EXISTS", "Ya existe una categoría con ese nombre.");
+          const d = old.data();
+          // `imagePath` queda fuera: su ruta en Storage lleva el slug anterior y las reglas la rechazarían.
+          tx.set(newRef, {
+            slug: next,
+            name: clean,
+            order: d.order,
+            published: d.published,
+            ...(d.description != null ? { description: d.description } : {}),
+            ...(d.seo != null ? { seo: d.seo } : {}),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+        // Productos y borrado de la anterior en lotes de 400; el último lote incluye el borrado (con pocos productos,
+        // todo es atómico). Si un lote falla, la anterior sigue existiendo con los productos que no alcanzaron a moverse.
+        const snap = await getDocs(query(collection(db, "products"), where("categoryId", "==", slug)));
+        const docs = snap.docs;
+        for (let i = 0; i === 0 || i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const d of docs.slice(i, i + 400)) batch.update(d.ref, { categoryId: next, updatedAt: serverTimestamp() });
+          if (i + 400 >= docs.length) batch.delete(oldRef);
+          await batch.commit();
+        }
+        return { slug: next };
+      } catch (error) {
+        throw mapSdkError(error);
+      }
+    },
+
+    async deleteCategory(slug) {
+      if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
+      try {
+        // Primero se quitan los productos de la categoría (en lotes de 400) y al final se borra la categoría:
+        // si algo falla a medias, la categoría sigue existiendo y basta con reintentar.
+        const snap = await getDocs(query(collection(db, "products"), where("categoryId", "==", slug)));
+        for (let i = 0; i < snap.docs.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const d of snap.docs.slice(i, i + 400)) batch.update(d.ref, { categoryId: null, updatedAt: serverTimestamp() });
+          await batch.commit();
+        }
+        await deleteDoc(doc(db, "categories", slug));
+        return { productsUpdated: snap.docs.length };
+      } catch (error) {
+        throw mapSdkError(error);
+      }
     },
 
     // Pedidos: callables del contrato.

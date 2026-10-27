@@ -7,7 +7,6 @@ const valid: CheckoutFormValues = {
   lastName: "Pérez",
   email: "ana@correo.cl",
   phone: "+56 9 1234 5678",
-  rut: "12.345.678-5",
   deliveryType: "shipping",
   communeCode: "puente-alto",
   address: "Av. Concha y Toro 100",
@@ -16,24 +15,13 @@ const valid: CheckoutFormValues = {
 };
 
 describe("validateCheckout", () => {
-  it("acepta datos válidos y normaliza RUT, teléfono y textos", () => {
+  it("acepta datos válidos y normaliza teléfono y textos, sin pedir RUT", () => {
     const r = validateCheckout(valid, ctx);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.customer).toEqual({ firstName: "Ana", lastName: "Pérez", email: "ana@correo.cl", phone: "+56912345678", rut: "12345678-5" });
+      expect(r.customer).toEqual({ firstName: "Ana", lastName: "Pérez", email: "ana@correo.cl", phone: "+56912345678" });
       expect(r.delivery).toEqual({ type: "shipping", communeCode: "puente-alto", address: "Av. Concha y Toro 100" });
     }
-  });
-
-  it("rechaza un RUT con dígito verificador incorrecto", () => {
-    const r = validateCheckout({ ...valid, rut: "12.345.678-4" }, ctx);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.rut).toMatch(/RUT/);
-  });
-
-  it("exige RUT", () => {
-    const r = validateCheckout({ ...valid, rut: "" }, ctx);
-    expect(!r.ok && r.errors.rut).toBe("Ingresa tu RUT.");
   });
 
   it("retiro no pide comuna ni dirección", () => {

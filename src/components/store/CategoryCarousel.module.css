@@ -1,0 +1,107 @@
+.carousel {
+  --cards: 2.3;
+  --gap: var(--space-3);
+  --fade: 2.5rem;
+  position: relative;
+}
+@media (min-width: 640px) {
+  .carousel {
+    --cards: 3.4;
+  }
+}
+@media (min-width: 1100px) {
+  .carousel {
+    --cards: 6;
+  }
+}
+
+/*
+ * Fila con scroll-snap. El ancho de cada tarjeta deja ver `--cards` a la vez; en móvil y tablet la
+ * fracción deja asomar la siguiente para que se note que hay más. El relleno vertical evita que el
+ * desplazamiento recorte la sombra y el salto del hover de las tarjetas.
+ */
+.track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - (var(--cards) - 1) * var(--gap)) / var(--cards));
+  gap: var(--gap);
+  margin: calc(-1 * var(--space-3)) 0;
+  padding: var(--space-3) 0;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.track::-webkit-scrollbar {
+  display: none;
+}
+.track > li {
+  scroll-snap-align: start;
+}
+/* Sin esto el ajuste no deja llegar al final exacto y la flecha "siguiente" nunca se apaga. */
+.track > li:last-child {
+  scroll-snap-align: end;
+}
+
+/* Difuminado de los bordes solo hacia donde queda contenido. */
+.carousel[data-fade-start] .track {
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+}
+.carousel[data-fade-end] .track {
+  mask-image: linear-gradient(to left, transparent, #000 var(--fade));
+}
+.carousel[data-fade-start][data-fade-end] .track {
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent);
+}
+
+.arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-navy);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: opacity 0.2s, border-color 0.15s, color 0.15s;
+}
+.arrow:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
+}
+.arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+.arrow:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.prev {
+  left: calc(-1 * var(--space-2));
+}
+.next {
+  right: calc(-1 * var(--space-2));
+}
+
+/* En pantallas táctiles chicas se desliza con el dedo; las flechas taparían las tarjetas. */
+@media (max-width: 639px) {
+  .arrow {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow {
+    transition: none;
+  }
+}

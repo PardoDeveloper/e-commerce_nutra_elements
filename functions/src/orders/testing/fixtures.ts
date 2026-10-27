@@ -124,10 +124,11 @@ export function orderDoc(overrides: DocData = {}): DocData {
     customer: { firstName: "Ana", lastName: "Pérez", email: "ana@example.com", phone: "+56912345678", rut: VALID_RUT },
     delivery: { type: "shipping", communeCode: "puente-alto", communeName: "Puente Alto", address: "Calle Falsa 123, depto 4" },
     items: [
-      { sku: "1001", name: "Citrato de Magnesio x 120", unitPrice: 10990, discount: { type: "percent", value: 10 }, unitFinalPrice: 9891, qty: 2, lineTotal: 19782 },
-      { sku: "1002", name: "Vitamina C x 60", unitPrice: 8990, discount: null, unitFinalPrice: 8990, qty: 1, lineTotal: 8990 },
+      { sku: "1001", name: "Citrato de Magnesio x 120", unitPrice: 10990, discount: { type: "percent", value: 10 }, unitFinalPrice: 9891, qty: 2, lineTotal: 19782, commissionPerUnit: null, commission: 0 },
+      { sku: "1002", name: "Vitamina C x 60", unitPrice: 8990, discount: null, unitFinalPrice: 8990, qty: 1, lineTotal: 8990, commissionPerUnit: null, commission: 0 },
     ],
     subtotal: 28772,
+    commission: 0,
     shipping: 3990,
     total: 32762,
     currency: "CLP",

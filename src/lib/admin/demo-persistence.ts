@@ -90,5 +90,8 @@ export function withProductPersistence(service: AdminService, client: Persistenc
     updateProductCommerce: (input) => tracked(() => service.updateProductCommerce(input)),
     updateProductContent: (sku, patch) => tracked(() => service.updateProductContent(sku, patch)),
     setProductActive: (sku, active) => tracked(() => service.setProductActive(sku, active)),
+    // Las categorías viven en memoria; al renombrar o eliminar una, los productos que la usaban sí se guardan.
+    deleteCategory: (slug) => tracked(() => service.deleteCategory(slug)),
+    updateCategory: (slug, input) => tracked(() => service.updateCategory(slug, input)),
   };
 }

@@ -42,6 +42,9 @@ const FULFILLMENT_LABEL: Record<FulfillmentStatus, string> = {
   delivered: "Entregado",
 };
 
+/** Estados en que el pago ya se recibió (aunque esté en revisión o se haya reembolsado). */
+const PAYMENT_RECEIVED: ReadonlySet<PaymentStatus> = new Set(["paid", "payment_review", "refunded"]);
+
 const NO_TOKEN_MESSAGE =
   "Para ver este pedido ábrelo desde el navegador donde lo compraste, o con el enlace completo que se mostró al comprar.";
 
@@ -142,7 +145,7 @@ export function OrderStatusView({ orderNumber, dataSource = "demo" }: { orderNum
   if (state.kind === "error") {
     return (
       <div className={`${styles.notice} ${styles.noticeDanger}`} role="alert">
-        <p className={styles.noticeTitle}>No pudimos mostrar el pedido {orderNumber}</p>
+        <p className={styles.noticeTitle}>No pudimos mostrar tu pedido</p>
         <p>{state.message}</p>
         {mode === "simulated" ? (
           <p className={styles.muted}>
@@ -159,19 +162,29 @@ export function OrderStatusView({ orderNumber, dataSource = "demo" }: { orderNum
   const { order } = state;
   const pending = order.paymentStatus === "pending_payment";
   const rejected = pending && order.paymentMethod === "flow" && order.lastPaymentAttemptRejected === true;
+  // Con Flow el número de pedido se entrega solo cuando hay un pago recibido. Con transferencia se muestra
+  // desde el inicio porque es la glosa del depósito.
+  const showNumber = order.paymentMethod === "transfer" || PAYMENT_RECEIVED.has(order.paymentStatus);
 
   return (
     <>
-      <div className={styles.orderBox}>
-        <p className={styles.orderLabel}>Número de pedido</p>
-        <strong className={styles.orderNumber} aria-label={`Número de pedido ${order.orderNumber}`}>
-          {order.orderNumber}
-        </strong>
-        <p>
-          <strong>Guarda este número.</strong> {order.trackingNote} Como no enviamos correos, es la única forma de
-          consultar tu pedido.
-        </p>
-      </div>
+      {showNumber ? (
+        <div className={styles.orderBox}>
+          <p className={styles.orderLabel}>Número de pedido</p>
+          <strong className={styles.orderNumber} aria-label={`Número de pedido ${order.orderNumber}`}>
+            {order.orderNumber}
+          </strong>
+          <p>
+            <strong>Guarda este número.</strong> {order.trackingNote} Como no enviamos correos, es la única forma de
+            consultar tu pedido.
+          </p>
+        </div>
+      ) : pending ? (
+        <div className={styles.orderBox} role="status">
+          <p className={styles.orderLabel}>Tu compra aún no está pagada</p>
+          <p>Completa el pago con Flow para confirmar tu compra. Te mostraremos tu número de pedido cuando recibamos el pago.</p>
+        </div>
+      ) : null}
 
       <section className={styles.panel} aria-labelledby="pay-status-title">
         <h2 id="pay-status-title" className={styles.panelTitle}>

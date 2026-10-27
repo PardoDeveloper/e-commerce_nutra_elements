@@ -12,7 +12,7 @@ export const revalidate = 3600;
 export const metadata = pageMetadata({
   title: "Quiénes somos | Nutra Elements",
   description:
-    "Conoce Nutra Elements, marca propia de suplementos alimentarios en cápsulas, con tienda para retiro en Puente Alto y despacho en toda la RM.",
+    "Conoce Nutra Elements, marca propia de suplementos, con tienda para retiro en Puente Alto y despacho en toda la RM.",
   path: "/nosotros",
 });
 
@@ -36,7 +36,7 @@ export default async function AboutPage() {
       <header className={styles.pageHead}>
         <h1>Quiénes somos</h1>
         <p className={styles.lead}>
-          Nutra Elements es una marca propia de suplementos alimentarios en cápsulas, con tienda en Puente Alto.
+          Nutra Elements es una marca propia de suplementos, con tienda en Puente Alto.
         </p>
       </header>
 
@@ -45,22 +45,15 @@ export default async function AboutPage() {
         <div className={styles.text}>
           <p>
             Ofrecemos un catálogo de vitaminas, magnesio, minerales, omega 3, productos de belleza y suplementos
-            funcionales, todos en cápsulas. Cada producto tiene su ficha con presentación, contenido y precio, y puedes
+            funcionales. Cada producto tiene su ficha con presentación, contenido y precio, y puedes
             revisar el detalle completo en el rótulo del frasco.
           </p>
           <p>
             Nuestros productos son suplementos alimentarios: no reemplazan una alimentación variada y equilibrada. Ante
             cualquier duda sobre su uso, consulta a un profesional de la salud.
           </p>
-          <p>Explora el catálogo por categoría:</p>
+        
         </div>
-        <ul className={styles.linkList}>
-          {categories.map((c) => (
-            <li key={c.slug}>
-              <Link href={`/categorias/${c.slug}`}>{c.name}</Link>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section className={styles.block} aria-labelledby="nos-donde">
@@ -79,7 +72,7 @@ export default async function AboutPage() {
           <p>
             Despachamos con medios propios a toda la Región Metropolitana por {formatClp(settings.shippingFee)}. Puedes
             pagar con Flow o por transferencia bancaria. Si tienes dudas sobre despacho, retiro o pagos, revisa las{" "}
-            <Link href="/preguntas-frecuentes">preguntas frecuentes</Link> o mira todo el{" "}
+            <Link href="/#preguntas-frecuentes">preguntas frecuentes</Link> o mira todo el{" "}
             <Link href="/productos">catálogo</Link>.
           </p>
         </div>

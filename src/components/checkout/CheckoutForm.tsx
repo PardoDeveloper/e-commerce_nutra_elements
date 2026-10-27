@@ -19,6 +19,8 @@ import {
   type FieldKey,
   type MockSettings,
   type OrderErrorCode,
+  type OrderService,
+  ORDER_ERROR_MESSAGES,
 } from "@/lib/checkout";
 import type { DataSource } from "@/lib/data-source";
 import { formatClp } from "@/lib/format";
@@ -40,12 +42,12 @@ const INITIAL: CheckoutFormValues = {
   lastName: "",
   email: "",
   phone: "",
-  rut: "",
   deliveryType: "shipping",
   communeCode: "",
   address: "",
   notes: "",
-  paymentMethod: "",
+  // Flow queda elegido por defecto; el comprador puede cambiar a transferencia.
+  paymentMethod: "flow",
 };
 
 const FIELD_LABELS: Record<FieldKey, string> = {
@@ -53,7 +55,6 @@ const FIELD_LABELS: Record<FieldKey, string> = {
   lastName: "Apellido",
   email: "Correo",
   phone: "Teléfono",
-  rut: "RUT",
   deliveryType: "Entrega",
   communeCode: "Comuna",
   address: "Dirección",
@@ -63,10 +64,12 @@ const FIELD_LABELS: Record<FieldKey, string> = {
 
 /** Id del control a enfocar para cada campo con error. */
 const fieldId = (key: FieldKey) => `field-${key}`;
-const FIELD_ORDER: FieldKey[] = ["firstName", "lastName", "email", "phone", "rut", "deliveryType", "communeCode", "address", "notes", "paymentMethod"];
+const FIELD_ORDER: FieldKey[] = ["firstName", "lastName", "email", "phone", "deliveryType", "communeCode", "address", "notes", "paymentMethod"];
 
 /** Errores pasajeros de `createOrder`: el reintento reutiliza la clave de idempotencia (functions.md 3.1). */
 const TRANSIENT_ERRORS: ReadonlySet<OrderErrorCode> = new Set(["INTERNAL", "CONTENTION", "RATE_LIMITED"]);
+
+type UnpaidOrder = { orderNumber: string; accessToken: string };
 
 interface TextFieldProps {
   name: FieldKey;
@@ -135,12 +138,14 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
   const [formError, setFormError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"form" | "submitting" | "redirecting">("form");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  // Pedido de Flow ya creado cuyo pago no se pudo iniciar. Se reintenta sin crear otro.
+  const [unpaid, setUnpaid] = useState<UnpaidOrder | null>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   if (phase === "redirecting") {
     return (
       <div className={styles.panel} role="status">
-        <h2 className={styles.panelTitle}>Creando tu pedido…</h2>
+        <h2 className={styles.panelTitle}>Preparando tu pago…</h2>
         <p>Un momento, te llevamos al siguiente paso.</p>
       </div>
     );
@@ -181,6 +186,12 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
     const value = e.target.value;
     setValues((prev) => ({ ...prev, [name]: value }) as CheckoutFormValues);
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+    // Si cambian los datos, el pedido pendiente ya no corresponde: el próximo envío crea uno nuevo
+    // (el anterior libera su reserva al vencer).
+    if (unpaid) {
+      setUnpaid(null);
+      setRequestId(crypto.randomUUID());
+    }
   }
 
   function focusSummary() {
@@ -212,6 +223,11 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
     setPhase("submitting");
 
     const service = getOrderService(dataSource, { catalog, settings });
+    // Reintento tras un fallo al iniciar el pago: el pedido ya existe (y su stock está reservado), solo falta pagar.
+    if (unpaid) {
+      await startFlowPayment(service, unpaid);
+      return;
+    }
     let order;
     try {
       order = await service.createOrder({
@@ -227,7 +243,6 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
       // MISMA clave de idempotencia para no duplicarlo. Ante un rechazo de negocio se abre un intento nuevo.
       if (!(error instanceof OrderServiceError) || !TRANSIENT_ERRORS.has(error.code)) setRequestId(crypto.randomUUID());
       if (error instanceof OrderServiceError) {
-        if (error.code === "INVALID_RUT") setErrors({ rut: "Revisa tu RUT. Ejemplo: 12.345.678-5." });
         setFormError(error.message);
       } else {
         setFormError("Ocurrió un error inesperado. Intenta de nuevo.");
@@ -236,23 +251,43 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
       return;
     }
 
-    // Pedido creado: se guarda el token en este navegador (A2), se vacía el carrito y se sigue al pago.
-    setPhase("redirecting");
-    cartActions.clear();
+    // Pedido creado: se guarda el token en este navegador (A2) para mostrar el pedido al volver de Flow.
     const storage = browserStorage();
     if (storage) rememberOrderToken(storage, order.orderNumber, order.accessToken);
-    const orderUrl = `/pedido/${order.orderNumber}?${new URLSearchParams({ t: order.accessToken }).toString()}`;
     if (order.next !== "pay_with_flow") {
-      router.push(orderUrl);
+      // Transferencia: el número es la glosa del depósito, así que se muestra de inmediato.
+      setPhase("redirecting");
+      cartActions.clear();
+      router.push(`/pedido/${order.orderNumber}?${new URLSearchParams({ t: order.accessToken }).toString()}`);
       return;
     }
+    await startFlowPayment(service, { orderNumber: order.orderNumber, accessToken: order.accessToken });
+  }
+
+  /**
+   * Con Flow el comprador NO ve su número de pedido hasta pagar: si no se puede iniciar el pago, se queda
+   * en el checkout con el carrito intacto y puede reintentar (se reutiliza el mismo pedido, sin duplicarlo).
+   */
+  async function startFlowPayment(service: OrderService, order: UnpaidOrder) {
+    setPhase("redirecting");
     try {
-      const payment = await service.createFlowPayment({ orderNumber: order.orderNumber, accessToken: order.accessToken });
+      const payment = await service.createFlowPayment(order);
+      cartActions.clear();
       if (isExternalUrl(payment.redirectUrl)) window.location.assign(payment.redirectUrl);
       else router.push(payment.redirectUrl);
-    } catch {
-      // El pedido ya existe y su stock está reservado: se lleva al comprador a su pedido, donde puede reintentar el pago.
-      router.push(orderUrl);
+    } catch (error) {
+      setPhase("form");
+      const code = error instanceof OrderServiceError ? error.code : "INTERNAL";
+      if (code === "ORDER_EXPIRED" || code === "ORDER_NOT_PAYABLE" || code === "ORDER_NOT_FOUND") {
+        // Ese pedido ya no se puede pagar: el próximo intento crea uno nuevo.
+        setUnpaid(null);
+        setRequestId(crypto.randomUUID());
+        setFormError(`${ORDER_ERROR_MESSAGES[code]} Vuelve a intentar el pago.`);
+      } else {
+        setUnpaid(order);
+        setFormError(`${ORDER_ERROR_MESSAGES[code === "FLOW_UNAVAILABLE" ? "FLOW_UNAVAILABLE" : "INTERNAL"]} No se realizó ningún cobro.`);
+      }
+      focusSummary();
     }
   }
 
@@ -293,19 +328,6 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
               <TextField name="lastName" label="Apellido" autoComplete="family-name" maxLength={60} value={values.lastName} error={errors.lastName} onChange={onChange} disabled={busy} />
               <TextField name="email" label="Correo" type="email" autoComplete="email" inputMode="email" maxLength={254} value={values.email} error={errors.email} onChange={onChange} disabled={busy} />
               <TextField name="phone" label="Teléfono" type="tel" autoComplete="tel" inputMode="tel" hint="Ej: +56 9 1234 5678" maxLength={20} value={values.phone} error={errors.phone} onChange={onChange} disabled={busy} />
-              <TextField
-                name="rut"
-                label="RUT"
-                autoComplete="off"
-                inputMode="text"
-                autoCapitalize="characters"
-                hint="Obligatorio. Con o sin puntos y guion, por ejemplo 12.345.678-5. No se muestra en la confirmación."
-                maxLength={12}
-                value={values.rut}
-                error={errors.rut}
-                onChange={onChange}
-                disabled={busy}
-              />
             </div>
           </fieldset>
 

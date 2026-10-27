@@ -2,8 +2,10 @@
 // los nombres, los parámetros y los códigos de error son los de las Cloud Functions, para
 // reemplazar la simulación (`demo-service.ts`) por `httpsCallable` sin tocar las pantallas.
 // Los errores se lanzan como `AdminServiceError` (equivalente a HttpsError + details.code).
+import type { OrderHistorySource } from "./order-history";
 import type { RefundInput } from "./orders";
 import type {
+  AdminCategory,
   AdminOrder,
   AdminProduct,
   AdminSettings,
@@ -32,6 +34,8 @@ export interface AggregatedMetrics {
 
 export interface AdminState {
   products: readonly AdminProduct[];
+  /** Categorías ordenadas por `order` y luego por nombre. */
+  categories: readonly AdminCategory[];
   orders: readonly AdminOrder[];
   settings: AdminSettings;
   /** Solo Firebase: carga inicial de los datos. En la demo no existe (siempre listo). */
@@ -42,10 +46,15 @@ export interface AdminState {
   settingsMissing?: boolean;
   /** Solo Firebase: `settings/private` aún no existe. */
   settingsPrivateMissing?: boolean;
-  /** Solo Firebase: cuántas de las 6 categorías iniciales (D-023) ya existen; ausente = aún no se sabe. */
-  initialCategoriesExisting?: number;
+  /** Solo Firebase: ya se leyó `categories` (para ofrecer las iniciales solo si de verdad no hay ninguna). */
+  categoriesLoaded?: boolean;
   /** Solo Firebase: métricas reales (si hay datos); null/ausente = calcular desde los pedidos. */
   metrics?: AggregatedMetrics | null;
+  /**
+   * Solo Firebase: pedidos leídos uno a uno (`loadOrder`) porque quedan fuera de los últimos ORDERS_LIMIT que se
+   * escuchan, por número. No se suman a `orders`: las vistas de pedidos activos y las métricas no los ven.
+   */
+  extraOrders?: Readonly<Record<string, AdminOrder>>;
 }
 
 export interface OrderActionResponse {
@@ -59,6 +68,7 @@ export interface CommerceUpdateResponse {
   price: number;
   finalPrice: number;
   stock: number;
+  commissionPerUnit: number | null;
   warnings: string[];
 }
 
@@ -78,7 +88,8 @@ export interface AdminService {
   /** Restaura productos eliminados; quedan despublicados. Máximo 200 SKU. */
   restoreProducts(input: { skus: string[] }): Promise<RestoreReport>;
   createProduct(input: { sku: string; name: string; price: number; stock: number; barcode?: string }): Promise<{ sku: string; created: boolean }>;
-  updateProductCommerce(input: { sku: string; price?: number; stock?: number }): Promise<CommerceUpdateResponse>;
+  /** Precio, stock y/o comisión (CLP por unidad; null la borra). */
+  updateProductCommerce(input: { sku: string; price?: number; stock?: number; commissionPerUnit?: number | null }): Promise<CommerceUpdateResponse>;
   /** Escritura directa del admin sobre campos de contenido (reglas de Firestore). */
   updateProductContent(sku: string, patch: ProductContentPatch): Promise<void>;
   /**
@@ -94,7 +105,22 @@ export interface AdminService {
    */
   setProductActive(sku: string, active: boolean): Promise<void>;
 
+  // --- Categorías (escritura directa con validación en reglas; D-040) ---
+  /** Crea una categoría publicada; el slug sale del nombre. Devuelve el slug. */
+  createCategory(input: { name: string }): Promise<{ slug: string }>;
+  /**
+   * Cambia el nombre. El slug (ID y URL) siempre sale del nombre: si cambia, la categoría pasa al slug nuevo y sus
+   * productos se mueven con ella. Devuelve el slug resultante.
+   */
+  updateCategory(slug: string, input: { name: string }): Promise<{ slug: string }>;
+  /** Elimina la categoría y deja sin categoría a los productos que la usaban. Devuelve cuántos productos cambió. */
+  deleteCategory(slug: string): Promise<{ productsUpdated: number }>;
+
   // --- Pedidos (functions.md 4) ---
+  /** Solo Firebase: historial de pedidos cerrados paginado en el servidor. En la demo se filtra `orders` en memoria. */
+  createOrderHistory?(): OrderHistorySource;
+  /** Solo Firebase: lee un pedido que no está entre los escuchados y lo deja en `extraOrders`. null si no existe. */
+  loadOrder?(orderNumber: string): Promise<AdminOrder | null>;
   confirmTransferPayment(input: { orderNumber: string; reference?: string; note?: string }): Promise<OrderActionResponse>;
   cancelOrder(input: { orderNumber: string; reason: string }): Promise<OrderActionResponse>;
   updateFulfillment(input: { orderNumber: string; to: FulfillmentStatus; note?: string; reason?: string }): Promise<OrderActionResponse>;

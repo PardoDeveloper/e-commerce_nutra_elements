@@ -7,7 +7,7 @@ import { orderAccessSchema, parseInput } from "../orders/schemas.js";
 import { readOrder, type Deps } from "../orders/tx.js";
 import { parseOrder, type OrderDoc } from "../orders/types.js";
 import { applyFlowStatus } from "./apply-status.js";
-import { buildReturnUrl, type FlowConfig } from "./config.js";
+import { buildReturnUrl, FlowConfigError, type FlowConfig } from "./config.js";
 import { buildPaymentUrl, FlowApiError, FlowStatus, type FlowClient } from "./flow-client.js";
 
 // createFlowPayment (functions.md 3.2). El monto sale de `order.total`; el cliente solo entrega
@@ -81,7 +81,11 @@ export async function handleCreateFlowPayment(deps: CreatePaymentDeps, data: unk
     config = await deps.getConfig();
     client = await deps.getFlow();
   } catch (err) {
-    logger.error("Configuración de Flow no válida", { errorName: err instanceof Error ? err.name : typeof err });
+    // `problems` solo nombra variables (p. ej. "APP_ENV debe ser…", "FLOW_API_KEY falta"), nunca valores.
+    logger.error("Configuración de Flow no válida", {
+      errorName: err instanceof Error ? err.name : typeof err,
+      ...(err instanceof FlowConfigError ? { problems: err.problems } : {}),
+    });
     throw appError("FLOW_UNAVAILABLE");
   }
 
@@ -102,7 +106,7 @@ export async function handleCreateFlowPayment(deps: CreatePaymentDeps, data: unk
     });
   } catch (err) {
     if (err instanceof FlowApiError) {
-      logger.error("payment/create falló", { orderNumber, kind: err.kind, httpStatus: err.httpStatus, flowCode: err.flowCode });
+      logger.error("payment/create falló", { orderNumber, kind: err.kind, httpStatus: err.httpStatus, flowCode: err.flowCode, flowMessage: err.flowMessage });
       throw appError("FLOW_UNAVAILABLE");
     }
     throw err;

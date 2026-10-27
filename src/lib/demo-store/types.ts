@@ -26,8 +26,9 @@ export interface StoredProduct {
   published: boolean;
   format: string | null;
   unitsPerPack: number | null;
-  family: string | null;
   seo: { title?: string; description?: string } | null;
+  /** Comisión en CLP por unidad. Opcional: lo guardado antes no la trae. */
+  commissionPerUnit?: number | null;
   deletedAt: string | null;
   deletedBy: string | null;
 }

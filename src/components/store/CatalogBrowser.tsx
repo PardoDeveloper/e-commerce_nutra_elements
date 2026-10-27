@@ -87,7 +87,7 @@ function Results({ products, categories, children }: CatalogBrowserProps) {
         <ul className="product-grid">
           {list.map((p) => (
             <li key={p.sku}>
-              <ProductCard product={p} categoryName={names.get(p.categoryId)} />
+              <ProductCard product={p} categoryName={p.categoryId ? names.get(p.categoryId) : undefined} />
             </li>
           ))}
         </ul>

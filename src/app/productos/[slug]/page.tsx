@@ -12,7 +12,7 @@ import { ProductPurchase } from "@/components/store/ProductPurchase";
 import styles from "@/components/store/store.module.css";
 import { getCategory, getProduct, getProducts, getPublicSettings, getRelatedProducts } from "@/lib/data";
 import { formatClp } from "@/lib/format";
-import { absoluteUrl, baseName, breadcrumbList, displayName, graph, pageMetadata, productMetaDescription, productNode, withBrand } from "@/lib/seo";
+import { absoluteUrl, baseName, breadcrumbList, displayName, graph, metaDescriptionFrom, pageMetadata, productMetaDescription, productNode, withBrand } from "@/lib/seo";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -27,9 +27,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const product = await getProduct(slug);
   if (!product) return { title: "Producto no encontrado", robots: { index: false, follow: false } };
   const name = displayName(product.name);
+  // Título y descripción SEO salen del nombre y la descripción del producto (D-040).
   return pageMetadata({
-    title: product.seo?.title ?? withBrand(name),
-    description: product.seo?.description ?? productMetaDescription(product.name, product.unitsPerPack),
+    title: withBrand(name),
+    description: product.description ? metaDescriptionFrom(product.description) : productMetaDescription(product.name, product.unitsPerPack),
     path: `/productos/${slug}`,
   });
 }
@@ -39,16 +40,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const product = await getProduct(slug);
   if (!product) notFound();
 
-  const [category, related, settings, sameFamily] = await Promise.all([
-    getCategory(product.categoryId),
+  const [category, relatedProducts, settings] = await Promise.all([
+    product.categoryId ? getCategory(product.categoryId) : Promise.resolve(null),
     getRelatedProducts(product.sku, 4),
     getPublicSettings(),
-    product.family ? getProducts() : Promise.resolve([]),
   ]);
   const name = displayName(product.name);
-  const categoryName = category?.name ?? product.categoryId;
-  const otherSizes = sameFamily.filter((p) => p.family === product.family && p.sku !== product.sku).slice(0, 6);
-  const relatedProducts = related.filter((p) => !otherSizes.some((o) => o.sku === p.sku)).slice(0, 4);
+  // La categoría es opcional (D-040): sin categoría publicada, la ficha no la muestra ni la enlaza.
+  const categoryCrumb = category ? [{ name: category.name, path: `/categorias/${category.slug}` }] : [];
   const description =
     product.description ??
     `${baseName(product.name)} en ${product.unitsPerPack ? `frasco de ${product.unitsPerPack} cápsulas` : "cápsulas"}. Suplemento alimentario de Nutra Elements.`;
@@ -67,7 +66,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             slug: product.slug,
             sku: product.sku,
             description,
-            category: categoryName,
+            category: category?.name,
             price: product.finalPrice,
             inStock: product.inStock,
             shippingFee: settings.shippingFee,
@@ -76,7 +75,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           breadcrumbList([
             { name: "Inicio", path: "/" },
             { name: "Catálogo", path: "/productos" },
-            { name: categoryName, path: `/categorias/${product.categoryId}` },
+            ...categoryCrumb,
             { name },
           ]),
         )}
@@ -85,7 +84,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         items={[
           { label: "Inicio", href: "/" },
           { label: "Catálogo", href: "/productos" },
-          { label: categoryName, href: `/categorias/${product.categoryId}` },
+          ...categoryCrumb.map((c) => ({ label: c.name, href: c.path })),
           { label: name },
         ]}
       />
@@ -96,12 +95,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
         <div className={styles.buyBox}>
           <h1>{name}</h1>
-          <p className={styles.meta}>
-            Categoría:{" "}
-            <Link href={`/categorias/${product.categoryId}`} className={styles.inlineLink}>
-              {categoryName}
-            </Link>
-          </p>
+          {category ? (
+            <p className={styles.meta}>
+              Categoría:{" "}
+              <Link href={`/categorias/${category.slug}`} className={styles.inlineLink}>
+                {category.name}
+              </Link>
+            </p>
+          ) : null}
           <Price price={product.price} finalPrice={product.finalPrice} size="lg" />
           {perCapsule ? <p className={styles.perUnit}>Aprox. {formatClp(perCapsule)} por cápsula</p> : null}
           <StockBadge inStock={product.inStock} />
@@ -149,25 +150,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
       </section>
 
-      {otherSizes.length > 0 ? (
-        <section className={styles.block} aria-labelledby="prod-formatos">
-          <h2 id="prod-formatos">Otros formatos de este producto</h2>
-          <ul className={styles.linkList}>
-            {otherSizes.map((p) => (
-              <li key={p.sku}>
-                <Link href={`/productos/${p.slug}`}>{displayName(p.name)}</Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <section className={styles.block} aria-labelledby="prod-despacho">
         <h2 id="prod-despacho">Despacho y retiro</h2>
         <div className={styles.text}>
           <p>
             Despachamos a toda la RM por {formatClp(settings.shippingFee)} y puedes retirar en {settings.pickup.address}.
-            Más información en <Link href="/preguntas-frecuentes">preguntas frecuentes</Link>.
+            Más información en <Link href="/#preguntas-frecuentes">preguntas frecuentes</Link>.
           </p>
         </div>
       </section>

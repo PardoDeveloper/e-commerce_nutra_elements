@@ -1,3 +1,4 @@
+import { refundedCommission } from "./commission.js";
 import { appError } from "./errors.js";
 
 // Métricas (D-012, D-025; data-model.md 2.6; functions.md 4.6 y 6). Lógica pura: calcula los
@@ -11,6 +12,8 @@ export interface MetricsItem {
   name: string;
   qty: number;
   lineTotal: number;
+  /** Comisión congelada de la línea (0 si no tiene). */
+  commission?: number | undefined;
 }
 
 export interface DailyIncrements {
@@ -20,6 +23,8 @@ export interface DailyIncrements {
   unitsSold: number;
   refundsCount: number;
   refundedAmount: number;
+  /** Comisiones del químico devengadas (pago) o revertidas (reembolso). */
+  commission: number;
 }
 
 export interface ProductIncrements {
@@ -65,6 +70,10 @@ export function productMetricsPath(sku: string): string {
   return `metrics/products/items/${sku}`;
 }
 
+function sumCommission(items: readonly MetricsItem[]): number {
+  return items.reduce((acc, i) => acc + (i.commission ?? 0), 0);
+}
+
 function sumQty(items: readonly MetricsItem[]): number {
   return items.reduce((acc, i) => acc + i.qty, 0);
 }
@@ -92,6 +101,7 @@ export function paymentIncrements(order: {
       unitsSold: sumQty(order.items),
       refundsCount: 0,
       refundedAmount: 0,
+      commission: sumCommission(order.items),
     },
     products: order.items.map((i) => ({ sku: i.sku, name: i.name, unitsSold: i.qty, revenue: i.lineTotal })),
   };
@@ -127,6 +137,8 @@ export function refundIncrements(order: {
       unitsSold: restocked ? neg(sumQty(order.items)) : 0,
       refundsCount: 1,
       refundedAmount: amount,
+      // Se revierte en proporción al monto devuelto (un reembolso total revierte toda la comisión).
+      commission: neg(refundedCommission(sumCommission(order.items), amount, order.total)),
     },
     products: restocked
       ? order.items.map((i) => ({ sku: i.sku, name: i.name, unitsSold: neg(i.qty), revenue: neg(i.lineTotal) }))

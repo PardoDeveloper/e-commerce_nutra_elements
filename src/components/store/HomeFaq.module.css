@@ -1,0 +1,160 @@
+/* Preguntas frecuentes de la página principal: banda suave con introducción a la izquierda y acordeón a la derecha. */
+.faq {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  /* El encabezado fijo no tapa el título al llegar desde "/#preguntas-frecuentes". */
+  scroll-margin-top: calc(var(--header-h) + var(--space-3));
+}
+
+@media (min-width: 960px) {
+  .faq {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--space-5);
+    padding: var(--space-5);
+  }
+  .intro {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-4));
+    align-self: start;
+  }
+}
+
+.help {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.helpTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  color: var(--color-navy);
+}
+
+.helpText {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.groups {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.groupTitle {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gold-text);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.item[open] {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-md);
+}
+
+.question::-webkit-details-marker {
+  display: none;
+}
+
+.question:hover {
+  color: var(--color-primary);
+}
+
+.question:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Signo "+" que gira a "×" al abrir. */
+.icon {
+  position: relative;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.icon::before,
+.icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.75rem;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-primary);
+  transform: translate(-50%, -50%);
+}
+
+.icon::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.item[open] .icon {
+  transform: rotate(45deg);
+  background: var(--color-primary);
+}
+
+.item[open] .icon::before,
+.item[open] .icon::after {
+  background: var(--color-primary-contrast);
+}
+
+.answer {
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  max-width: 68ch;
+  line-height: var(--leading-body);
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .icon {
+    transition: none;
+  }
+}

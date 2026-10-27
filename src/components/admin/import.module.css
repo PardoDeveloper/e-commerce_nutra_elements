@@ -1,0 +1,123 @@
+/* Diálogo "Importar Excel" de Productos. */
+
+.drop {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-3);
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+  color: var(--color-primary);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+.drop:hover,
+.dropActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.drop:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.dropBusy {
+  cursor: progress;
+  opacity: 0.7;
+}
+.dropTitle {
+  font-weight: 700;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.dropHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.preview {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.summary li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+.summary strong {
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.statNew {
+  background: var(--color-primary-soft) !important;
+  border-color: rgb(4 129 68 / 0.3) !important;
+}
+.statNew strong {
+  color: var(--color-primary);
+}
+.statUpdated strong {
+  color: var(--color-navy);
+}
+.statInvalid {
+  background: var(--color-danger-soft) !important;
+  border-color: rgb(180 35 24 / 0.3) !important;
+}
+.statInvalid strong {
+  color: var(--color-danger);
+}
+
+.group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.group > summary {
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  font-weight: 700;
+  cursor: pointer;
+}
+.group[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+.group :global(table) {
+  margin: 0;
+}
+.group > div {
+  max-height: 22rem;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+}
+.notes {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

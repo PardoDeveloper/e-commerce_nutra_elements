@@ -175,7 +175,6 @@ export async function handleCreateProduct(store: CatalogStore, data: unknown, ui
             gtin: barcode.gtin,
             unitsPerPack: null,
             format: null,
-            family: null,
             source: "manual",
           },
         },
@@ -194,6 +193,8 @@ export interface UpdateProductCommerceResponse {
   price: number;
   finalPrice: number;
   stock: number;
+  /** Comisión en CLP por unidad, o null si no está definida. */
+  commissionPerUnit: number | null;
   /** Extensión aditiva: el descuento fijo dejó de ser válido con el precio nuevo y se eliminó. */
   discountRemoved: boolean;
 }
@@ -202,8 +203,9 @@ export async function handleUpdateProductCommerce(store: CatalogStore, data: unk
   const req: UpdateCommerceRequest = parseSingle(updateCommerceSchema, data);
   const hasPrice = req.price !== undefined;
   const hasStock = req.stock !== undefined;
-  if (!hasPrice && !hasStock) {
-    throw appError("INVALID_INPUT", { fields: [{ path: "price", message: "Indica el precio o el stock" }] });
+  const hasRate = req.commissionPerUnit !== undefined;
+  if (!hasPrice && !hasStock && !hasRate) {
+    throw appError("INVALID_INPUT", { fields: [{ path: "price", message: "Indica el precio, el stock o la comisión" }] });
   }
 
   let newPrice: number | null = null;
@@ -246,6 +248,7 @@ export async function handleUpdateProductCommerce(store: CatalogStore, data: unk
         patch.inStock = available > 0;
       }
     }
+    if (hasRate && req.commissionPerUnit !== product.commissionPerUnit) patch.commissionPerUnit = req.commissionPerUnit ?? null;
     const changed = Object.keys(patch).length > 0;
     if (changed) {
       tx.apply([updateOp(product, patch)], { uid });
@@ -256,9 +259,17 @@ export async function handleUpdateProductCommerce(store: CatalogStore, data: unk
       price: patch.price ?? product.price,
       finalPrice: patch.finalPrice ?? product.finalPrice,
       stock: patch.stock ?? product.stock,
+      commissionPerUnit: patch.commissionPerUnit !== undefined ? patch.commissionPerUnit : product.commissionPerUnit,
     };
   });
 
   if (outcome.changed) await store.saveImport(singleAudit("update", uid, 0, 1, corrected));
-  return { sku: req.sku, price: outcome.price, finalPrice: outcome.finalPrice, stock: outcome.stock, discountRemoved: outcome.discountRemoved };
+  return {
+    sku: req.sku,
+    price: outcome.price,
+    finalPrice: outcome.finalPrice,
+    stock: outcome.stock,
+    commissionPerUnit: outcome.commissionPerUnit,
+    discountRemoved: outcome.discountRemoved,
+  };
 }

@@ -12,11 +12,13 @@ import {
   planImportStock,
   SKU_PATTERN,
 } from "./batch";
+import { DEFAULT_CATEGORIES } from "@/lib/data/defaults";
+import { cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
 import { AdminServiceError } from "./errors";
 import * as orderLogic from "./orders";
 import { computeFinalPrice, validateDiscount } from "./pricing";
 import type { AdminService, AdminState, CommerceUpdateResponse, OrderActionResponse } from "./service";
-import type { AdminOrder, AdminProduct, AdminSettings, BatchReport, DeleteReport, InvalidRow, ProductContentPatch, RestoreReport } from "./types";
+import type { AdminCategory, AdminOrder, AdminProduct, AdminSettings, BatchReport, DeleteReport, InvalidRow, ProductContentPatch, RestoreReport } from "./types";
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ADMIN_ID = "demo-admin";
@@ -25,6 +27,8 @@ export interface DemoSeed {
   products: AdminProduct[];
   orders: AdminOrder[];
   settings: AdminSettings;
+  /** Si falta, las 6 iniciales (D-023). */
+  categories?: AdminCategory[];
 }
 
 function recompute(p: AdminProduct): AdminProduct {
@@ -68,7 +72,6 @@ export function publishBlocker(p: AdminProduct, others: Iterable<AdminProduct>, 
   }
   if (pendingSlugs.has(p.slug)) return { code: "DUPLICATE_SLUG", message: "Otro producto del mismo lote usa el mismo slug." };
   if (!p.description || p.description.trim() === "") return { code: "MISSING_DESCRIPTION", message: "Falta la descripción." };
-  if (!p.categoryId) return { code: "INVALID_CATEGORY", message: "Falta la categoría." };
   if (p.images.length === 0 || p.images.some((i) => i.alt.trim() === "")) {
     return { code: "MISSING_IMAGE", message: "Falta al menos una imagen con texto alternativo." };
   }
@@ -99,7 +102,8 @@ function classifyDeletion(skus: string[], map: Map<string, AdminProduct>, mode: 
 }
 
 export function createDemoService(seed: DemoSeed, clock: () => Date = () => new Date()): AdminService {
-  let state: AdminState = { products: seed.products, orders: seed.orders, settings: seed.settings };
+  const initialCategories = seed.categories ?? DEFAULT_CATEGORIES.map((c) => ({ slug: c.slug, name: c.name, order: c.order, published: true }));
+  let state: AdminState = { products: seed.products, categories: sortCategories(initialCategories), orders: seed.orders, settings: seed.settings };
   const listeners = new Set<() => void>();
   const set = (next: Partial<AdminState>) => {
     state = { ...state, ...next };
@@ -134,9 +138,9 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
             published: false,
             format: null,
             unitsPerPack: null,
-            family: null,
             seo: null,
             source: "controlfarma-xls",
+            commissionPerUnit: null,
             deletedAt: null,
             deletedBy: null,
           }),
@@ -296,9 +300,9 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
         published: false,
         format: null,
         unitsPerPack: null,
-        family: null,
         seo: null,
         source: "manual",
+        commissionPerUnit: null,
         deletedAt: null,
         deletedBy: null,
       });
@@ -306,11 +310,14 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       return { sku, created: true };
     },
 
-    async updateProductCommerce({ sku, price, stock }): Promise<CommerceUpdateResponse> {
+    async updateProductCommerce({ sku, price, stock, commissionPerUnit }): Promise<CommerceUpdateResponse> {
       const current = state.products.find((p) => p.sku === sku);
       if (!current) throw new AdminServiceError("SKU_NOT_FOUND", "El SKU no existe en el catálogo.");
       if (current.deletedAt) throw new AdminServiceError("PRODUCT_DELETED", "El producto está eliminado: restáuralo para editarlo.");
-      if (price === undefined && stock === undefined) throw new AdminServiceError("INVALID_INPUT", "Indica el precio, el stock o ambos.");
+      if (price === undefined && stock === undefined && commissionPerUnit === undefined) throw new AdminServiceError("INVALID_INPUT", "Indica el precio, el stock o la comisión.");
+      if (commissionPerUnit !== undefined && commissionPerUnit !== null && (!Number.isInteger(commissionPerUnit) || commissionPerUnit < 0 || commissionPerUnit > 10_000_000)) {
+        throw new AdminServiceError("INVALID_INPUT", "La comisión debe ser un monto en pesos entre $0 y $10.000.000.");
+      }
       if (price !== undefined && (!Number.isInteger(price) || price < 1 || price > 10_000_000)) {
         throw new AdminServiceError("INVALID_PRICE", "El precio debe ser un entero entre 1 y 10.000.000.");
       }
@@ -328,9 +335,10 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       }
       // El stock enviado es el físico; lo disponible descuenta lo reservado.
       if (stock !== undefined) next.stock = Math.max(0, stock - current.reserved);
+      if (commissionPerUnit !== undefined) next.commissionPerUnit = commissionPerUnit;
       next = recompute(next);
       set({ products: state.products.map((p) => (p.sku === sku ? next : p)) });
-      return { sku, price: next.price, finalPrice: next.finalPrice, stock: next.stock, warnings };
+      return { sku, price: next.price, finalPrice: next.finalPrice, stock: next.stock, commissionPerUnit: next.commissionPerUnit, warnings };
     },
 
     async updateProductContent(sku, patch: ProductContentPatch) {
@@ -341,6 +349,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       if (patch.description != null && patch.description.length > 5000) throw new AdminServiceError("INVALID_INPUT", "La descripción admite hasta 5000 caracteres.");
       if (patch.shortDescription != null && patch.shortDescription.length > 300) throw new AdminServiceError("INVALID_INPUT", "La descripción corta admite hasta 300 caracteres.");
       if (patch.images && patch.images.length > 8) throw new AdminServiceError("INVALID_INPUT", "Máximo 8 imágenes.");
+      if (patch.categoryId != null && !state.categories.some((c) => c.slug === patch.categoryId)) throw new AdminServiceError("INVALID_CATEGORY", "La categoría no existe.");
       if (patch.slug !== undefined) {
         if (current.published) throw new AdminServiceError("SLUG_LOCKED", "El slug no se puede cambiar mientras el producto está publicado.");
         if (patch.slug !== null && (!SLUG_PATTERN.test(patch.slug) || patch.slug.length > 80)) throw new AdminServiceError("INVALID_SLUG", "El slug solo admite minúsculas, números y guiones.");
@@ -348,6 +357,36 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       if (patch.seo?.title && patch.seo.title.length > 70) throw new AdminServiceError("INVALID_INPUT", "El título SEO admite hasta 70 caracteres.");
       if (patch.seo?.description && patch.seo.description.length > 170) throw new AdminServiceError("INVALID_INPUT", "La descripción SEO admite hasta 170 caracteres.");
       set({ products: state.products.map((p) => (p.sku === sku ? { ...p, ...patch } : p)) });
+    },
+
+    async createCategory({ name }) {
+      const clean = cleanCategoryName(name);
+      const slug = newCategorySlug(clean, state.categories);
+      set({ categories: sortCategories([...state.categories, { slug, name: clean, order: nextCategoryOrder(state.categories), published: true }]) });
+      return { slug };
+    },
+
+    async updateCategory(slug, { name }) {
+      const clean = cleanCategoryName(name);
+      if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
+      const next = renamedCategorySlug(slug, clean, state.categories);
+      set({
+        categories: sortCategories(state.categories.map((c) => (c.slug === slug ? { ...c, slug: next, name: clean } : c))),
+        products: next === slug ? state.products : state.products.map((p) => (p.categoryId === slug ? { ...p, categoryId: next } : p)),
+      });
+      return { slug: next };
+    },
+
+    async deleteCategory(slug) {
+      if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
+      let productsUpdated = 0;
+      const products = state.products.map((p) => {
+        if (p.categoryId !== slug) return p;
+        productsUpdated++;
+        return { ...p, categoryId: null };
+      });
+      set({ categories: state.categories.filter((c) => c.slug !== slug), products });
+      return { productsUpdated };
     },
 
     async setProductActive(sku, active) {

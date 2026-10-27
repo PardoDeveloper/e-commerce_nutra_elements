@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { errorMessage } from "@/lib/admin/errors";
 import { FULFILLMENT_LABELS, METHOD_LABELS, PAYMENT_LABELS, statusLabel } from "@/lib/admin/labels";
 import { allowedActions } from "@/lib/admin/orders";
@@ -11,13 +11,37 @@ import { useAdminService, useAdminState } from "./AdminProvider";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { formatDateTime, toLocalInput } from "./format";
 import ui from "./admin.module.css";
+import { orderCommission } from "@/lib/admin/commission";
 import { getActiveDataSource, sim } from "@/lib/admin/mode";
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
 export function OrderDetail({ orderNumber }: { orderNumber: string }) {
-  const { orders } = useAdminState();
-  const order = orders.find((o) => o.orderNumber === orderNumber);
+  const { orders, extraOrders } = useAdminState();
+  const order = orders.find((o) => o.orderNumber === orderNumber) ?? extraOrders?.[orderNumber];
+  const lookup = useOlderOrder(orderNumber, order === undefined);
+  if (!order && lookup.state === "loading") {
+    return (
+      <div className={ui.page}>
+        <p className={ui.help} role="status">
+          Cargando el pedido {orderNumber}…
+        </p>
+      </div>
+    );
+  }
+  if (!order && lookup.state === "error") {
+    return (
+      <div className={ui.page}>
+        <h1>No se pudo cargar el pedido</h1>
+        <p className={`${ui.alert} ${ui.alertError}`} role="alert">
+          {lookup.message}
+        </p>
+        <Link href="/admin/pedidos" className={ui.btn}>
+          Volver a pedidos
+        </Link>
+      </div>
+    );
+  }
   if (!order) {
     return (
       <div className={ui.page}>
@@ -30,6 +54,30 @@ export function OrderDetail({ orderNumber }: { orderNumber: string }) {
     );
   }
   return <Detail key={order.orderNumber} order={order} />;
+}
+
+type Lookup = { state: "idle" | "loading" | "missing" } | { state: "error"; message: string };
+
+/** Con Firebase, un pedido fuera de los últimos que se escuchan (por ejemplo, desde el historial) se lee aparte. */
+function useOlderOrder(orderNumber: string, needed: boolean): Lookup {
+  const service = useAdminService();
+  const canLoad = needed && service.loadOrder !== undefined;
+  const [result, setResult] = useState<{ orderNumber: string; lookup: Lookup } | null>(null);
+
+  useEffect(() => {
+    if (!canLoad || !service.loadOrder) return;
+    let cancelled = false;
+    service.loadOrder(orderNumber).then(
+      (order) => !cancelled && setResult({ orderNumber, lookup: { state: order ? "idle" : "missing" } }),
+      (e: unknown) => !cancelled && setResult({ orderNumber, lookup: { state: "error", message: errorMessage(e) } }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [canLoad, orderNumber, service]);
+
+  if (!canLoad) return { state: needed ? "missing" : "idle" };
+  return result?.orderNumber === orderNumber ? result.lookup : { state: "loading" };
 }
 
 function historyText(h: StatusHistoryEntry): string {
@@ -80,8 +128,12 @@ function Detail({ order }: { order: AdminOrder }) {
             <dd>
               {order.customer.firstName} {order.customer.lastName}
             </dd>
-            <dt>RUT</dt>
-            <dd className={ui.mono}>{order.customer.rut}</dd>
+            {order.customer.rut ? (
+              <>
+                <dt>RUT</dt>
+                <dd className={ui.mono}>{order.customer.rut}</dd>
+              </>
+            ) : null}
             <dt>Correo</dt>
             <dd>{order.customer.email}</dd>
             <dt>Teléfono</dt>
@@ -179,6 +231,21 @@ function Detail({ order }: { order: AdminOrder }) {
                 <td className={ui.num}>
                   <strong>{formatClp(order.total)}</strong>
                 </td>
+              </tr>
+              <tr>
+                <th scope="row" colSpan={3} className={ui.num}>
+                  Tu comisión
+                  <br />
+                  <span className={ui.help}>
+                    {orderCommission(order) > 0
+                      ? order.items
+                          .filter((it) => it.commissionPerUnit !== null)
+                          .map((it) => `${it.sku}: ${formatClp(it.commissionPerUnit!)} × ${it.qty}`)
+                          .join(" · ")
+                      : "Sin comisión definida al momento de la venta"}
+                  </span>
+                </th>
+                <td className={ui.num}>{formatClp(orderCommission(order))}</td>
               </tr>
             </tfoot>
           </table>

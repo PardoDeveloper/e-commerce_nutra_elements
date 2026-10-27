@@ -14,7 +14,7 @@ export default function PrivacyPage() {
     <LegalPage title="Política de privacidad" lead="Qué datos pedimos, para qué los usamos y cómo los cuidamos.">
       <h2>1. Datos que recopilamos</h2>
       <p>
-        Al comprar te pedimos tu nombre, RUT, correo, teléfono y la dirección de despacho (o la de retiro en tienda), solo
+        Al comprar te pedimos tu nombre, correo, teléfono y la dirección de despacho (o la de retiro en tienda), solo
         para gestionar tu pedido.
       </p>
       <h2>2. Para qué los usamos</h2>

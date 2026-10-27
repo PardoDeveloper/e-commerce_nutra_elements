@@ -84,7 +84,8 @@
   font-weight: 600;
   text-decoration: none;
 }
-.link:hover {
+.link:hover,
+.link[aria-current="page"] {
   color: var(--color-primary);
 }
 
@@ -111,18 +112,45 @@
     margin: 0;
     width: 14rem;
   }
+  /* Enlaces centrados en la cabecera (.inner es position: relative), sin importar el ancho del logo y el buscador. */
   .list {
     order: 1;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     flex-direction: row;
-    gap: var(--space-1);
+    gap: var(--space-4);
   }
+  /* Subrayado dorado que crece desde el centro al pasar el puntero; fijo en la página actual. */
   .link {
-    padding: 0 var(--space-2);
+    position: relative;
+    padding: 0 var(--space-1);
     border-bottom: 0;
-    border-radius: var(--radius-pill);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    transition: color 0.2s ease;
   }
-  .link:hover {
-    background: var(--color-primary-soft);
+  .link::after {
+    content: "";
+    position: absolute;
+    left: var(--space-1);
+    right: var(--space-1);
+    bottom: 0.55rem;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--color-gold);
+    transform: scaleX(0);
+    transition: transform 0.25s ease;
+  }
+  .link:hover::after,
+  .link:focus-visible::after,
+  .link[aria-current="page"]::after {
+    transform: scaleX(1);
+  }
+  .link[aria-current="page"] {
+    font-weight: 600;
   }
 }

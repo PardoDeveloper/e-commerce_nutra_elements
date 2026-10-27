@@ -51,7 +51,7 @@ async function readProducts(extra: QueryConstraint[] = [], ordered = true): Prom
   for (const d of snap.docs) {
     const product = mapProduct(d.id, d.data(), (p) => storagePublicUrl(p));
     if (product) products.push(product);
-    else console.warn(`[data/firestore] producto ${d.id} omitido: faltan slug, nombre, categoría o precio válidos`);
+    else console.warn(`[data/firestore] producto ${d.id} omitido: faltan slug, nombre o precio válidos`);
   }
   return products;
 }
@@ -60,11 +60,8 @@ async function readCategories(): Promise<Category[]> {
   const db = getServerFirestore();
   // Solo un filtro de igualdad (índice automático); el orden se aplica en memoria.
   const snap = await getDocs(query(collection(db, "categories"), where("published", "==", true)));
+  // Sin categorías publicadas la lista queda vacía: el admin las crea, renombra y elimina (D-040).
   const categories = snap.docs.flatMap((d) => mapCategory(d.id, d.data()) ?? []);
-  if (categories.length === 0) {
-    warnOnce("[data/firestore] no hay categorías publicadas: se usan las 6 por defecto (D-023)");
-    return DEFAULT_CATEGORIES;
-  }
   return categories.sort((a, b) => a.order - b.order);
 }
 
@@ -103,10 +100,9 @@ async function getRelatedProducts(sku: string, limit = 4): Promise<Product[]> {
   const base = all.find((p) => p.sku === sku);
   if (!base) return [];
   const others = all.filter((p) => p.sku !== sku);
-  // Primero los otros tamaños de la misma familia, luego el resto de la categoría.
-  const sameFamily = others.filter((p) => base.family && p.family === base.family);
-  const sameCategory = others.filter((p) => p.categoryId === base.categoryId && !sameFamily.includes(p));
-  return [...sameFamily, ...sameCategory].slice(0, limit);
+  // Productos de la misma categoría (sin categoría no hay relacionados).
+  if (base.categoryId === null) return [];
+  return others.filter((p) => p.categoryId === base.categoryId).slice(0, limit);
 }
 
 async function getPublicSettings() {

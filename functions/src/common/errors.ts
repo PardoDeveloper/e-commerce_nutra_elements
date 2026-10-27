@@ -12,7 +12,7 @@ const ERROR_CATALOG = {
   UNAUTHENTICATED: ["unauthenticated", "Debes iniciar sesión."],
   NOT_ADMIN: ["permission-denied", "No tienes permisos para realizar esta acción."],
   APP_CHECK_FAILED: ["failed-precondition", "No se pudo verificar la aplicación. Recarga la página e intenta de nuevo."],
-  RATE_LIMITED: ["resource-exhausted", "Demasiados intentos. Intenta de nuevo en unos minutos."],
+  RATE_LIMITED: ["resource-exhausted", "Demasiados intentos o pedidos sin pagar con este correo. Intenta de nuevo en unos minutos."],
   INTERNAL: ["internal", "Ocurrió un error inesperado. Intenta de nuevo."],
   // createOrder (3.1)
   INVALID_RUT: ["invalid-argument", "Revisa tu RUT."],

@@ -137,6 +137,20 @@
 .menuButton svg {
   flex: none;
 }
+/* Contador de mensajes sin leer (Mensajes). Con la barra plegada queda como burbuja sobre el ícono. */
+.navBadge {
+  margin-left: auto;
+  min-width: 1.375rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.375rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .navLink:hover {
   background: var(--color-navy-hover);
   color: #fff;
@@ -266,6 +280,18 @@
   .navCollapsed .collapseButton {
     justify-content: center;
     padding-inline: 0;
+  }
+  .navCollapsed .navLink {
+    position: relative;
+  }
+  .navCollapsed .navBadge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 1.125rem;
+    padding: 0 0.25rem;
+    line-height: 1.125rem;
+    font-size: 0.625rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {

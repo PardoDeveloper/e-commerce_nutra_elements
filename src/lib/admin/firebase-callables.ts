@@ -217,12 +217,13 @@ export function createCatalogCallables(invoke: CallableInvoker) {
       );
       return { sku: typeof r.sku === "string" ? r.sku : input.sku, created: r.created !== false };
     },
-    async updateProductCommerce(input: { sku: string; price?: number; stock?: number }): Promise<CommerceUpdateResponse> {
+    async updateProductCommerce(input: { sku: string; price?: number; stock?: number; commissionPerUnit?: number | null }): Promise<CommerceUpdateResponse> {
       const r = record(
         await invoke("updateProductCommerce", {
           sku: input.sku,
           ...(input.price !== undefined ? { price: input.price } : {}),
           ...(input.stock !== undefined ? { stock: input.stock } : {}),
+          ...(input.commissionPerUnit !== undefined ? { commissionPerUnit: input.commissionPerUnit } : {}),
         }),
       );
       return {
@@ -230,6 +231,7 @@ export function createCatalogCallables(invoke: CallableInvoker) {
         price: num(r.price),
         finalPrice: num(r.finalPrice),
         stock: num(r.stock),
+        commissionPerUnit: typeof r.commissionPerUnit === "number" ? r.commissionPerUnit : null,
         warnings: list<string>(r.warnings).filter((w) => typeof w === "string"),
       };
     },

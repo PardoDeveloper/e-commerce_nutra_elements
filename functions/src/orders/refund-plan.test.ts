@@ -42,7 +42,7 @@ describe("planRefund - reposición y métricas (D-025)", () => {
       recordedAt: NOW,
     });
     expect(plan.metrics.date).toBe("2026-10-20"); // día de paidAt, no del reembolso
-    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -32762, merchandise: 0, unitsSold: -3, refundsCount: 1, refundedAmount: 32762 });
+    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -32762, merchandise: 0, unitsSold: -3, refundsCount: 1, refundedAmount: 32762, commission: 0 });
     expect(plan.metrics.products).toEqual([
       { sku: "1001", name: "Citrato de Magnesio x 120", unitsSold: -2, revenue: -19782 },
       { sku: "1002", name: "Vitamina C x 60", unitsSold: -1, revenue: -8990 },
@@ -64,7 +64,7 @@ describe("planRefund - reposición y métricas (D-025)", () => {
     expect(plan.stock.changes).toEqual([]);
     expect(plan.orderPatch).not.toHaveProperty("stockState");
     expect((plan.orderPatch["refund"] as { restocked: boolean }).restocked).toBe(false);
-    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -32762, merchandise: 0, unitsSold: 0, refundsCount: 1, refundedAmount: 32762 });
+    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -32762, merchandise: 0, unitsSold: 0, refundsCount: 1, refundedAmount: 32762, commission: 0 });
     expect(plan.metrics.products).toEqual([]);
     const history = plan.orderPatch["statusHistory"] as { kind: string }[];
     expect(history.some((h) => h.kind === "stock")).toBe(false);
@@ -72,7 +72,7 @@ describe("planRefund - reposición y métricas (D-025)", () => {
 
   it("(b2) parcial sin restock: solo revenue y refundedAmount cambian", () => {
     const plan = planRefund({ order: paid(), products, now: NOW, uid: "u", refund: { ...base, amount: 5000, restock: false } });
-    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -5000, merchandise: 0, unitsSold: 0, refundsCount: 1, refundedAmount: 5000 });
+    expect(plan.metrics.daily).toEqual({ ordersCount: 0, revenue: -5000, merchandise: 0, unitsSold: 0, refundsCount: 1, refundedAmount: 5000, commission: 0 });
     expect(plan.metrics.products).toEqual([]);
   });
 

@@ -96,8 +96,8 @@
 }
 
 /*
- * Banner recortado por CSS (la imagen original no se toca). Móvil: 2:1, conserva el
- * logo y el lema a la izquierda. Desde 640px: 3,1:1 y se recorta arriba y abajo
+ * Banner recortado por CSS (la imagen original no se toca). Base: banner.jpeg (2.ª diapositiva).
+ * Móvil: 2:1, conserva el logo y el lema a la izquierda. Desde 640px: 3,1:1 y se recorta arriba y abajo
  * (más abajo que arriba, porque sobra aire sobre el logo) para dejar libre la franja
  * bajo el lema donde va el botón.
  */
@@ -110,29 +110,89 @@
   object-position: left center;
 }
 
-/* Botón sobre la imagen, bajo el lema y centrado en el eje del logo (~28 % desde la izquierda). */
+/* Primera diapositiva (banner_2): botón abajo a la izquierda, centrado bajo las manos y sobre el mármol. */
 .heroActions {
   position: absolute;
-  left: 28%;
-  bottom: 4%;
+  left: 25%;
+  bottom: 9%;
   transform: translateX(-50%);
   display: flex;
   justify-content: center;
   white-space: nowrap;
 }
-.heroActions a {
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.28);
-  font-size: clamp(0.875rem, 0.6rem + 0.9vw, 1.125rem);
-  padding-inline: clamp(var(--space-3), 2.4vw, var(--space-5));
+
+/*
+ * Botón del banner: blanco con texto verde de marca, sombra suave en capas y, al pasar el puntero,
+ * se eleva, la sombra crece, el texto pasa a navy y la flecha avanza.
+ * Se anida en .heroActions para ganar en especificidad a la variante .primary de Button.
+ */
+.heroActions .heroCta {
+  min-height: clamp(2.75rem, 2.2rem + 1.4vw, 3rem);
+  padding-inline: clamp(var(--space-4), 4vw, 3.5rem);
+  background: #fff;
+  color: var(--color-primary);
+  border-color: rgb(255 255 255 / 0.9);
+  font-size: clamp(0.9375rem, 0.65rem + 0.9vw, 1.1875rem);
+  letter-spacing: 0.03em;
+  box-shadow:
+    0 12px 28px -10px rgb(0 40 20 / 0.45),
+    0 4px 10px -4px rgb(0 0 0 / 0.18),
+    inset 0 -2px 0 rgb(0 40 20 / 0.06);
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.heroActions .heroCta svg {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.heroActions .heroCta:hover:not(:disabled) {
+  background: #fff;
+  color: var(--color-navy);
+  transform: translateY(-3px);
+  box-shadow:
+    0 20px 36px -12px rgb(0 40 20 / 0.5),
+    0 6px 14px -6px rgb(0 0 0 / 0.22),
+    0 0 0 4px rgb(255 255 255 / 0.35);
+}
+.heroActions .heroCta:hover:not(:disabled) svg {
+  transform: translateX(4px);
+}
+.heroActions .heroCta:active:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 18px -8px rgb(0 40 20 / 0.45),
+    0 2px 6px rgb(0 0 0 / 0.18);
+}
+.heroActions .heroCta:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heroActions .heroCta,
+  .heroActions .heroCta svg {
+    transition: none;
+  }
 }
 
-/* Bajo 1024px el logo ocupa más del ancho y sobra poca altura bajo el lema: el botón va a la derecha, sobre la escena. */
+/* Bajo 1024px el banner es más bajo: el botón se pega a la esquina inferior izquierda, sobre las manos. */
 @media (max-width: 1023px) {
   .heroActions {
-    left: auto;
-    right: var(--space-3);
+    left: var(--space-3);
     bottom: var(--space-3);
     transform: none;
+  }
+}
+/* En móvil la imagen mide ~190 px de alto: botón compacto y más abajo para no tapar el lema. */
+@media (max-width: 639px) {
+  .heroActions {
+    bottom: var(--space-2);
+  }
+  .heroActions .heroCta {
+    min-height: var(--tap-min);
+    padding-inline: var(--space-3);
+    font-size: var(--text-sm);
   }
 }
 
@@ -141,6 +201,37 @@
     aspect-ratio: 1565 / 505;
     max-height: 420px;
     object-position: left 77%;
+  }
+}
+
+/*
+ * banner_2 (1.ª diapositiva): el logo y el lema están a la derecha. Móvil: se recorta por la izquierda
+ * (las manos) y se conserva el texto. Desde 640px: recorte vertical que deja libre la franja
+ * bajo "Pureza | Calidad | Confianza" para el botón.
+ */
+.heroImageAlt {
+  object-position: right center;
+}
+@media (min-width: 640px) {
+  .heroImageAlt {
+    object-position: center 40%;
+  }
+}
+
+/* banner.jpeg (2.ª diapositiva): botón bajo el lema, centrado en el eje del logo (~28 % desde la izquierda). */
+.heroActionsAlt {
+  left: 28%;
+  right: auto;
+  bottom: 4%;
+  transform: translateX(-50%);
+}
+/* Bajo 1024px el logo ocupa más del ancho: el botón va abajo a la derecha, sobre la escena. */
+@media (max-width: 1023px) {
+  .heroActionsAlt {
+    left: auto;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    transform: none;
   }
 }
 
