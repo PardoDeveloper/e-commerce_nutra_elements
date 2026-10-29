@@ -1,7 +1,6 @@
 // Servicio de pedidos REAL: llama a las Cloud Functions del contrato (functions.md 3.1, 3.2 y 3.4).
 // Misma interfaz `OrderService` que el simulado, así las pantallas no cambian. Solo navegador.
-import { httpsCallable } from "firebase/functions";
-import { getFirebaseFunctions } from "@/lib/firebase/client";
+import { callFunction } from "@/lib/firebase/client";
 import {
   ORDER_ERROR_MESSAGES,
   OrderServiceError,
@@ -77,8 +76,5 @@ export function createFirebaseOrderService(invoke: OrderInvoker): OrderService {
 const TIMEOUTS: Record<string, number> = { createOrder: 35_000, createFlowPayment: 35_000, getOrderStatus: 25_000 };
 
 export function createDefaultFirebaseOrderService(): OrderService {
-  return createFirebaseOrderService(async (name, data) => {
-    const callable = httpsCallable(getFirebaseFunctions(), name, { timeout: TIMEOUTS[name] ?? 30_000 });
-    return (await callable(data)).data;
-  });
+  return createFirebaseOrderService((name, data) => callFunction(name, data, TIMEOUTS[name] ?? 30_000));
 }

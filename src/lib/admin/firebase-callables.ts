@@ -5,8 +5,7 @@
 // - Los errores (`HttpsError` con `details.code`) se convierten en `AdminServiceError` con mensajes en español.
 // - `deleteProducts` / `restoreProducts` responden `BatchReport` en el contrato; aquí se adaptan a los
 //   `DeleteReport` / `RestoreReport` que ya usa la interfaz.
-import { httpsCallable } from "firebase/functions";
-import { getFirebaseFunctions } from "@/lib/firebase/client";
+import { callFunction } from "@/lib/firebase/client";
 import { AdminServiceError } from "./errors";
 import type { RefundInput } from "./orders";
 import type { CommerceUpdateResponse } from "./service";
@@ -123,9 +122,7 @@ const TIMEOUTS: Record<string, number> = {
 export function createFirebaseInvoker(): CallableInvoker {
   return async (name, data) => {
     try {
-      const callable = httpsCallable(getFirebaseFunctions(), name, { timeout: TIMEOUTS[name] ?? 40_000 });
-      const result = await callable(data);
-      return result.data;
+      return await callFunction(name, data, TIMEOUTS[name] ?? 40_000);
     } catch (error) {
       throw mapCallableError(error);
     }

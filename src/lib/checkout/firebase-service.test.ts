@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createFirebaseOrderService, mapOrderError } from "./firebase-service";
 import { OrderServiceError } from "./types";
 
-vi.mock("@/lib/firebase/client", () => ({ getFirebaseFunctions: () => ({}) }));
+vi.mock("@/lib/firebase/client", () => ({ callFunction: async () => ({}) }));
 
 const fnError = (code: string, details?: unknown) => Object.assign(new Error("x"), { code: `functions/${code}`, details });
 
