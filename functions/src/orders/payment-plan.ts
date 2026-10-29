@@ -7,7 +7,7 @@ import { appendHistory, type OrderDoc, type ReviewReason, type StatusEntry } fro
 // 4.5). Reciben el pedido y los productos ya leídos y devuelven un PLAN (parche del pedido,
 // cambios de stock y métricas). La capa transaccional solo lo aplica. Sin Firestore ni reloj.
 
-export type ConfirmMode = "flow" | "transfer" | "accept_review";
+export type ConfirmMode = "flow" | "accept_review";
 
 export type MismatchReason = "AMOUNT_MISMATCH" | "CURRENCY_MISMATCH";
 
@@ -48,7 +48,6 @@ const payEntry = (order: OrderDoc, now: Date, actor: string, to: string, note?: 
 export function confirmNeedsProducts(order: OrderDoc, mode: ConfirmMode, mismatch: MismatchReason | undefined): boolean {
   if (mismatch !== undefined && mode === "flow") return false;
   if (mode === "flow") return order.paymentStatus === "pending_payment" || order.paymentStatus === "expired";
-  if (mode === "transfer") return order.paymentStatus === "pending_payment" || order.paymentStatus === "expired";
   return order.paymentStatus === "payment_review";
 }
 
@@ -115,16 +114,16 @@ function payWithStock(input: ConfirmInput, fallback: "review" | "error"): Confir
 }
 
 /**
- * Confirma un pago (Flow, transferencia o aceptación de una revisión). Tabla de decisiones:
+ * Confirma un pago (Flow o aceptación de una revisión). Tabla de decisiones:
  *
- * | estado actual     | flow                                  | transfer             | accept_review   |
- * |-------------------|---------------------------------------|----------------------|-----------------|
- * | pending_payment   | monto mal -> review; si no, paid      | paid                 | invalid         |
- * | expired           | monto mal -> review; re-reserva o review NO_STOCK | igual (review NO_STOCK) | invalid |
- * | cancelled         | review PAID_AFTER_CANCEL (o el monto) | invalid              | invalid         |
- * | payment_review    | noop                                  | invalid              | paid o out_of_stock |
- * | paid              | noop                                  | noop (alreadyPaid)   | invalid         |
- * | refunded          | noop (nunca vuelve a paid)            | invalid              | invalid         |
+ * | estado actual     | flow                                  | accept_review   |
+ * |-------------------|---------------------------------------|-----------------|
+ * | pending_payment   | monto mal -> review; si no, paid      | invalid         |
+ * | expired           | monto mal -> review; re-reserva o review NO_STOCK | invalid |
+ * | cancelled         | review PAID_AFTER_CANCEL (o el monto) | invalid         |
+ * | payment_review    | noop                                  | paid o out_of_stock |
+ * | paid              | noop                                  | invalid         |
+ * | refunded          | noop (nunca vuelve a paid)            | invalid         |
  */
 export function planPaymentConfirmation(input: ConfirmInput): ConfirmPlan {
   const { order, mode } = input;
@@ -136,17 +135,12 @@ export function planPaymentConfirmation(input: ConfirmInput): ConfirmPlan {
 
   if (status === "paid") return { kind: "noop", reason: "already_paid" };
 
-  if (mode === "flow") {
-    if (status === "payment_review") return { kind: "noop", reason: "already_review" };
-    if (status === "refunded") return { kind: "noop", reason: "refunded" };
-    if (status === "cancelled") return reviewPlan(input, input.mismatch ?? "PAID_AFTER_CANCEL");
-    if (input.mismatch !== undefined) return reviewPlan(input, input.mismatch);
-    return payWithStock(input, "review");
-  }
-
-  // transfer
-  if (status === "pending_payment" || status === "expired") return payWithStock(input, "review");
-  return { kind: "invalid" };
+  // flow
+  if (status === "payment_review") return { kind: "noop", reason: "already_review" };
+  if (status === "refunded") return { kind: "noop", reason: "refunded" };
+  if (status === "cancelled") return reviewPlan(input, input.mismatch ?? "PAID_AFTER_CANCEL");
+  if (input.mismatch !== undefined) return reviewPlan(input, input.mismatch);
+  return payWithStock(input, "review");
 }
 
 // --- Liberar (expirar o cancelar) ---

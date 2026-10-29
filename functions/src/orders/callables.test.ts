@@ -21,11 +21,10 @@ const endpointOf = (fn: unknown): Endpoint => (fn as { __endpoint: Endpoint })._
 const ALL = { ...orders, ...payments } as Record<string, unknown>;
 
 describe("funciones exportadas de orders/ y payments/", () => {
-  it("exporta exactamente las 12 funciones del contrato (secciones 3, 4 y 5.10)", () => {
+  it("exporta exactamente las 11 funciones del contrato (secciones 3, 4 y 5.10)", () => {
     expect(Object.keys(ALL).sort()).toEqual(
       [
         "cancelOrder",
-        "confirmTransferPayment",
         "createFlowPayment",
         "createOrder",
         "flowConfirm",
@@ -46,7 +45,6 @@ describe("funciones exportadas de orders/ y payments/", () => {
       createFlowPayment: { timeout: 30, max: 10 },
       flowConfirm: { timeout: 30, max: 10 },
       getOrderStatus: { timeout: 20, max: 10 },
-      confirmTransferPayment: { timeout: 30, max: 5 },
       resolvePaymentReview: { timeout: 30, max: 5 },
       cancelOrder: { timeout: 30, max: 5 },
       updateFulfillment: { timeout: 15, max: 5 },
@@ -88,7 +86,7 @@ describe("funciones exportadas de orders/ y payments/", () => {
 });
 
 describe("autorización de los callables de admin (test 13)", () => {
-  const ADMIN_FUNCTIONS = ["confirmTransferPayment", "resolvePaymentReview", "cancelOrder", "updateFulfillment", "recordManualRefund"] as const;
+  const ADMIN_FUNCTIONS = ["resolvePaymentReview", "cancelOrder", "updateFulfillment", "recordManualRefund"] as const;
   type Runnable = { run: (request: unknown) => Promise<unknown> };
   const call = (name: string, auth: unknown, data: unknown = {}) =>
     (ALL[name] as Runnable).run({ data, auth, rawRequest: { headers: {}, ip: "203.0.113.5" } });

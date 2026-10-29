@@ -155,16 +155,6 @@ export function SalesView() {
             <option value="refunded">Reembolsadas</option>
           </select>
         </div>
-        <div className={ui.field}>
-          <label className={ui.label} htmlFor={`${id}-method`}>
-            Medio de pago
-          </label>
-          <select id={`${id}-method`} className={ui.select} value={filters.method} onChange={(e) => update({ method: e.target.value as SaleFilters["method"] })}>
-            <option value="all">Todos</option>
-            <option value="flow">{METHOD_LABELS.flow}</option>
-            <option value="transfer">{METHOD_LABELS.transfer}</option>
-          </select>
-        </div>
       </form>
 
       {!demo && orders.length >= FIREBASE_ORDERS_LIMIT ? (

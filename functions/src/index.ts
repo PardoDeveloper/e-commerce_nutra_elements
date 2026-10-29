@@ -3,7 +3,7 @@ import "./common/options.js";
 
 // Las funciones del contrato (docs/team/contracts/functions.md, sección 2) se exportan aquí
 // a medida que se implementen:
-//   orders/    -> createOrder, getOrderStatus, confirmTransferPayment, resolvePaymentReview,
+//   orders/    -> createOrder, getOrderStatus, resolvePaymentReview,
 //                 cancelOrder, updateFulfillment, recordManualRefund, releaseExpiredReservations
 //   payments/  -> createFlowPayment, flowConfirm
 //   metrics/   -> lógica de métricas (compartida por orders/)
@@ -16,7 +16,7 @@ export * from "./catalog/index.js";
 export * from "./admin/index.js";
 // triggers/: revalidación ISR (otro agente).
 export * from "./triggers/index.js";
-// orders/: createOrder, getOrderStatus, confirmTransferPayment, resolvePaymentReview, cancelOrder,
+// orders/: createOrder, getOrderStatus, resolvePaymentReview, cancelOrder,
 // updateFulfillment, recordManualRefund, releaseExpiredReservations.
 export * from "./orders/index.js";
 // payments/: createFlowPayment, flowConfirm, getFlowCredentialsStatus, setFlowCredentials.

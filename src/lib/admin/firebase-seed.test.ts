@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { TEST_BANK_HOLDER_RUT, isTestBank } from "@/lib/bank";
 import { buildInitialCategories, buildInitialPrivateSettings, buildInitialPublicSettings } from "./firebase-seed";
 
 const isStr = (v: unknown, min: number, max: number) => typeof v === "string" && v.length >= min && v.length <= max;
@@ -23,14 +22,10 @@ describe("ajustes iniciales (espejo de validPublicSettings)", () => {
 describe("ajustes privados iniciales (espejo de validPrivateSettings)", () => {
   const d = buildInitialPrivateSettings();
   it("tiene exactamente las claves y valores válidos", () => {
-    expect(Object.keys(d).sort()).toEqual(["bank", "limits", "orderNumberStart", "reservationMinutes"]);
+    expect(Object.keys(d).sort()).toEqual(["limits", "orderNumberStart", "reservationMinutes"]);
     const r = d.reservationMinutes as Record<string, unknown>;
-    expect(isInt(r.flow, 5, 240) && isInt(r.transfer, 60, 10080)).toBe(true);
-    const bank = d.bank as Record<string, unknown>;
-    for (const key of ["bankName", "accountType", "accountNumber", "holderName", "holderRut"]) expect(isStr(bank[key], 1, 100), key).toBe(true);
-    expect(bank.holderRut).toBe(TEST_BANK_HOLDER_RUT);
-    expect(bank.holderRut).not.toMatch(/\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]/);
-    expect(isTestBank(bank as { bankName: string })).toBe(true);
+    expect(Object.keys(r)).toEqual(["flow"]);
+    expect(isInt(r.flow, 5, 240)).toBe(true);
     expect(d.orderNumberStart).toBe(1);
     const l = d.limits as Record<string, number>;
     expect(isInt(l.createOrderPerIpPer10Min, 1, 100) && isInt(l.pendingOrdersPerEmail, 1, 50)).toBe(true);

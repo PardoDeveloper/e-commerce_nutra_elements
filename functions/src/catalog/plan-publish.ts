@@ -40,9 +40,7 @@ export function publishProblems(product: ProductData, ctx: PublishContext): Publ
     problems.push({ code: "DUPLICATE_SLUG", label: "otro producto usa el mismo slug" });
   }
 
-  if (product.description === null || product.description.trim().length === 0) {
-    problems.push({ code: "MISSING_DESCRIPTION", label: "falta la descripción" });
-  }
+  // La descripción es opcional (D-042): sin ella, la ficha usa un texto plantilla.
 
   // La categoría es opcional (D-040); si el producto tiene una, debe existir y estar publicada.
   if (product.categoryId !== null) {

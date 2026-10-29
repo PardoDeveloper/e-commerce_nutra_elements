@@ -81,16 +81,6 @@ describe("callables del catálogo", () => {
 });
 
 describe("callables de pedidos", () => {
-  it("confirmTransferPayment: alreadyPaid no cambia nada", async () => {
-    const o = createOrderCallables(async () => ({ orderNumber: "NE-000001", paymentStatus: "paid", alreadyPaid: true, fulfillmentStatus: "preparing" }));
-    expect((await o.confirmTransferPayment({ orderNumber: "NE-000001" })).changed).toBe(false);
-  });
-
-  it("avisa cuando el pago pasa a revisión", async () => {
-    const o = createOrderCallables(async () => ({ paymentStatus: "payment_review", alreadyPaid: false }));
-    expect((await o.confirmTransferPayment({ orderNumber: "NE-000001" })).message).toMatch(/revisión/);
-  });
-
   it("updateFulfillment y recordManualRefund arman la petición del contrato", async () => {
     const invoke = vi.fn(async () => ({ changed: true, alreadyRefunded: false }));
     const o = createOrderCallables(invoke);

@@ -39,7 +39,7 @@ Tipos comunes
 ```ts
 type Clp = number;
 type Sku = string;
-type PaymentMethod = 'flow' | 'transfer';
+type PaymentMethod = 'flow';                 // solo Flow (D-044)
 type PaymentStatus = 'pending_payment' | 'paid' | 'payment_review' | 'expired' | 'cancelled' | 'refunded';   // 'refunded' es terminal; etiqueta "Reembolsado"
 type RefundMethod = 'flow' | 'transfer';
 type FulfillmentStatus = 'preparing' | 'ready_for_pickup' | 'on_route' | 'delivered';
@@ -71,7 +71,7 @@ Errores comunes a todas las callables
 | 2 | `createFlowPayment` | callable | public (número + token) + App Check | 256 MiB / 30 s / 10 |
 | 3 | `flowConfirm` | HTTP (`onRequest`) | flow (firma vía `getStatus`) | 256 MiB / 30 s / 10 |
 | 4 | `getOrderStatus` | callable | public (número + token) + App Check | 256 MiB / 20 s / 10 |
-| 5 | `confirmTransferPayment` | callable | admin | 256 MiB / 30 s / 5 |
+| 5 | ~~`confirmTransferPayment`~~ | — | — | Eliminada (D-044): solo se paga con Flow |
 | 6 | `resolvePaymentReview` | callable | admin | 256 MiB / 30 s / 5 |
 | 7 | `cancelOrder` | callable | admin | 256 MiB / 30 s / 5 |
 | 8 | `updateFulfillment` | callable | admin | 256 MiB / 15 s / 5 |
@@ -133,7 +133,7 @@ interface CreateOrderResponse {
   freeShippingApplied: boolean;
   items: { sku: Sku; name: string; unitFinalPrice: Clp; qty: number; lineTotal: Clp }[];
   reservedUntil: string;              // ISO
-  next: 'pay_with_flow' | 'show_transfer_instructions';
+  next: 'pay_with_flow';
 }
 ```
 - Los precios del `response` son informativos para pintar la confirmación; lo que vale es el pedido en el servidor. El cliente **no** envía nunca precios, descuentos, envío ni total.
@@ -253,10 +253,6 @@ interface GetOrderStatusResponse {
   subtotal: Clp;
   shipping: Clp;
   total: Clp;
-  transferInstructions?: {             // solo si paymentMethod == 'transfer' y paymentStatus == 'pending_payment'
-    bankName: string; accountType: string; accountNumber: string; holderName: string; holderRut: string; contactEmail?: string;
-    amount: Clp; reference: string;    // reference = orderNumber
-  };
   trackingNote: string;                // texto fijo: "Guarda tu número de pedido; con él puedes seguir tu despacho en DispatchTrack."
 }
 ```
@@ -285,14 +281,8 @@ Todas: callable, `admin`, `enforceAppCheck`. Quien ejecuta se anota en `statusHi
 | `not-found` | `ORDER_NOT_FOUND` | el pedido no existe |
 | `failed-precondition` | `INVALID_TRANSITION` | la transición no está en la tabla de data-model.md 6 (el mensaje indica el estado actual) |
 
-### 4.1 `confirmTransferPayment`
-```ts
-interface ConfirmTransferRequest { orderNumber: string; reference?: string /* <=100 */; note?: string /* <=300 */ }
-interface ConfirmTransferResponse { orderNumber: string; paymentStatus: 'paid' | 'payment_review'; alreadyPaid: boolean; fulfillmentStatus: FulfillmentStatus | null }
-```
-- Solo `paymentMethod == "transfer"` (`ORDER_NOT_TRANSFER`).
-- `pending_payment → paid` (confirma la venta como en `flowConfirm`, con métricas). `expired` → re-reserva; si no hay stock, resultado `payment_review` (`NO_STOCK_AFTER_EXPIRY`) y respuesta 200 con ese estado (el dinero ya se recibió). `paid` → `alreadyPaid: true`, sin efectos. `cancelled` y `payment_review` → `INVALID_TRANSITION`.
-- Idempotente: se apoya en el estado dentro de la transacción. Escribe `transfer {confirmedBy, confirmedAt, reference, note}`.
+### 4.1 ~~`confirmTransferPayment`~~ (eliminada, D-044)
+Solo se paga con Flow: no hay pagos por transferencia que confirmar a mano.
 
 ### 4.2 `resolvePaymentReview`
 ```ts
@@ -420,7 +410,7 @@ Reglas comunes de los lotes
 - **Auditoría (v1.3)**: `imports/{id}` se guarda **después** de las transacciones de productos, no es atómica con ellas. Si un trozo falla tras haber aplicado otros, se guarda un registro parcial con la advertencia `PARTIAL_FAILURE` y se relanza el error; repetir el lote es seguro.
 - **Números estrictos (v1.3)**: `"1,000"` y `"1,5"` son inválidos (ambiguos); `"1.000"` es 1000 (miles chilenos); `-0` no se guarda. El servidor manda sobre el prototipo del cliente.
 - **Slug único (v1.3)**: el slug debe ser único entre productos **vigentes** (los eliminados no cuentan). Si dos productos ya comparten slug, ninguno se publica hasta cambiar uno.
-- **Códigos de fila inválida (v1.3, lista completa)**: `INVALID_SKU`, `DUPLICATE_SKU`, `SKU_NOT_FOUND`, `PRODUCT_DELETED`, `INVALID_PRODUCT_DATA`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK`, `INVALID_ACTIVE`, `DISCOUNT_TOO_HIGH`, `ALREADY_DELETED`, `NOT_DELETED`, `NOT_ACTIVE`, `MISSING_NAME`, `MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG`, `MISSING_DESCRIPTION`, `INVALID_CATEGORY`, `MISSING_IMAGE`. En publicación, `code` es el primer problema y `message` los lista todos.
+- **Códigos de fila inválida (v1.3, lista completa)**: `INVALID_SKU`, `DUPLICATE_SKU`, `SKU_NOT_FOUND`, `PRODUCT_DELETED`, `INVALID_PRODUCT_DATA`, `INVALID_NAME`, `INVALID_PRICE`, `INVALID_STOCK`, `EMPTY_STOCK`, `INVALID_ACTIVE`, `DISCOUNT_TOO_HIGH`, `ALREADY_DELETED`, `NOT_DELETED`, `NOT_ACTIVE`, `MISSING_NAME`, `MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG`, `INVALID_CATEGORY`, `MISSING_IMAGE`. En publicación, `code` es el primer problema y `message` los lista todos.
 - Revalidación: cada producto modificado dispara `onProductWritten` (sección 8). Un lote de 150 productos genera ≤150 revalidaciones agrupables; costo despreciable.
 
 ### 5.1 `importCatalog` (planilla de Control Farma, D-016, D-018)
@@ -484,7 +474,7 @@ type SetPublishedResponse = BatchReport;
 ```
 - Un SKU eliminado (`deletedAt != null`) es fila inválida `PRODUCT_DELETED`, tanto al publicar como al despublicar (ya está despublicado; restaurar primero, 5.9).
 - Despublicar: siempre permitido para productos vigentes.
-- Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `description` no vacía (`MISSING_DESCRIPTION`), `categoryId` opcional; si no es null, existente y con `published == true` (`INVALID_CATEGORY`, D-040), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
+- Publicar: cada producto debe cumplir **todo** esto o la fila es inválida con su código: `active == true` (`NOT_ACTIVE`), `name` no vacío, `slug` válido y **único** (`MISSING_SLUG`, `INVALID_SLUG`, `DUPLICATE_SLUG` — también contra otros SKU del mismo lote), `categoryId` opcional; si no es null, existente y con `published == true` (`INVALID_CATEGORY`, D-040), al menos una imagen con `path` en `products/{sku}/` y `alt` (`MISSING_IMAGE`), `price >= 1` (`INVALID_PRICE`). Fija `publishedAt` la primera vez.
 - Un producto publicado sin stock sigue siendo público (se muestra "agotado"); no se despublica solo.
 - Idempotente. Revalidación: `onProductWritten` revalida ficha, categoría, `/productos`, `/` y el sitemap.
 

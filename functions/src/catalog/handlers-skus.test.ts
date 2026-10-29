@@ -159,21 +159,19 @@ describe("setProductsPublished", () => {
     store.seedProduct("a", ready("a", { active: false }));
     store.seedProduct("b", ready("b", { slug: null }));
     store.seedProduct("c", ready("c", { slug: "Mal Slug" }));
-    store.seedProduct("d", ready("d", { description: "  " }));
     store.seedProduct("f", ready("f", { categoryId: "no-existe" }));
     store.seedProduct("g", ready("g", { categoryId: "oculta" }));
     store.seedProduct("h", ready("h", { images: [] }));
     store.seedProduct("i", ready("i", { images: [{ path: "products/otro/a.webp", alt: "x" }] }));
     store.seedProduct("j", ready("j", { images: [{ path: "products/j/a.webp", alt: " " }] }));
     store.seedProduct("k", ready("k", { name: "" }));
-    const skus = ["a", "b", "c", "d", "f", "g", "h", "i", "j", "k"];
+    const skus = ["a", "b", "c", "f", "g", "h", "i", "j", "k"];
     const report = await handleSetProductsPublished(store, { skus, published: true }, UID);
     expect(report.updated).toBe(0);
     expect(report.invalid.map((r) => r.code)).toEqual([
       "NOT_ACTIVE",
       "MISSING_SLUG",
       "INVALID_SLUG",
-      "MISSING_DESCRIPTION",
       "INVALID_CATEGORY",
       "INVALID_CATEGORY",
       "MISSING_IMAGE",
@@ -188,7 +186,15 @@ describe("setProductsPublished", () => {
     const store = seeded();
     store.seedProduct("1", productFixture("1"));
     const report = await handleSetProductsPublished(store, { skus: ["1"], published: true }, UID);
-    expect(report.invalid[0]?.message).toMatch(/slug.*descripción.*imagen/);
+    expect(report.invalid[0]?.message).toMatch(/slug.*imagen/);
+  });
+
+  it("publica un producto sin descripción: es opcional (D-042)", async () => {
+    const store = seeded();
+    store.seedProduct("1", ready("1", { description: null }));
+    const report = await handleSetProductsPublished(store, { skus: ["1"], published: true }, UID);
+    expect(report).toMatchObject({ updated: 1, invalid: [] });
+    expect(store.product("1")["published"]).toBe(true);
   });
 
   it("publica un producto sin categoría: es opcional (D-040)", async () => {

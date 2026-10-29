@@ -322,12 +322,6 @@
   font-size: var(--text-sm);
 }
 
-.perUnit {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
 .qtyRow {
   display: flex;
   flex-wrap: wrap;
@@ -478,4 +472,19 @@
 .faqQ {
   font: inherit;
   margin: 0;
+}
+
+/* Mapa de la tienda en /nosotros (iframe de Google Maps). */
+.map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+@media (min-width: 768px) {
+  .map {
+    aspect-ratio: 16 / 9;
+  }
 }

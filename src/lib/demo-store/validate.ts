@@ -45,7 +45,7 @@ const isStr = (v: unknown, min: number, max: number): v is string => typeof v ==
 // `family` ya no existe (D-040), pero se acepta y se ignora para no rechazar lo guardado antes.
 const FIELDS = [
   "sku", "name", "slug", "description", "shortDescription", "categoryId", "images", "price", "discount", "stock",
-  "active", "published", "format", "unitsPerPack", "family", "seo", "deletedAt", "deletedBy",
+  "active", "published", "format", "unitsPerPack", "featured", "family", "seo", "deletedAt", "deletedBy",
   "commissionPerUnit",
 ] as const;
 
@@ -70,6 +70,7 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
   if (typeof raw.published !== "boolean") bad("published", "debe ser booleano.");
   if (!(raw.format === null || isStr(raw.format, 0, 60))) bad("format", "admite hasta 60 caracteres.");
   if (!(raw.unitsPerPack === null || isInt(raw.unitsPerPack, 1, 10_000))) bad("unitsPerPack", "debe ser un entero entre 1 y 10.000.");
+  if (!(raw.featured === undefined || typeof raw.featured === "boolean")) bad("featured", "debe ser booleano.");
   if (!(raw.deletedBy === null || isStr(raw.deletedBy, 1, 64))) bad("deletedBy", "no es válido.");
   if (!(raw.commissionPerUnit === undefined || raw.commissionPerUnit === null || isInt(raw.commissionPerUnit, 0, 10_000_000))) bad("commissionPerUnit", "debe ser un entero entre 0 y 10.000.000.");
   if (!(raw.deletedAt === null || (isStr(raw.deletedAt, 10, 40) && !Number.isNaN(Date.parse(raw.deletedAt))))) bad("deletedAt", "debe ser una fecha ISO.");
@@ -135,6 +136,7 @@ export function validateProductInput(raw: unknown): ValidationResult<StoredProdu
       seo,
       deletedAt: raw.deletedAt as string | null,
       deletedBy: raw.deletedBy as string | null,
+      ...(raw.featured !== undefined ? { featured: raw.featured as boolean } : {}),
       ...(raw.commissionPerUnit !== undefined ? { commissionPerUnit: raw.commissionPerUnit as number | null } : {}),
     },
   };

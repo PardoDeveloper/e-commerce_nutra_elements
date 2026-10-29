@@ -49,13 +49,6 @@ describe("servicio simulado", () => {
     expect(calls).toBe(1);
   });
 
-  it("confirmar la transferencia paga el pedido", async () => {
-    const svc = setup();
-    const r = await svc.confirmTransferPayment({ orderNumber: "NE-000001", reference: "123" });
-    expect(r.order.paymentStatus).toBe("paid");
-    expect(svc.getState().orders[0]?.fulfillmentStatus).toBe("preparing");
-  });
-
   it("cancelar libera la reserva y devuelve el stock", async () => {
     const svc = setup();
     await svc.cancelOrder({ orderNumber: "NE-000001", reason: "Sin pago" });

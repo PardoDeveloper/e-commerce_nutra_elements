@@ -108,7 +108,7 @@ Regla: **una intención principal por URL**.
 | `/productos/[slug]` | "[nombre producto] [N] cápsulas" | forma química, dosis, marca | transaccional por SKU |
 | `/nosotros` | qué es Nutra Elements, marca propia | calidad, Puente Alto | marca |
 | `/contacto` | tienda de suplementos Puente Alto, retiro en tienda | horario, dirección, contacto | local + marca |
-| `/preguntas-frecuentes` | preguntas de compra: despacho, retiro, pagos, seguimiento | $3.990, Flow, transferencia, DispatchTrack | soporte |
+| `/preguntas-frecuentes` | preguntas de compra: despacho, retiro, pagos, seguimiento | $3.990, Flow, DispatchTrack | soporte |
 
 Reglas anti-canibalización:
 1. Las fichas apuntan a **producto + forma + cantidad** ("Citrato de magnesio 120 cápsulas"); el término genérico ("magnesio") es de la categoría.
@@ -129,7 +129,7 @@ Por qué:
 
 Cómo evitar el contenido duplicado (el riesgo real es el texto casi idéntico entre tamaños):
 1. **Diferenciar lo que cambia**: title, H1, meta description, slug, `name` del JSON-LD y `alt` de la imagen **incluyen la cantidad** de cápsulas.
-2. Cada ficha incluye un **bloque propio por SKU**: cantidad de cápsulas, precio por cápsula, duración estimada del frasco según la dosis del rótulo (solo si el rótulo da una dosis diaria y se calcula con ella), y su propio stock.
+2. Cada ficha incluye un **bloque propio por SKU**: cantidad de cápsulas, duración estimada del frasco según la dosis del rótulo (solo si el rótulo da una dosis diaria y se calcula con ella), y su propio stock.
 3. La descripción larga y compartida de la familia es aceptable, pero **no más de la mitad del texto visible** de la ficha. El resto es específico del SKU y de datos estructurados (tabla "Información del producto").
 4. Sección **"Otros formatos de este producto"** en cada ficha: enlaces a los demás tamaños (anchor: nombre + cantidad). Requiere que el admin marque la familia: **campo `familyId` (o `family`) por producto**; yo lo pido al firebase-architect.
 5. Fichas de tamaños sin stock siguen publicadas con `OutOfStock` (no se des-indexan).

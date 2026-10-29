@@ -5,7 +5,6 @@ import type { AdminOrder, FulfillmentStatus, RefundMethod, StatusHistoryEntry } 
 
 export type OrderErrorCode =
   | "INVALID_TRANSITION"
-  | "ORDER_NOT_TRANSFER"
   | "ORDER_NOT_PAID"
   | "REASON_REQUIRED"
   | "INVALID_REFUND_AMOUNT"
@@ -49,7 +48,6 @@ export function previousFulfillment(order: Logistics): FulfillmentStatus | null 
 }
 
 export interface AllowedActions {
-  confirmTransfer: boolean;
   cancel: boolean;
   advanceTo: FulfillmentStatus | null;
   backTo: FulfillmentStatus | null;
@@ -58,9 +56,7 @@ export interface AllowedActions {
 
 /** Solo estas acciones se muestran en el detalle del pedido. */
 export function allowedActions(order: AdminOrder): AllowedActions {
-  const pendingLike = order.paymentStatus === "pending_payment" || order.paymentStatus === "expired";
   return {
-    confirmTransfer: order.paymentMethod === "transfer" && pendingLike,
     cancel: order.paymentStatus === "pending_payment",
     advanceTo: nextFulfillment(order),
     backTo: previousFulfillment(order),
@@ -70,62 +66,6 @@ export function allowedActions(order: AdminOrder): AllowedActions {
 
 function withHistory(order: AdminOrder, entries: StatusHistoryEntry[], at: string): AdminOrder {
   return { ...order, statusHistory: [...order.statusHistory, ...entries].slice(-50), updatedAt: at };
-}
-
-export function confirmTransferPayment(
-  order: AdminOrder,
-  input: { reference?: string; note?: string },
-  ctx: { now: string; by: string; hasStock: boolean },
-): OrderResult {
-  if (order.paymentMethod !== "transfer") return fail("ORDER_NOT_TRANSFER", "El pedido no se paga por transferencia.");
-  if (order.paymentStatus === "paid") {
-    return { ok: true, order, restockItems: false, releaseItems: false, changed: false, message: "El pedido ya estaba pagado." };
-  }
-  if (order.paymentStatus !== "pending_payment" && order.paymentStatus !== "expired") {
-    return fail("INVALID_TRANSITION", `No se puede confirmar un pedido en estado "${order.paymentStatus}".`);
-  }
-  if ((input.reference?.length ?? 0) > 100 || (input.note?.length ?? 0) > 300) {
-    return fail("INVALID_INPUT", "Referencia o nota demasiado largas.");
-  }
-  const transfer = { confirmedBy: ctx.by, confirmedAt: ctx.now, reference: input.reference, note: input.note };
-  if (order.paymentStatus === "expired" && !ctx.hasStock) {
-    // El dinero ya se recibió pero no hay stock: queda en revisión (respuesta 200 con ese estado).
-    const reviewed: AdminOrder = { ...order, paymentStatus: "payment_review", transfer };
-    return {
-      ok: true,
-      order: withHistory(
-        reviewed,
-        [{ at: ctx.now, kind: "payment", from: order.paymentStatus, to: "payment_review", by: ctx.by, note: "NO_STOCK_AFTER_EXPIRY" }],
-        ctx.now,
-      ),
-      restockItems: false,
-      releaseItems: false,
-      changed: true,
-      message: "Sin stock tras la expiración: el pedido pasó a revisión de pago.",
-    };
-  }
-  const paid: AdminOrder = {
-    ...order,
-    paymentStatus: "paid",
-    fulfillmentStatus: "preparing",
-    stockState: "committed",
-    paidAt: ctx.now,
-    transfer,
-  };
-  return {
-    ok: true,
-    order: withHistory(
-      paid,
-      [
-        { at: ctx.now, kind: "payment", from: order.paymentStatus, to: "paid", by: ctx.by, note: input.note },
-        { at: ctx.now, kind: "fulfillment", from: null, to: "preparing", by: "system" },
-      ],
-      ctx.now,
-    ),
-    restockItems: false,
-    releaseItems: false,
-    changed: true,
-  };
 }
 
 export function cancelOrder(order: AdminOrder, reason: string, ctx: { now: string; by: string }): OrderResult {

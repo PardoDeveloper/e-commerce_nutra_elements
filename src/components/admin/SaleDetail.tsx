@@ -244,12 +244,6 @@ export function SaleDetail({ orderNumber }: { orderNumber: string }) {
             <dd>{formatDateTime(order.createdAt)}</dd>
             <dt>Pagado</dt>
             <dd>{formatDateTime(order.paidAt)}</dd>
-            {order.transfer?.reference ? (
-              <>
-                <dt>Referencia</dt>
-                <dd>{order.transfer.reference}</dd>
-              </>
-            ) : null}
             {refunded ? (
               <>
                 <dt>Reembolso</dt>

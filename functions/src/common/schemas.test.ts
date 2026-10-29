@@ -50,14 +50,13 @@ describe("createOrderRequestSchema: caso válido", () => {
     expect(r.delivery).toEqual({ type: "pickup" });
   });
 
-  it("acepta transferencia y notas ausentes", () => {
-    const r = parseCreateOrderRequest(
-      withChange((x) => {
-        x["paymentMethod"] = "transfer";
-        delete deliveryOf(x)["notes"];
-      }),
-    );
-    expect(r.paymentMethod).toBe("transfer");
+  it("acepta notas ausentes", () => {
+    const r = parseCreateOrderRequest(withChange((x) => delete deliveryOf(x)["notes"]));
+    expect(r.paymentMethod).toBe("flow");
+  });
+
+  it("rechaza transferencia: solo Flow (D-044)", () => {
+    expect(() => parseCreateOrderRequest(withChange((x) => (x["paymentMethod"] = "transfer")))).toThrow();
   });
 
   it("recorta espacios y pasa clientRequestId a minúsculas", () => {

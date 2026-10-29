@@ -1,7 +1,6 @@
 // Datos que el servidor entrega a las pantallas de carrito y checkout (solo servidor).
 // El carrito del cliente guarda únicamente {sku, qty}; los precios llegan desde aquí (D-005).
 import { getProducts, getPublicSettings } from "@/lib/data";
-import { isTransferOffered } from "@/lib/bank";
 import { resolveDataSource } from "@/lib/data-source";
 import type { MockSettings } from "./mock-service";
 import { toCatalogEntry, type CatalogEntry } from "./summary";
@@ -9,8 +8,6 @@ import { toCatalogEntry, type CatalogEntry } from "./summary";
 export interface CheckoutData {
   catalog: Record<string, CatalogEntry>;
   settings: MockSettings;
-  /** ¿Se ofrece «Transferencia»? Ver `isTransferOffered`. */
-  transferAvailable: boolean;
 }
 
 /**
@@ -30,11 +27,7 @@ export async function loadCheckoutData(): Promise<CheckoutData> {
   const [products, settings] = await Promise.all([getProducts(), getPublicSettings()]);
   const catalog: Record<string, CatalogEntry> = {};
   for (const p of products) catalog[p.sku] = toCatalogEntry(p);
-  // settings/private (banco) no es legible con las reglas públicas del servidor: con firebase se trata como
-  // "sin datos bancarios" hasta que exista una Cloud Function que informe si hay banco real configurado.
-  const transferAvailable = isTransferOffered(resolveDataSource(), null);
   return {
-    transferAvailable,
     catalog,
     settings: {
       shippingFee: settings.shippingFee,

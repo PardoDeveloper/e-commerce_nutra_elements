@@ -34,7 +34,7 @@ Formato `[nombre-normalizado]-[N]-capsulas`; minúsculas, sin tildes ni ñ, sin 
 
 ```
 H1  {Nombre} {N} cápsulas                      (el mismo que alimenta el title; ej.: "Citrato de magnesio 120 cápsulas")
-  (bloque de compra: precio, estado de stock, selector de cantidad, botón agregar; precio por cápsula)
+  (bloque de compra: precio, estado de stock, selector de cantidad, botón agregar; sin precio por cápsula, D-043)
   H2  Descripción                               (texto de la familia + bloque propio del SKU; 80 a 200 palabras)
   H2  Información del producto                  (ingredientes, porción, cantidad de cápsulas, alérgenos; copiado del rótulo)
   H2  Modo de uso y advertencias                (copiado del rótulo)
@@ -43,7 +43,7 @@ H1  {Nombre} {N} cápsulas                      (el mismo que alimenta el title;
   H2  Productos relacionados                    (3 a 4, misma categoría; H3 = nombre)
 ```
 - Un solo H1. No hay H2 con alegaciones ("Beneficios", "Para qué sirve", "Propiedades") salvo que el profesional lo autorice texto por texto. **Evitar "Beneficios" como título de sección** (00 sección 7).
-- Bloque propio por SKU (anti-duplicado, 00 sección 5): cantidad de cápsulas, precio por cápsula, duración estimada según la dosis del rótulo (si hay), stock visible.
+- Bloque propio por SKU (anti-duplicado, 00 sección 5): cantidad de cápsulas, duración estimada según la dosis del rótulo (si hay), stock visible.
 - Un `FAQPage` en la ficha **no se emite**.
 
 ## JSON-LD

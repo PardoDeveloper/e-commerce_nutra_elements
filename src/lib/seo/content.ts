@@ -99,8 +99,8 @@ export const FAQ_SECTIONS: Array<{ title: string; items: Array<{ q: string; a: s
   {
     title: "Pagos",
     items: [
-      { q: "¿Qué medios de pago aceptan?", a: "Puedes pagar con Flow o con transferencia bancaria." },
-      { q: "¿Cuándo se confirma un pago por transferencia?", a: "Las transferencias se confirman de forma manual. Tu pedido queda registrado con su número NE-xxxxxx mientras esperamos el pago." },
+      { q: "¿Qué medios de pago aceptan?", a: "Pagas en línea a través de Flow, al finalizar tu compra." },
+      { q: "¿Cuándo se confirma mi pago?", a: "Cuando Flow aprueba el pago, tu pedido queda confirmado y ves su número NE-xxxxxx." },
     ],
   },
   {

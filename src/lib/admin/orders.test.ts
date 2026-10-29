@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   allowedActions,
   cancelOrder,
-  confirmTransferPayment,
   nextFulfillment,
   previousFulfillment,
   recordManualRefund,
@@ -14,19 +13,14 @@ const paid = (over = {}) =>
   makeOrder({ paymentStatus: "paid", fulfillmentStatus: "preparing", stockState: "committed", paidAt: "2026-10-12T12:00:00.000Z", ...over });
 
 describe("acciones permitidas por estado", () => {
-  it("pago pendiente por transferencia: confirmar y cancelar, nada más", () => {
-    expect(allowedActions(makeOrder())).toEqual({ confirmTransfer: true, cancel: true, advanceTo: null, backTo: null, refund: false });
+  it("pago pendiente: solo cancelar (el pago lo confirma Flow)", () => {
+    expect(allowedActions(makeOrder())).toEqual({ cancel: true, advanceTo: null, backTo: null, refund: false });
   });
-  it("pago pendiente con Flow: no se confirma a mano", () => {
-    expect(allowedActions(makeOrder({ paymentMethod: "flow" })).confirmTransfer).toBe(false);
-  });
-  it("expirado: se puede confirmar la transferencia, pero no cancelar", () => {
-    const a = allowedActions(makeOrder({ paymentStatus: "expired", stockState: "released" }));
-    expect(a.confirmTransfer).toBe(true);
-    expect(a.cancel).toBe(false);
+  it("expirado: sin acciones", () => {
+    expect(allowedActions(makeOrder({ paymentStatus: "expired", stockState: "released" }))).toEqual({ cancel: false, advanceTo: null, backTo: null, refund: false });
   });
   it("pagado en preparación: avanzar y reembolsar; no retroceder", () => {
-    expect(allowedActions(paid())).toEqual({ confirmTransfer: false, cancel: false, advanceTo: "on_route", backTo: null, refund: true });
+    expect(allowedActions(paid())).toEqual({ cancel: false, advanceTo: "on_route", backTo: null, refund: true });
   });
   it("entregado: retrocede un paso según el tipo de entrega", () => {
     expect(previousFulfillment(paid({ fulfillmentStatus: "delivered" }))).toBe("on_route");
@@ -38,39 +32,12 @@ describe("acciones permitidas por estado", () => {
   it("reembolsado, cancelado y en revisión: sin acciones", () => {
     for (const paymentStatus of ["refunded", "cancelled", "payment_review"] as const) {
       expect(allowedActions(makeOrder({ paymentStatus, fulfillmentStatus: "delivered" }))).toEqual({
-        confirmTransfer: false,
         cancel: false,
         advanceTo: null,
         backTo: null,
         refund: false,
       });
     }
-  });
-});
-
-describe("confirmTransferPayment", () => {
-  it("pasa a pagado, deja en preparación y confirma el stock", () => {
-    const r = confirmTransferPayment(makeOrder(), { reference: "ABC" }, { ...CTX, hasStock: true });
-    expect(r.ok && r.order.paymentStatus).toBe("paid");
-    expect(r.ok && r.order.fulfillmentStatus).toBe("preparing");
-    expect(r.ok && r.order.stockState).toBe("committed");
-    expect(r.ok && r.order.statusHistory.map((h) => h.to)).toEqual(["pending_payment", "paid", "preparing"]);
-  });
-  it("es idempotente si ya está pagado", () => {
-    const r = confirmTransferPayment(paid(), {}, { ...CTX, hasStock: true });
-    expect(r.ok && r.changed).toBe(false);
-  });
-  it("un pago de Flow no se confirma a mano", () => {
-    const r = confirmTransferPayment(makeOrder({ paymentMethod: "flow" }), {}, { ...CTX, hasStock: true });
-    expect(r).toMatchObject({ ok: false, code: "ORDER_NOT_TRANSFER" });
-  });
-  it("expirado sin stock queda en revisión de pago", () => {
-    const r = confirmTransferPayment(makeOrder({ paymentStatus: "expired", stockState: "released" }), {}, { ...CTX, hasStock: false });
-    expect(r.ok && r.order.paymentStatus).toBe("payment_review");
-  });
-  it("cancelado no se puede confirmar", () => {
-    const r = confirmTransferPayment(makeOrder({ paymentStatus: "cancelled" }), {}, { ...CTX, hasStock: true });
-    expect(r).toMatchObject({ ok: false, code: "INVALID_TRANSITION" });
   });
 });
 

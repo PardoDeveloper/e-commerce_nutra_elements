@@ -63,6 +63,7 @@ export const SETTINGS_PUBLIC: DocData = {
 };
 
 export const SETTINGS_PRIVATE: DocData = {
+  // Datos antiguos (D-044): la transferencia y el banco ya no se usan; se dejan para probar que se ignoran.
   reservationMinutes: { flow: 30, transfer: 2880 },
   bank: {
     bankName: "BANCO DE PRUEBA",

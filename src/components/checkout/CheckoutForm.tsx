@@ -31,8 +31,6 @@ import { OrderSummary } from "./OrderSummary";
 interface CheckoutFormProps {
   catalog: Record<string, CatalogEntry>;
   settings: MockSettings;
-  /** Falso con firebase si el banco es de prueba o no hay datos bancarios. */
-  transferAvailable?: boolean;
   /** "firebase": pedidos y pagos reales con las Cloud Functions; "demo": el simulado. */
   dataSource?: DataSource;
 }
@@ -46,7 +44,7 @@ const INITIAL: CheckoutFormValues = {
   communeCode: "",
   address: "",
   notes: "",
-  // Flow queda elegido por defecto; el comprador puede cambiar a transferencia.
+  // Flow es el único medio de pago (D-044).
   paymentMethod: "flow",
 };
 
@@ -130,7 +128,7 @@ function TextField({ name, label, value, error, onChange, disabled, type = "text
   );
 }
 
-export function CheckoutForm({ catalog, settings, transferAvailable = true, dataSource = "demo" }: CheckoutFormProps) {
+export function CheckoutForm({ catalog, settings, dataSource = "demo" }: CheckoutFormProps) {
   const router = useRouter();
   const cart = useCart();
   const [values, setValues] = useState<CheckoutFormValues>(INITIAL);
@@ -254,13 +252,6 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
     // Pedido creado: se guarda el token en este navegador (A2) para mostrar el pedido al volver de Flow.
     const storage = browserStorage();
     if (storage) rememberOrderToken(storage, order.orderNumber, order.accessToken);
-    if (order.next !== "pay_with_flow") {
-      // Transferencia: el número es la glosa del depósito, así que se muestra de inmediato.
-      setPhase("redirecting");
-      cartActions.clear();
-      router.push(`/pedido/${order.orderNumber}?${new URLSearchParams({ t: order.accessToken }).toString()}`);
-      return;
-    }
     await startFlowPayment(service, { orderNumber: order.orderNumber, accessToken: order.accessToken });
   }
 
@@ -457,27 +448,7 @@ export function CheckoutForm({ catalog, settings, transferAvailable = true, data
                   <span className={formStyles.hint}>Pago en línea. Reservamos tus productos por 30 minutos (simulado).</span>
                 </span>
               </label>
-              {transferAvailable ? (
-                <label className={formStyles.option}>
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="transfer"
-                    checked={values.paymentMethod === "transfer"}
-                    onChange={onChange}
-                    className={formStyles.radio}
-                    disabled={busy}
-                  />
-                  <span className={formStyles.optionText}>
-                    <span className={formStyles.optionTitle}>Transferencia bancaria</span>
-                    <span className={formStyles.hint}>Reservamos tus productos por 48 horas para que transfieras.</span>
-                  </span>
-                </label>
-              ) : null}
             </div>
-            {transferAvailable ? null : (
-              <p className={formStyles.hint}>La transferencia bancaria no está disponible por ahora.</p>
-            )}
             {errors.paymentMethod ? (
               <span id="field-paymentMethod-error" className={formStyles.error}>
                 {errors.paymentMethod}

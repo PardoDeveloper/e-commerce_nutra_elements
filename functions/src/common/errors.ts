@@ -29,7 +29,6 @@ const ERROR_CATALOG = {
   ORDER_EXPIRED: ["failed-precondition", "El pedido expiró. Crea uno nuevo."],
   FLOW_UNAVAILABLE: ["unavailable", "El medio de pago no está disponible. Intenta de nuevo."],
   INVALID_TRANSITION: ["failed-precondition", "El pedido no puede pasar a ese estado."],
-  ORDER_NOT_TRANSFER: ["failed-precondition", "El pedido no es de transferencia."],
   ORDER_NOT_PAID: ["failed-precondition", "El pedido no está pagado."],
   REASON_REQUIRED: ["invalid-argument", "Indica el motivo del cambio."],
   INVALID_REFUND_AMOUNT: ["invalid-argument", "El monto del reembolso no es válido."],

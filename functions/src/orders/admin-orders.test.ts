@@ -4,7 +4,6 @@ import { getAppErrorCode } from "../common/errors.js";
 import { assertAdmin } from "../common/auth.js";
 import {
   handleCancelOrder,
-  handleConfirmTransferPayment,
   handleRecordManualRefund,
   handleResolvePaymentReview,
   handleUpdateFulfillment,
@@ -43,66 +42,6 @@ describe("autorización (test 13)", () => {
     expect(() => assertAdmin(withAdmin(undefined))).toThrowError(expect.objectContaining({ code: "permission-denied", details: { code: "NOT_ADMIN" } }));
     expect(() => assertAdmin(withAdmin("true"))).toThrowError(expect.objectContaining({ details: { code: "NOT_ADMIN" } }));
     expect(assertAdmin(withAdmin(true))).toBe("u1");
-  });
-});
-
-describe("confirmTransferPayment (4.1)", () => {
-  const transfer = { paymentMethod: "transfer", reservedUntil: new Date(T0.getTime() + 2880 * 60_000) };
-
-  it("pending_payment -> paid con transfer{...}, preparing y métricas", async () => {
-    const env = setup(transfer);
-    const res = await handleConfirmTransferPayment(env.deps, { ...NUM, reference: "Dep. 1234", note: "Verificado" }, ADMIN_UID);
-    expect(res).toEqual({ orderNumber: "NE-000001", paymentStatus: "paid", alreadyPaid: false, fulfillmentStatus: "preparing" });
-    expect(o(env)).toMatchObject({ paymentStatus: "paid", fulfillmentStatus: "preparing", stockState: "committed" });
-    expect(o(env)["transfer"]).toEqual({ confirmedBy: ADMIN_UID, confirmedAt: env.clock(), reference: "Dep. 1234", note: "Verificado" });
-    expect(productStock(env.db, "1001")).toEqual({ stock: 3, reserved: 0, inStock: true });
-    expect(day(env)).toMatchObject({ ordersCount: 1, revenue: 32762 });
-    const history = o(env)["statusHistory"] as { by: string }[];
-    expect(history[1]?.by).toBe(ADMIN_UID);
-  });
-
-  it("idempotente: repetir -> alreadyPaid true sin efectos nuevos (también en paralelo)", async () => {
-    const env = setup(transfer);
-    await handleConfirmTransferPayment(env.deps, NUM, ADMIN_UID);
-    const before = env.db.commits;
-    const again = await handleConfirmTransferPayment(env.deps, NUM, ADMIN_UID);
-    expect(again).toMatchObject({ alreadyPaid: true, paymentStatus: "paid", fulfillmentStatus: "preparing" });
-    expect(env.db.commits).toBe(before);
-
-    const env2 = setup(transfer);
-    const results = await Promise.all(Array.from({ length: 5 }, () => handleConfirmTransferPayment(env2.deps, NUM, ADMIN_UID)));
-    expect(results.filter((r) => !r.alreadyPaid)).toHaveLength(1);
-    expect(day(env2)).toMatchObject({ ordersCount: 1, revenue: 32762 });
-  });
-
-  it("expired con stock -> paid re-reservando; expired sin stock -> payment_review con 200", async () => {
-    const withStock = setup({ ...transfer, paymentStatus: "expired", stockState: "released" }, { s1001: 5, r1001: 0, s1002: 5, r1002: 0 });
-    expect(await handleConfirmTransferPayment(withStock.deps, NUM, ADMIN_UID)).toMatchObject({ paymentStatus: "paid" });
-    expect(productStock(withStock.db, "1001").stock).toBe(3);
-
-    const noStock = setup({ ...transfer, paymentStatus: "expired", stockState: "released" }, { s1001: 1, r1001: 0, s1002: 5, r1002: 0 });
-    const res = await handleConfirmTransferPayment(noStock.deps, NUM, ADMIN_UID);
-    expect(res).toEqual({ orderNumber: "NE-000001", paymentStatus: "payment_review", alreadyPaid: false, fulfillmentStatus: null });
-    expect(o(noStock)["review"]).toMatchObject({ reason: "NO_STOCK_AFTER_EXPIRY" });
-    expect(o(noStock)["transfer"]).toMatchObject({ confirmedBy: ADMIN_UID }); // el dinero ya llegó: queda registrado
-    expect(productStock(noStock.db, "1001").stock).toBe(1);
-    expect(day(noStock)).toBeUndefined();
-  });
-
-  it("Flow -> ORDER_NOT_TRANSFER; cancelled, payment_review y refunded -> INVALID_TRANSITION; inexistente -> ORDER_NOT_FOUND", async () => {
-    expect(await codeOf(handleConfirmTransferPayment(setup().deps, NUM, ADMIN_UID))).toBe("ORDER_NOT_TRANSFER");
-    for (const paymentStatus of ["cancelled", "payment_review", "refunded"]) {
-      const env = setup({ ...transfer, paymentStatus });
-      expect(await codeOf(handleConfirmTransferPayment(env.deps, NUM, ADMIN_UID)), paymentStatus).toBe("INVALID_TRANSITION");
-    }
-    expect(await codeOf(handleConfirmTransferPayment(setup(transfer).deps, { orderNumber: "NE-000777" }, ADMIN_UID))).toBe("ORDER_NOT_FOUND");
-  });
-
-  it("valida la entrada", async () => {
-    const env = setup(transfer);
-    for (const bad of [{}, { orderNumber: "x" }, { ...NUM, note: "" }, { ...NUM, reference: "a".repeat(101) }, { ...NUM, extra: 1 }]) {
-      expect(await codeOf(handleConfirmTransferPayment(env.deps, bad, ADMIN_UID))).toBe("INVALID_INPUT");
-    }
   });
 });
 
@@ -382,16 +321,11 @@ describe("recordManualRefund (9b)", () => {
     }
   });
 
-  it("(i) tras refunded fallan updateFulfillment, cancelOrder y confirmTransferPayment", async () => {
+  it("(i) tras refunded fallan updateFulfillment y cancelOrder", async () => {
     const env = paidEnv();
     await handleRecordManualRefund(env.deps, refundReq(), ADMIN_UID);
     expect(await codeOf(handleUpdateFulfillment(env.deps, { ...NUM, to: "on_route" }, ADMIN_UID))).toBe("ORDER_NOT_PAID");
     expect(await codeOf(handleCancelOrder(env.deps, { ...NUM, reason: "x" }, ADMIN_UID))).toBe("INVALID_TRANSITION");
-    expect(await codeOf(handleConfirmTransferPayment(env.deps, NUM, ADMIN_UID))).toBe("ORDER_NOT_TRANSFER");
-    const tr = setup(paidOrderDoc({ paymentMethod: "transfer" }), { s1001: 3, r1001: 0, s1002: 2, r1002: 0 });
-    tr.clock.advance(3600_000);
-    await handleRecordManualRefund(tr.deps, refundReq({ method: "transfer" }), ADMIN_UID);
-    expect(await codeOf(handleConfirmTransferPayment(tr.deps, NUM, ADMIN_UID))).toBe("INVALID_TRANSITION");
   });
 
   it("(D-029i) repone stock en un producto ELIMINADO sin revivirlo", async () => {

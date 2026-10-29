@@ -151,7 +151,7 @@ H1  Preguntas frecuentes
   H2  Productos y uso responsable   (no es médico: leer el rótulo, consultar a un profesional)
 ```
 - Las respuestas están **visibles en el HTML** (acordeón `<details>` o equivalente con el texto en el DOM inicial). Sin respuestas cargadas por JavaScript.
-- Contenido sujeto a lo confirmado: despacho $3.990 a toda la RM; retiro en Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00; Flow y transferencia con confirmación manual; seguimiento con el número NE-xxxxxx en DispatchTrack. **No se inventan** plazos de entrega, política de devoluciones, correos de aviso (el MVP no envía correos, D-008) ni montos de envío gratis.
+- Contenido sujeto a lo confirmado: despacho $3.990 a toda la RM; retiro en Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00; pago solo con Flow (D-044); seguimiento con el número NE-xxxxxx en DispatchTrack. **No se inventan** plazos de entrega, política de devoluciones, correos de aviso (el MVP no envía correos, D-008) ni montos de envío gratis.
 - Las preguntas sobre "para qué sirve" un producto no van aquí.
 
 JSON-LD: `FAQPage` (lo pide AGENTS.md) + `BreadcrumbList`.

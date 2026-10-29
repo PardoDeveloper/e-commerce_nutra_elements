@@ -1,4 +1,3 @@
-import type { Bank } from "./settings.js";
 import type { OrderDoc } from "./types.js";
 
 // Vista pública de un pedido para `getOrderStatus` (functions.md 3.4). Función pura que ARMA la
@@ -20,22 +19,12 @@ export interface OrderStatusResponse {
   subtotal: number;
   shipping: number;
   total: number;
-  transferInstructions?: {
-    bankName: string;
-    accountType: string;
-    accountNumber: string;
-    holderName: string;
-    holderRut: string;
-    contactEmail?: string;
-    amount: number;
-    reference: string;
-  };
   trackingNote: string;
 }
 
-export function buildStatusResponse(order: OrderDoc, bank: Bank | undefined): OrderStatusResponse {
+export function buildStatusResponse(order: OrderDoc): OrderStatusResponse {
   const pending = order.paymentStatus === "pending_payment";
-  const response: OrderStatusResponse = {
+  return {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt.toISOString(),
     paymentMethod: order.paymentMethod,
@@ -52,17 +41,4 @@ export function buildStatusResponse(order: OrderDoc, bank: Bank | undefined): Or
     total: order.total,
     trackingNote: TRACKING_NOTE,
   };
-  if (order.paymentMethod === "transfer" && pending && bank) {
-    response.transferInstructions = {
-      bankName: bank.bankName,
-      accountType: bank.accountType,
-      accountNumber: bank.accountNumber,
-      holderName: bank.holderName,
-      holderRut: bank.holderRut,
-      ...(bank.contactEmail !== undefined ? { contactEmail: bank.contactEmail } : {}),
-      amount: order.total,
-      reference: order.orderNumber,
-    };
-  }
-  return response;
 }

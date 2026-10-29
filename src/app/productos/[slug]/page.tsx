@@ -51,8 +51,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const description =
     product.description ??
     `${baseName(product.name)} en ${product.unitsPerPack ? `frasco de ${product.unitsPerPack} cápsulas` : "cápsulas"}. Suplemento alimentario de Nutra Elements.`;
-  const perCapsule =
-    product.unitsPerPack && product.unitsPerPack > 0 ? Math.round(product.finalPrice / product.unitsPerPack) : null;
   // JSON-LD: solo URL absolutas de imágenes reales (las de la demo son rutas propias; se completan con SITE_URL).
   const images = product.images.flatMap((i) => (i.url ? [/^https?:\/\//.test(i.url) ? i.url : absoluteUrl(i.url)] : []));
   const photo = mainImage(product);
@@ -104,7 +102,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             </p>
           ) : null}
           <Price price={product.price} finalPrice={product.finalPrice} size="lg" />
-          {perCapsule ? <p className={styles.perUnit}>Aprox. {formatClp(perCapsule)} por cápsula</p> : null}
           <StockBadge inStock={product.inStock} />
           <ProductPurchase product={product} max={settings.maxQtyPerItem} />
           <p className={styles.meta}>

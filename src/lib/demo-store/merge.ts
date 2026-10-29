@@ -33,6 +33,7 @@ export function mergeStoredIntoProduct(base: Product, s: StoredProduct): Product
     inStock: s.stock > 0,
     format: s.format,
     unitsPerPack: s.unitsPerPack,
+    featured: s.featured ?? false,
     seo: s.seo,
   };
 }
@@ -60,6 +61,7 @@ export function applyStoredToAdmin(base: AdminProduct, s: StoredProduct): AdminP
     published: s.published,
     format: s.format,
     unitsPerPack: s.unitsPerPack,
+    featured: s.featured ?? base.featured,
     seo: s.seo,
     commissionPerUnit: s.commissionPerUnit !== undefined ? s.commissionPerUnit : base.commissionPerUnit,
     deletedAt: s.deletedAt,
@@ -83,6 +85,7 @@ export function toStoredProduct(p: AdminProduct): StoredProduct {
     published: p.published,
     format: p.format,
     unitsPerPack: p.unitsPerPack,
+    featured: p.featured,
     seo: p.seo,
     commissionPerUnit: p.commissionPerUnit,
     deletedAt: p.deletedAt,

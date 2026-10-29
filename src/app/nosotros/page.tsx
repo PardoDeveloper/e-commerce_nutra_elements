@@ -9,6 +9,11 @@ import { absoluteUrl, breadcrumbList, graph, orgId, pageMetadata } from "@/lib/s
 
 export const revalidate = 3600;
 
+// Ubicación de la tienda (pin de Google Maps). El mapa embebido no requiere API key.
+const STORE_COORDS = "-33.610227,-70.5759595";
+const MAP_EMBED_URL = `https://maps.google.com/maps?q=${STORE_COORDS}&z=17&hl=es&output=embed`;
+const MAP_LINK_URL = `https://www.google.com/maps/search/?api=1&query=${STORE_COORDS}`;
+
 export const metadata = pageMetadata({
   title: "Quiénes somos | Nutra Elements",
   description:
@@ -36,7 +41,11 @@ export default async function AboutPage() {
       <header className={styles.pageHead}>
         <h1>Quiénes somos</h1>
         <p className={styles.lead}>
-          Nutra Elements es una marca propia de suplementos, con tienda en Puente Alto.
+          En Nutra Elements creemos que el bienestar verdadero nace del equilibrio natural y el cuidado consciente de la salid. Somos una Marca de suplementos alimenticios, comprometida con ofrecer formulas con altos estándares de calidad, seguridad y pureza.
+          <br />
+          Nuestro proposito es acompañarte en tu día a día a través de soluciones confiables, incluyendo nuestras vitaminas y minerales esenciales, diseñadas para potenciar tu vitalidad, complementar tus tratamientos y mejorar tu calidad de vida.
+          <br />
+          Descubre nuestra línea de suplementos y da el primer paso hacia una vida más saludable.
         </p>
       </header>
 
@@ -60,10 +69,23 @@ export default async function AboutPage() {
         <h2 id="nos-donde">Dónde estamos</h2>
         <div className={styles.text}>
           <p>
-            Nuestra tienda está en {settings.pickup.address}. Puedes retirar tu pedido ahí: {settings.pickup.hours.toLowerCase()}.
+            Nuestra tienda está en {settings.pickup.address}. Puedes retirar tu pedido ahí: {settings.pickup.hours.toLowerCase()} hrs.
             Revisa cómo llegar y los datos de contacto en <Link href="/contacto">retiro en tienda en Puente Alto</Link>.
           </p>
         </div>
+        <iframe
+          className={styles.map}
+          src={MAP_EMBED_URL}
+          title={`Mapa: tienda Nutra Elements en ${settings.pickup.address}`}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+        <p className={styles.meta}>
+          <a href={MAP_LINK_URL} target="_blank" rel="noopener noreferrer" className={styles.inlineLink}>
+            Abrir en Google Maps
+          </a>
+        </p>
       </section>
 
       <section className={styles.block} aria-labelledby="nos-como">
@@ -71,7 +93,7 @@ export default async function AboutPage() {
         <div className={styles.text}>
           <p>
             Despachamos con medios propios a toda la Región Metropolitana por {formatClp(settings.shippingFee)}. Puedes
-            pagar con Flow o por transferencia bancaria. Si tienes dudas sobre despacho, retiro o pagos, revisa las{" "}
+            pagar en línea con Flow. Si tienes dudas sobre despacho, retiro o pagos, revisa las{" "}
             <Link href="/#preguntas-frecuentes">preguntas frecuentes</Link> o mira todo el{" "}
             <Link href="/productos">catálogo</Link>.
           </p>

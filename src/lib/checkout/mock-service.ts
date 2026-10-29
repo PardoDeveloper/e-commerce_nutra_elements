@@ -20,27 +20,17 @@ import {
   type OrderService,
   type PaymentMethod,
   type PaymentStatus,
-  type TransferInstructions,
 } from "./types";
 
 export const ORDER_SEQ_KEY = "ne.orderSeq.v1";
 export const ORDERS_KEY = "ne.orders.v1";
 export const REQUESTS_KEY = "ne.orderReq.v1";
 
-/** Reservas del contrato (D-006): 30 minutos con Flow, 48 horas con transferencia. */
-export const RESERVATION_MINUTES: Record<PaymentMethod, number> = { flow: 30, transfer: 48 * 60 };
+/** Reserva del contrato (D-006): 30 minutos con Flow, el único medio de pago (D-044). */
+export const RESERVATION_MINUTES: Record<PaymentMethod, number> = { flow: 30 };
 
 export const TRACKING_NOTE =
   "Guarda tu número de pedido; con él puedes seguir tu despacho en DispatchTrack.";
-
-/** Datos bancarios DE PRUEBA. No son una cuenta real. */
-export const TEST_BANK_DATA = {
-  bankName: "Banco de Prueba",
-  accountType: "Cuenta corriente",
-  accountNumber: "000-00000-00",
-  holderName: "Nutra Elements SpA (datos de prueba)",
-  holderRut: "00.000.000-0",
-} as const;
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -142,7 +132,7 @@ export function createMockOrderService(deps: MockServiceDeps): MockOrderService 
       freeShippingApplied: order.freeShippingApplied,
       items: order.items.map((i) => ({ sku: i.sku, name: i.name, unitFinalPrice: i.unitFinalPrice, qty: i.qty, lineTotal: i.lineTotal })),
       reservedUntil: order.reservedUntil,
-      next: order.paymentMethod === "flow" ? "pay_with_flow" : "show_transfer_instructions",
+      next: "pay_with_flow",
     };
   }
 
@@ -205,6 +195,7 @@ export function createMockOrderService(deps: MockServiceDeps): MockOrderService 
       const orderNumber = formatOrderNumber(sequence);
 
       const created = now();
+      if (request.paymentMethod !== "flow") throw new OrderServiceError("INVALID_INPUT");
       const reservedUntil = new Date(created.getTime() + RESERVATION_MINUTES[request.paymentMethod] * 60_000);
       const order: StoredOrder = {
         orderNumber,
@@ -249,7 +240,7 @@ export function createMockOrderService(deps: MockServiceDeps): MockOrderService 
       const order = findOrder(request.orderNumber, request.accessToken);
       const status = effectiveStatus(order);
       const pending = status === "pending_payment";
-      const response: GetOrderStatusResponse = {
+      return {
         orderNumber: order.orderNumber,
         createdAt: order.createdAt,
         paymentMethod: order.paymentMethod,
@@ -264,11 +255,6 @@ export function createMockOrderService(deps: MockServiceDeps): MockOrderService 
         trackingNote: TRACKING_NOTE,
         lastPaymentAttemptRejected: order.lastPaymentAttemptRejected,
       };
-      if (order.paymentMethod === "transfer" && pending) {
-        const transfer: TransferInstructions = { ...TEST_BANK_DATA, amount: order.total, reference: order.orderNumber };
-        response.transferInstructions = transfer;
-      }
-      return response;
     },
 
     async simulateFlowResult(request: GetOrderStatusRequest, result: SimulatedFlowResult): Promise<void> {

@@ -7,16 +7,21 @@ import { Container } from "@/components/Container";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { CategoryCarousel } from "@/components/store/CategoryCarousel";
+import { CategoryProducts } from "@/components/store/CategoryProducts";
+import categoryStyles from "@/components/store/CategoryProducts.module.css";
 import { HeroCarousel } from "@/components/store/HeroCarousel";
 import { HomeFaq } from "@/components/store/HomeFaq";
 import { JsonLd } from "@/components/store/JsonLd";
 import styles from "@/components/store/store.module.css";
 import { getCategories, getProducts, getPublicSettings } from "@/lib/data";
-import type { Product } from "@/lib/data";
+import { pickFeatured } from "@/lib/featured";
 import { formatClp } from "@/lib/format";
 import { faqPageNode, graph, organizationNode, pageMetadata, websiteNode } from "@/lib/seo";
 
 export const revalidate = 3600;
+
+/** Productos por pestaña en «Compra por categoría»; el resto, en la página de la categoría. */
+const CATEGORY_PRODUCTS_LIMIT = 8;
 
 export const metadata = pageMetadata({
   title: "Nutra Elements | Suplementos en cápsulas, Puente Alto y RM",
@@ -24,20 +29,6 @@ export const metadata = pageMetadata({
     "Vitaminas, minerales, omega 3 y más en cápsulas, de marca propia. Despacho a toda la RM por $3.990 y retiro en tienda en Puente Alto.",
   path: "/",
 });
-
-/** Destacados: el primer producto con stock de cada categoría y luego completa hasta 8. */
-function pickFeatured(products: Product[], categoryOrder: string[]): Product[] {
-  const picked: Product[] = [];
-  for (const cat of categoryOrder) {
-    const first = products.find((p) => p.categoryId === cat && p.inStock);
-    if (first) picked.push(first);
-  }
-  for (const p of products) {
-    if (picked.length >= 8) break;
-    if (p.inStock && !picked.includes(p)) picked.push(p);
-  }
-  return picked;
-}
 
 export default async function HomePage() {
   const [categories, products, settings] = await Promise.all([
@@ -49,6 +40,13 @@ export default async function HomePage() {
   const counts = new Map<string, number>();
   for (const p of products) if (p.categoryId) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
   const categoryNames = new Map(categories.map((c) => [c.slug as string, c.name]));
+  // Pestañas solo para las categorías con productos; primero los que tienen stock.
+  const categoryPanels = categories
+    .map((category) => ({
+      category,
+      items: products.filter((p) => p.categoryId === category.slug).sort((a, b) => Number(b.inStock) - Number(a.inStock)),
+    }))
+    .filter((c) => c.items.length > 0);
 
   return (
     <Container as="div" className={styles.page}>
@@ -96,6 +94,31 @@ export default async function HomePage() {
             </li>
           ))}
         </CategoryCarousel>
+        {categoryPanels.length > 0 ? (
+          <CategoryProducts
+            label="Productos por categoría"
+            panels={categoryPanels.map(({ category, items }) => ({
+              slug: category.slug,
+              name: category.name,
+              content: (
+                <>
+                  <ul className="product-grid">
+                    {items.slice(0, CATEGORY_PRODUCTS_LIMIT).map((p) => (
+                      <li key={p.sku}>
+                        <ProductCard product={p} categoryName={category.name} />
+                      </li>
+                    ))}
+                  </ul>
+                  <p className={categoryStyles.more}>
+                    <Link href={`/categorias/${category.slug}`} className={styles.inlineLink}>
+                      Ver {items.length === 1 ? "el producto" : `los ${items.length} productos`} de {category.name}
+                    </Link>
+                  </p>
+                </>
+              ),
+            }))}
+          />
+        ) : null}
       </section>
 
       <section className={styles.block} aria-labelledby="home-destacados">
@@ -140,8 +163,8 @@ export default async function HomePage() {
             <p>Llegamos a las comunas de la Región Metropolitana por {formatClp(settings.shippingFee)}.</p>
           </li>
           <li className={styles.benefit}>
-            <h3>Paga con Flow o transferencia</h3>
-            <p>Elige el medio de pago que prefieras al finalizar tu compra.</p>
+            <h3>Paga en línea con Flow</h3>
+            <p>Pagas a través de Flow al finalizar tu compra.</p>
           </li>
         </ul>
         <p className={styles.text}>

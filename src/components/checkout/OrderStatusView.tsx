@@ -16,7 +16,6 @@ import {
   type GetOrderStatusResponse,
   type PaymentStatus,
 } from "@/lib/checkout";
-import { isTestBank } from "@/lib/bank";
 import type { DataSource } from "@/lib/data-source";
 import { formatClp } from "@/lib/format";
 import styles from "./checkout.module.css";
@@ -162,9 +161,8 @@ export function OrderStatusView({ orderNumber, dataSource = "demo" }: { orderNum
   const { order } = state;
   const pending = order.paymentStatus === "pending_payment";
   const rejected = pending && order.paymentMethod === "flow" && order.lastPaymentAttemptRejected === true;
-  // Con Flow el número de pedido se entrega solo cuando hay un pago recibido. Con transferencia se muestra
-  // desde el inicio porque es la glosa del depósito.
-  const showNumber = order.paymentMethod === "transfer" || PAYMENT_RECEIVED.has(order.paymentStatus);
+  // El número de pedido se entrega solo cuando hay un pago recibido.
+  const showNumber = PAYMENT_RECEIVED.has(order.paymentStatus);
 
   return (
     <>
@@ -222,53 +220,6 @@ export function OrderStatusView({ orderNumber, dataSource = "demo" }: { orderNum
             <Button onClick={pay} disabled={retrying} size="lg">
               {retrying ? "Conectando con Flow…" : rejected ? "Reintentar pago con Flow" : "Pagar con Flow"}
             </Button>
-          </>
-        ) : null}
-
-        {pending && order.paymentMethod === "transfer" && order.transferInstructions ? (
-          <>
-            {mode === "simulated" || isTestBank(order.transferInstructions) ? (
-              <div className={`${styles.notice} ${styles.noticeWarning}`}>
-                <p className={styles.noticeTitle}>Datos bancarios de prueba</p>
-                <p>No son una cuenta real: no transfieras dinero.</p>
-              </div>
-            ) : null}
-            <dl className={styles.bank}>
-              <div>
-                <dt>Banco</dt>
-                <dd>{order.transferInstructions.bankName}</dd>
-              </div>
-              <div>
-                <dt>Tipo de cuenta</dt>
-                <dd>{order.transferInstructions.accountType}</dd>
-              </div>
-              <div>
-                <dt>N° de cuenta</dt>
-                <dd>{order.transferInstructions.accountNumber}</dd>
-              </div>
-              <div>
-                <dt>Titular</dt>
-                <dd>{order.transferInstructions.holderName}</dd>
-              </div>
-              <div>
-                <dt>RUT del titular</dt>
-                <dd>{order.transferInstructions.holderRut}</dd>
-              </div>
-              <div>
-                <dt>Monto exacto</dt>
-                <dd>{formatClp(order.transferInstructions.amount)}</dd>
-              </div>
-              <div>
-                <dt>Referencia (glosa)</dt>
-                <dd>{order.transferInstructions.reference}</dd>
-              </div>
-            </dl>
-            {order.reservedUntil ? (
-              <p>
-                <strong>Reservamos tus productos por 48 horas</strong>, hasta el {dateFormat.format(new Date(order.reservedUntil))}.
-                Si no recibimos la transferencia a tiempo, la reserva se libera.
-              </p>
-            ) : null}
           </>
         ) : null}
 

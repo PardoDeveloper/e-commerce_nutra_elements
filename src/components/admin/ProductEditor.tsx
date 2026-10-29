@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { errorMessage } from "@/lib/admin/errors";
 import type { AdminProduct } from "@/lib/admin/types";
+import { FEATURED_LIMIT } from "@/lib/featured";
 import { formatClp } from "@/lib/format";
 import { slugify } from "@/lib/slug";
 import { useAdminService, useAdminState, useDataSource } from "./AdminProvider";
@@ -163,6 +164,7 @@ function ContentForm({ product }: { product: AdminProduct }) {
   const [description, setDescription] = useState(product.description ?? "");
   const [format, setFormat] = useState(product.format ?? "");
   const [units, setUnits] = useState(product.unitsPerPack?.toString() ?? "");
+  const [featured, setFeatured] = useState(product.featured);
   const [notice, setNotice] = useState<Notice>(null);
   const [showCategories, setShowCategories] = useState(false);
   const categoriesButtonRef = useRef<HTMLButtonElement>(null);
@@ -191,6 +193,7 @@ function ContentForm({ product }: { product: AdminProduct }) {
         description: description.trim() === "" ? null : description,
         format: format.trim() === "" ? null : format.trim(),
         unitsPerPack: unitsValue,
+        ...(featured !== product.featured ? { featured } : {}),
         // Título y descripción SEO salen del nombre y la descripción (D-040): se limpia lo que hubiera guardado.
         ...(product.seo !== null ? { seo: null } : {}),
       });
@@ -240,7 +243,7 @@ function ContentForm({ product }: { product: AdminProduct }) {
           </div>
           <div className={`${ui.field} ${ui.fieldFull}`}>
             <label className={ui.label} htmlFor={`${id}-desc`}>
-              Descripción
+              Descripción (opcional)
             </label>
             <textarea id={`${id}-desc`} className={ui.textarea} maxLength={5000} value={description} onChange={(e) => setDescription(e.target.value)} />
             <span className={ui.help}>Texto plano. {description.length}/5000</span>
@@ -258,6 +261,15 @@ function ContentForm({ product }: { product: AdminProduct }) {
             <input id={`${id}-units`} className={ui.input} inputMode="numeric" value={units} onChange={(e) => setUnits(e.target.value)} aria-describedby={`${id}-units-help`} />
             <span id={`${id}-units-help`} className={ui.help}>
               Unidades por envase, por ejemplo 60.
+            </span>
+          </div>
+          <div className={`${ui.field} ${ui.fieldFull}`}>
+            <div className={ui.checkRow}>
+              <input id={`${id}-featured`} type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} aria-describedby={`${id}-featured-help`} />
+              <label htmlFor={`${id}-featured`}>Producto destacado</label>
+            </div>
+            <span id={`${id}-featured-help`} className={ui.help}>
+              Se muestra en «Productos destacados» del inicio si está publicado. Máximo {FEATURED_LIMIT} en el inicio.
             </span>
           </div>
         </div>

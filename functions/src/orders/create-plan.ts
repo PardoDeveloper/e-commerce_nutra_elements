@@ -104,7 +104,7 @@ export function buildOrderDoc(input: {
 export interface CreateOrderResponse {
   orderNumber: string;
   accessToken: string;
-  paymentMethod: "flow" | "transfer";
+  paymentMethod: "flow";
   paymentStatus: "pending_payment";
   subtotal: number;
   shipping: number;
@@ -112,14 +112,14 @@ export interface CreateOrderResponse {
   freeShippingApplied: boolean;
   items: { sku: string; name: string; unitFinalPrice: number; qty: number; lineTotal: number }[];
   reservedUntil: string;
-  next: "pay_with_flow" | "show_transfer_instructions";
+  next: "pay_with_flow";
 }
 
 /** Respuesta a partir de lo que quedó guardado en el pedido (sirve también para el reintento idempotente). */
 export function buildCreateResponse(
   order: {
     orderNumber: string;
-    paymentMethod: "flow" | "transfer";
+    paymentMethod: "flow";
     subtotal: number;
     shipping: number;
     total: number;
@@ -140,6 +140,6 @@ export function buildCreateResponse(
     freeShippingApplied: order.freeShippingApplied,
     items: order.items.map((i) => ({ sku: i.sku, name: i.name, unitFinalPrice: i.unitFinalPrice, qty: i.qty, lineTotal: i.lineTotal })),
     reservedUntil: order.reservedUntil.toISOString(),
-    next: order.paymentMethod === "flow" ? "pay_with_flow" : "show_transfer_instructions",
+    next: "pay_with_flow",
   };
 }
