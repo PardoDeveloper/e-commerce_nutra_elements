@@ -24,25 +24,15 @@ const make = (sku: string, over: Partial<Product> = {}): Product => ({
 describe("pickFeatured", () => {
   it("muestra solo los marcados por el admin, primero los que tienen stock", () => {
     const products = [make("A"), make("B", { featured: true, inStock: false }), make("C", { featured: true })];
-    expect(pickFeatured(products, ["vitaminas"]).map((p) => p.sku)).toEqual(["C", "B"]);
+    expect(pickFeatured(products).map((p) => p.sku)).toEqual(["C", "B"]);
   });
 
   it("limita los marcados a FEATURED_LIMIT", () => {
     const products = Array.from({ length: FEATURED_LIMIT + 3 }, (_, i) => make(`P${i}`, { featured: true }));
-    expect(pickFeatured(products, [])).toHaveLength(FEATURED_LIMIT);
+    expect(pickFeatured(products)).toHaveLength(FEATURED_LIMIT);
   });
 
-  it("sin marcados, elige uno con stock por categoría y completa hasta 8", () => {
-    const products = [
-      make("V1"),
-      make("V2"),
-      make("M1", { categoryId: "magnesio", inStock: false }),
-      make("M2", { categoryId: "magnesio" }),
-      ...Array.from({ length: 10 }, (_, i) => make(`X${i}`)),
-    ];
-    const picked = pickFeatured(products, ["vitaminas", "magnesio"]);
-    expect(picked.slice(0, 2).map((p) => p.sku)).toEqual(["V1", "M2"]);
-    expect(picked).toHaveLength(8);
-    expect(picked.every((p) => p.inStock)).toBe(true);
+  it("sin marcados no devuelve ninguno (el inicio oculta la sección)", () => {
+    expect(pickFeatured([make("A"), make("B")])).toEqual([]);
   });
 });

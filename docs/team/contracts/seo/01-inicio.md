@@ -30,7 +30,7 @@ Reglas del title: sin precio (por ISR podría desfasarse), marca al inicio solo 
 ```
 H1  Suplementos en cápsulas de marca propia
   H2  Compra por categoría            (6 tarjetas, cada una enlaza a /categorias/[slug]; H3 = nombre de la categoría)
-  H2  Productos destacados            (los marcados en el admin, hasta 12; sin marcados, 8 automáticos; H3 = nombre del producto; D-043)
+  H2  Productos destacados            (solo los marcados en el admin, hasta 12; sin marcados, la sección no se muestra; H3 = nombre del producto; D-043, D-045)
   H2  Despacho en la RM y retiro en tienda en Puente Alto
         (texto: $3.990 a toda la RM, retiro en Av. Concha y Toro 180, lunes a viernes de 9:00 a 20:00)
   H2  Por qué Nutra Elements           (marca propia, cápsulas; sin alegaciones de salud ni sellos que no existan)
