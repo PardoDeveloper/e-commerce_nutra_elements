@@ -204,6 +204,12 @@ svg {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+/* Variante de 5 por fila en escritorio (destacados del inicio). */
+@media (min-width: 1100px) {
+  .product-grid--5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
 
 /* Bloque de texto legible */
 .prose {

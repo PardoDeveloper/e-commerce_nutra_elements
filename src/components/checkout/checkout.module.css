@@ -124,6 +124,7 @@
   min-width: 0;
 }
 .lineName {
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text);
   text-decoration: none;

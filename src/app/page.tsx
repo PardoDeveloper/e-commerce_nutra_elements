@@ -95,7 +95,7 @@ export default async function HomePage() {
               </Link>
             }
           />
-          <ul className="product-grid">
+          <ul className="product-grid product-grid--5">
             {featured.map((p) => (
               <li key={p.sku}>
                 <ProductCard product={p} categoryName={p.categoryId ? categoryNames.get(p.categoryId) : undefined} />
