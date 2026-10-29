@@ -33,10 +33,11 @@
   text-transform: uppercase;
   color: var(--color-gold-text);
 }
-.title {
+/* `.card .title` para ganarle a reglas de sección como `.block h3` (store.module.css). */
+.card .title {
   margin: 0;
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.35;
 }
