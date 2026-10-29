@@ -4,24 +4,41 @@
   align-items: baseline;
   gap: var(--space-1) var(--space-2);
 }
+/* Con descuento: oferta y % en la primera línea, precio normal tachado debajo. */
+.onSale {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+}
+.row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
 .current {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--color-navy);
 }
+.sale {
+  color: var(--color-danger);
+}
 .old {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+.old s {
+  text-decoration-thickness: 1px;
+}
 .badge {
-  align-self: center;
   padding: 0.125rem var(--space-2);
   border-radius: var(--radius-pill);
-  background: var(--color-gold-soft);
-  border: 1px solid var(--color-gold);
-  color: var(--color-gold-text);
+  background: var(--color-danger);
+  color: #ffffff;
   font-size: var(--text-xs);
   font-weight: 700;
+  line-height: 1.4;
 }
 .lg .current {
   font-size: var(--text-3xl);

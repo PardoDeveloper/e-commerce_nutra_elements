@@ -3,11 +3,10 @@ import { appError } from "../common/errors.js";
 import { writeMetrics } from "../metrics/index.js";
 import { applyConfirmPlan, runTx } from "./apply-plan.js";
 import { planFulfillment } from "./fulfillment-plan.js";
-import { canCancel, confirmNeedsProducts, planPaymentConfirmation, planReleaseOrder, reviewResolutionPatch } from "./payment-plan.js";
+import { canCancel, planPaymentConfirmation, planReleaseOrder, reviewResolutionPatch } from "./payment-plan.js";
 import { planRefund, validateRefund } from "./refund-plan.js";
 import {
   cancelOrderSchema,
-  confirmTransferSchema,
   parseInput,
   recordRefundSchema,
   resolveReviewSchema,
@@ -23,46 +22,7 @@ import type { FulfillmentStatus, PaymentStatus } from "./types.js";
 
 const noProducts = (): Map<string, StockProduct> => new Map();
 
-// --- 4.1 confirmTransferPayment ---
-
-export interface ConfirmTransferResponse {
-  orderNumber: string;
-  paymentStatus: "paid" | "payment_review";
-  alreadyPaid: boolean;
-  fulfillmentStatus: FulfillmentStatus | null;
-}
-
-export async function handleConfirmTransferPayment(deps: Deps, data: unknown, uid: string): Promise<ConfirmTransferResponse> {
-  const input = parseInput(confirmTransferSchema, data);
-  return runTx(deps, async (tx): Promise<ConfirmTransferResponse> => {
-    const order = await requireOrder(tx, input.orderNumber);
-    if (order.paymentMethod !== "transfer") throw appError("ORDER_NOT_TRANSFER");
-    const now = deps.clock();
-    const products = confirmNeedsProducts(order, "transfer", undefined) ? await readStockMap(tx, order.items) : noProducts();
-
-    const plan = planPaymentConfirmation({
-      order,
-      products,
-      now,
-      actor: uid,
-      mode: "transfer",
-      note: input.note,
-      extraPatch: {
-        transfer: { confirmedBy: uid, confirmedAt: now, reference: input.reference ?? null, note: input.note ?? null },
-      },
-    });
-
-    if (plan.kind === "invalid" || plan.kind === "out_of_stock") throw appError("INVALID_TRANSITION");
-    if (plan.kind === "noop") {
-      return { orderNumber: order.orderNumber, paymentStatus: "paid", alreadyPaid: true, fulfillmentStatus: order.fulfillmentStatus };
-    }
-    applyConfirmPlan(tx, order.orderNumber, plan, now);
-    logger.info("Transferencia confirmada", { orderNumber: order.orderNumber, result: plan.kind });
-    return plan.kind === "paid"
-      ? { orderNumber: order.orderNumber, paymentStatus: "paid", alreadyPaid: false, fulfillmentStatus: "preparing" }
-      : { orderNumber: order.orderNumber, paymentStatus: "payment_review", alreadyPaid: false, fulfillmentStatus: null };
-  });
-}
+// 4.1 confirmTransferPayment se eliminó: solo se paga con Flow (D-044).
 
 // --- 4.2 resolvePaymentReview ---
 

@@ -8,7 +8,7 @@ import type { PricingSettings } from "../common/pricing.js";
 // opcional falta se usa el inicial del contrato. Si falta lo imprescindible (la tienda no está
 // configurada) es un error NUESTRO: `INTERNAL`, sin detalles hacia el cliente.
 
-export const DEFAULT_RESERVATION_MINUTES = { flow: 30, transfer: 2880 } as const;
+export const DEFAULT_RESERVATION_MINUTES = { flow: 30 } as const;
 export const DEFAULT_LIMITS = {
   createOrderPerIpPer10Min: 5,
   pendingOrdersPerEmail: 3,
@@ -27,18 +27,9 @@ const publicSchema = z.object({
   maxQtyPerItem: z.number().int().optional(),
 });
 
-const bankSchema = z.object({
-  bankName: z.string(),
-  accountType: z.string(),
-  accountNumber: z.string(),
-  holderName: z.string(),
-  holderRut: z.string(),
-  contactEmail: z.string().optional(),
-});
-
 const privateSchema = z.object({
-  reservationMinutes: z.object({ flow: z.number().optional(), transfer: z.number().optional() }).optional(),
-  bank: bankSchema.optional(),
+  // Los datos bancarios y la reserva de transferencia que hubiera en el documento se ignoran (D-044).
+  reservationMinutes: z.object({ flow: z.number().optional() }).optional(),
   orderNumberStart: z.number().int().optional(),
   limits: z
     .object({
@@ -52,11 +43,9 @@ const privateSchema = z.object({
 });
 
 export type PublicSettings = PricingSettings & { pickup: { enabled: boolean; address: string; hours: string } };
-export type Bank = z.output<typeof bankSchema>;
 
 export interface PrivateSettings {
-  reservationMinutes: { flow: number; transfer: number };
-  bank: Bank | undefined;
+  reservationMinutes: { flow: number };
   orderNumberStart: number;
   limits: { [K in keyof typeof DEFAULT_LIMITS]: number };
 }
@@ -90,9 +79,7 @@ export function parsePrivateSettings(data: DocData | undefined): PrivateSettings
   return {
     reservationMinutes: {
       flow: inRange(reservation?.flow, 5, 240, DEFAULT_RESERVATION_MINUTES.flow),
-      transfer: inRange(reservation?.transfer, 60, 10080, DEFAULT_RESERVATION_MINUTES.transfer),
     },
-    bank: s.bank,
     orderNumberStart: inRange(s.orderNumberStart, 1, 100_000_000, 1),
     limits: {
       createOrderPerIpPer10Min: inRange(limits?.createOrderPerIpPer10Min, 1, 100, DEFAULT_LIMITS.createOrderPerIpPer10Min),

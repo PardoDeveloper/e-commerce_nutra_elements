@@ -61,7 +61,7 @@ service cloud.firestore {
     function productContentKeys() {
       // `family` ya no existe (D-040): el admin no la escribe.
       return ['name', 'description', 'shortDescription', 'categoryId', 'images', 'slug',
-              'format', 'unitsPerPack', 'seo', 'updatedAt'];
+              'format', 'unitsPerPack', 'featured', 'seo', 'updatedAt'];
     }
 
     function validProductContent(changed) {
@@ -80,6 +80,8 @@ service cloud.firestore {
         && (!changed.hasAny(['images']) || (newField('images') is list && newField('images').size() <= 8))
         && (!changed.hasAny(['format']) || newField('format') == null || isStr(newField('format'), 1, 40))
         && (!changed.hasAny(['unitsPerPack']) || newField('unitsPerPack') == null || isIntBetween(newField('unitsPerPack'), 1, 1000))
+        // Destacado en el inicio: booleano (si falta, cuenta como false).
+        && (!changed.hasAny(['featured']) || newField('featured') is bool)
         && (!changed.hasAny(['seo']) || validSeo(newField('seo')));
     }
 
@@ -183,18 +185,6 @@ service cloud.firestore {
       return !(k in m) || isIntBetween(m[k], lo, hi);
     }
 
-    function validBank(b) {
-      return b is map
-        && b.keys().hasOnly(['bankName', 'accountType', 'accountNumber', 'holderName', 'holderRut', 'contactEmail'])
-        && b.keys().hasAll(['bankName', 'accountType', 'accountNumber', 'holderName', 'holderRut'])
-        && isStr(b.bankName, 1, 100)
-        && isStr(b.accountType, 1, 100)
-        && isStr(b.accountNumber, 1, 100)
-        && isStr(b.holderName, 1, 100)
-        && isStr(b.holderRut, 1, 100)
-        && (!('contactEmail' in b) || isStr(b.contactEmail, 0, 100));
-    }
-
     function validLimits(l) {
       return l is map
         && l.keys().hasOnly(['createOrderPerIpPer10Min', 'pendingOrdersPerEmail', 'orderStatusPerIpPer10Min', 'orderStatusFailuresPerOrder', 'flowConfirmPerIpPer10Min'])
@@ -207,14 +197,13 @@ service cloud.firestore {
 
     function validPrivateSettings() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['reservationMinutes', 'bank', 'orderNumberStart', 'limits', 'updatedAt'])
-        && d.keys().hasAll(['reservationMinutes', 'bank', 'orderNumberStart', 'limits', 'updatedAt'])
+      // Solo Flow (D-044): sin datos bancarios ni reserva de transferencia.
+      return d.keys().hasOnly(['reservationMinutes', 'orderNumberStart', 'limits', 'updatedAt'])
+        && d.keys().hasAll(['reservationMinutes', 'orderNumberStart', 'limits', 'updatedAt'])
         && d.reservationMinutes is map
-        && d.reservationMinutes.keys().hasOnly(['flow', 'transfer'])
-        && d.reservationMinutes.keys().hasAll(['flow', 'transfer'])
+        && d.reservationMinutes.keys().hasOnly(['flow'])
+        && d.reservationMinutes.keys().hasAll(['flow'])
         && isIntBetween(d.reservationMinutes.flow, 5, 240)
-        && isIntBetween(d.reservationMinutes.transfer, 60, 10080)
-        && validBank(d.bank)
         && isIntBetween(d.orderNumberStart, 1, 100000000)
         && validLimits(d.limits)
         && d.updatedAt == request.time;

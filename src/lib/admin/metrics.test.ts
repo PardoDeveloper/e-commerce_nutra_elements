@@ -78,6 +78,7 @@ function catalog(): Product[] {
     inStock: i !== 3,
     format: null,
     unitsPerPack: null,
+    featured: false,
     seo: null,
   }));
 }

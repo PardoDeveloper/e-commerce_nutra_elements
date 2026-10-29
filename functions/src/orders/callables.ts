@@ -5,7 +5,6 @@ import { toHttpsError } from "../common/errors.js";
 import { FLOW_SECRETS, getDeps, getFlowApiClient, makeCheckFlowPaid, makeReconcile } from "../payments/runtime.js";
 import {
   handleCancelOrder,
-  handleConfirmTransferPayment,
   handleRecordManualRefund,
   handleResolvePaymentReview,
   handleUpdateFulfillment,
@@ -64,7 +63,6 @@ function adminCallable<R>(options: CallableOptions, handler: AdminHandler<R>) {
 
 const ADMIN: CallableOptions = { memory: "256MiB", timeoutSeconds: 30, maxInstances: 5 };
 
-export const confirmTransferPayment = adminCallable(ADMIN, handleConfirmTransferPayment);
 export const resolvePaymentReview = adminCallable(ADMIN, handleResolvePaymentReview);
 export const cancelOrder = adminCallable(ADMIN, handleCancelOrder);
 export const updateFulfillment = adminCallable({ ...ADMIN, timeoutSeconds: 15 }, handleUpdateFulfillment);

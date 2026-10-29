@@ -1,5 +1,5 @@
 // Etiquetas en español (data-model.md 6).
-import type { FulfillmentStatus, PaymentMethod, PaymentStatus } from "./types";
+import type { FulfillmentStatus, PaymentMethod, PaymentStatus, RefundMethod } from "./types";
 
 export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   pending_payment: "Pago pendiente",
@@ -19,7 +19,12 @@ export const FULFILLMENT_LABELS: Record<FulfillmentStatus, string> = {
 
 export const METHOD_LABELS: Record<PaymentMethod, string> = {
   flow: "Flow",
-  transfer: "Transferencia bancaria",
+};
+
+/** Cómo se devolvió el dinero de un reembolso (se registra a mano, fuera del sistema). */
+export const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
+  flow: "Flow",
+  transfer: "Transferencia al cliente",
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {

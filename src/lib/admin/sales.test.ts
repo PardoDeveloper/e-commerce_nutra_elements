@@ -13,7 +13,7 @@ const refund = { amount: 5000, method: "transfer" as const, refundedAt: "2026-10
 
 const ALL = [
   sale({ orderNumber: "NE-000001", paidAt: "2026-09-15T15:00:00.000Z" }),
-  sale({ orderNumber: "NE-000002", paidAt: "2026-10-05T15:00:00.000Z", paymentMethod: "transfer" }),
+  sale({ orderNumber: "NE-000002", paidAt: "2026-10-05T15:00:00.000Z" }),
   sale({ orderNumber: "NE-000003", paymentStatus: "refunded", refund }),
   sale({ orderNumber: "NE-000004", paymentStatus: "pending_payment", paidAt: null }),
 ];
@@ -31,7 +31,7 @@ describe("filterSales", () => {
   });
   it("por estado, medio de pago y texto (producto sin tildes)", () => {
     expect(nums(filterSales(ALL, { ...DEFAULT_SALE_FILTERS, status: "refunded" }, TODAY))).toEqual(["NE-000003"]);
-    expect(nums(filterSales(ALL, { ...DEFAULT_SALE_FILTERS, method: "transfer" }, TODAY))).toEqual(["NE-000002"]);
+    expect(nums(filterSales(ALL, { ...DEFAULT_SALE_FILTERS, method: "flow" }, TODAY))).toEqual(["NE-000003", "NE-000002"]);
     expect(nums(filterSales(ALL, { ...DEFAULT_SALE_FILTERS, period: "all", query: "CITRATO" }, TODAY))).toHaveLength(3);
   });
 });

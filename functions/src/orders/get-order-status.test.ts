@@ -118,10 +118,11 @@ describe("getOrderStatus (3.4, test 10)", () => {
     expect(env.db.paths("rateLimits/")).toEqual([]);
   });
 
-  it("transferencia pendiente incluye las instrucciones bancarias con monto y referencia", async () => {
+  it("pedido antiguo por transferencia: no expone datos bancarios aunque queden en settings (D-044)", async () => {
     const env = setup({ paymentMethod: "transfer" });
     const res = await ask(env);
-    expect(res.transferInstructions).toMatchObject({ bankName: "BANCO DE PRUEBA", amount: 32762, reference: "NE-000001" });
+    expect(res).not.toHaveProperty("transferInstructions");
+    expect(JSON.stringify(res)).not.toContain("BANCO DE PRUEBA");
   });
 });
 

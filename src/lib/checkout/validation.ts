@@ -79,7 +79,7 @@ export function validateCheckout(values: CheckoutFormValues, ctx: ValidationCont
     }
   }
 
-  if (values.paymentMethod !== "flow" && values.paymentMethod !== "transfer") {
+  if (values.paymentMethod !== "flow") {
     errors.paymentMethod = "Elige un medio de pago.";
   }
 

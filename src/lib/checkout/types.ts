@@ -3,7 +3,8 @@
 // funciones reales sin tocar las pantallas. El cliente nunca envía precios (D-005).
 
 export type Clp = number;
-export type PaymentMethod = "flow" | "transfer";
+/** Solo Flow (D-044). */
+export type PaymentMethod = "flow";
 export type PaymentStatus = "pending_payment" | "paid" | "payment_review" | "expired" | "cancelled" | "refunded";
 export type FulfillmentStatus = "preparing" | "ready_for_pickup" | "on_route" | "delivered";
 
@@ -43,7 +44,7 @@ export interface CreateOrderResponse {
   freeShippingApplied: boolean;
   items: OrderLineView[];
   reservedUntil: string;
-  next: "pay_with_flow" | "show_transfer_instructions";
+  next: "pay_with_flow";
 }
 
 export interface CreateFlowPaymentRequest {
@@ -61,17 +62,6 @@ export interface GetOrderStatusRequest {
   accessToken: string;
 }
 
-export interface TransferInstructions {
-  bankName: string;
-  accountType: string;
-  accountNumber: string;
-  holderName: string;
-  holderRut: string;
-  contactEmail?: string;
-  amount: Clp;
-  reference: string;
-}
-
 export interface GetOrderStatusResponse {
   orderNumber: string;
   createdAt: string;
@@ -84,7 +74,6 @@ export interface GetOrderStatusResponse {
   subtotal: Clp;
   shipping: Clp;
   total: Clp;
-  transferInstructions?: TransferInstructions;
   trackingNote: string;
   /**
    * EXTENSIÓN del prototipo (no está en el contrato): true si el último intento de pago con Flow

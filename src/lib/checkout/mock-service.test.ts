@@ -49,10 +49,16 @@ describe("mockOrderService", () => {
     expect(first.shipping).toBe(3990);
     expect(first.total).toBe(40990);
     expect(first.next).toBe("pay_with_flow");
-    const second = await service.createOrder(request({ clientRequestId: "req-2", paymentMethod: "transfer", delivery: { type: "pickup" } }));
+    const second = await service.createOrder(request({ clientRequestId: "req-2", delivery: { type: "pickup" } }));
     expect(second.orderNumber).toBe("NE-000002");
     expect(second.shipping).toBe(0);
-    expect(second.next).toBe("show_transfer_instructions");
+    expect(second.next).toBe("pay_with_flow");
+  });
+
+  it("rechaza transferencia: solo Flow (D-044)", async () => {
+    const { service } = setup();
+    const transfer = { ...request(), paymentMethod: "transfer" } as unknown as CreateOrderRequest;
+    await expect(service.createOrder(transfer)).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
   it("es idempotente con el mismo clientRequestId", async () => {
@@ -81,24 +87,22 @@ describe("mockOrderService", () => {
 
   it("getOrderStatus exige el token y no guarda ni devuelve datos personales", async () => {
     const { service, storage } = setup();
-    const order = await service.createOrder(request({ paymentMethod: "transfer" }));
+    const order = await service.createOrder(request());
     await expect(service.getOrderStatus({ orderNumber: order.orderNumber, accessToken: "otro" })).rejects.toMatchObject({ code: "ORDER_NOT_FOUND" });
     const status = await service.getOrderStatus({ orderNumber: order.orderNumber, accessToken: order.accessToken });
-    expect(status.transferInstructions?.reference).toBe("NE-000001");
-    expect(status.transferInstructions?.amount).toBe(40990);
+    expect(status.orderNumber).toBe("NE-000001");
+    expect(status.total).toBe(40990);
     const everything = JSON.stringify(status) + (storage.getItem("ne.orders.v1") ?? "");
     expect(everything).not.toContain("12345678");
     expect(everything).not.toContain("ana@correo.cl");
     expect(everything).not.toContain("Calle 123");
   });
 
-  it("reserva 48 h con transferencia y 30 min con Flow; luego vence", async () => {
+  it("reserva 30 min con Flow; luego vence", async () => {
     let current = t0;
     const { service } = setup(() => current);
     const flow = await service.createOrder(request());
-    const transfer = await service.createOrder(request({ clientRequestId: "r2", paymentMethod: "transfer" }));
     expect(new Date(flow.reservedUntil).getTime() - t0.getTime()).toBe(30 * 60_000);
-    expect(new Date(transfer.reservedUntil).getTime() - t0.getTime()).toBe(48 * 3_600_000);
     current = new Date(t0.getTime() + 31 * 60_000);
     const status = await service.getOrderStatus({ orderNumber: flow.orderNumber, accessToken: flow.accessToken });
     expect(status.paymentStatus).toBe("expired");

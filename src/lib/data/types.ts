@@ -41,6 +41,8 @@ export interface Product {
   inStock: boolean;
   format: string | null;
   unitsPerPack: number | null;
+  /** Marcado por el admin para la sección «Productos destacados» del inicio. */
+  featured: boolean;
   seo: { title?: string; description?: string } | null;
 }
 

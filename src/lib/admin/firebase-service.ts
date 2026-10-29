@@ -450,7 +450,6 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
     },
 
     // Pedidos: callables del contrato.
-    confirmTransferPayment: (input) => orderAction(() => orderCalls.confirmTransferPayment(input), input.orderNumber),
     async cancelOrder(input) {
       const wasCancelled = state.orders.find((o) => o.orderNumber === input.orderNumber)?.paymentStatus === "cancelled";
       const response = await orderAction(() => orderCalls.cancelOrder(input), input.orderNumber);

@@ -103,6 +103,7 @@ export function mapProduct(sku: string, d: Doc, bucket: string): AdminProduct {
     published: bool(d.published),
     format: str(d.format),
     unitsPerPack: typeof d.unitsPerPack === "number" ? d.unitsPerPack : null,
+    featured: bool(d.featured),
     seo: mapSeo(d.seo),
     source: d.source === "controlfarma-xls" ? "controlfarma-xls" : "manual",
     commissionPerUnit: rate(d.commissionPerUnit),
@@ -175,10 +176,10 @@ function mapDelivery(v: unknown): AdminOrder["delivery"] {
 
 export function mapOrder(id: string, d: Doc): AdminOrder {
   const customer = isRecord(d.customer) ? d.customer : {};
-  const method: PaymentMethod = d.paymentMethod === "transfer" ? "transfer" : "flow";
+  // Solo Flow (D-044); en producción nunca se ofreció la transferencia.
+  const method: PaymentMethod = "flow";
   const paymentStatus = PAYMENT_STATUSES.find((s) => s === d.paymentStatus) ?? "pending_payment";
   const fulfillment = d.fulfillmentStatus;
-  const transfer = isRecord(d.transfer) ? d.transfer : null;
   const refund = isRecord(d.refund) ? d.refund : null;
   return {
     orderNumber: str(d.orderNumber) ?? id,
@@ -201,14 +202,6 @@ export function mapOrder(id: string, d: Doc): AdminOrder {
     shipping: int(d.shipping),
     total: int(d.total),
     freeShippingApplied: bool(d.freeShippingApplied),
-    transfer: transfer
-      ? {
-          confirmedBy: str(transfer.confirmedBy) ?? "",
-          confirmedAt: toIso(transfer.confirmedAt) ?? "",
-          ...(typeof transfer.reference === "string" ? { reference: transfer.reference } : {}),
-          ...(typeof transfer.note === "string" ? { note: transfer.note } : {}),
-        }
-      : null,
     refund: refund
       ? {
           amount: int(refund.amount),
@@ -253,7 +246,7 @@ export function mapTopProduct(sku: string, d: Doc): TopProduct {
 // ---------- Contenido de producto (escritura directa permitida por las reglas) ----------
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-export const CONTENT_KEYS = ["name", "description", "shortDescription", "categoryId", "images", "slug", "format", "unitsPerPack", "seo"] as const;
+export const CONTENT_KEYS = ["name", "description", "shortDescription", "categoryId", "images", "slug", "format", "unitsPerPack", "featured", "seo"] as const;
 
 /** Mismas validaciones que las reglas de Firestore, para dar un mensaje claro antes de escribir. */
 export function validateContentPatch(current: AdminProduct, patch: ProductContentPatch): void {
@@ -319,16 +312,13 @@ export const DEFAULT_SETTINGS: AdminSettings = {
   freeShippingThreshold: null,
   pickup: { enabled: true, address: "Av. Concha y Toro 180, Puente Alto", hours: "Lunes a viernes de 9:00 a 20:00" },
   maxQtyPerItem: 10,
-  reservationMinutes: { flow: 30, transfer: 2880 },
-  bank: { bankName: "", accountType: "", accountNumber: "", holderName: "", holderRut: "" },
+  reservationMinutes: { flow: 30 },
 };
 
 export function mergeSettings(pub: Doc | null, priv: Doc | null): AdminSettings {
   const base = DEFAULT_SETTINGS;
   const pickup = pub && isRecord(pub.pickup) ? pub.pickup : null;
   const minutes = priv && isRecord(priv.reservationMinutes) ? priv.reservationMinutes : null;
-  const bank = priv && isRecord(priv.bank) ? priv.bank : null;
-  const contactEmail = bank ? str(bank.contactEmail) : null;
   return {
     shippingFee: pub ? int(pub.shippingFee, base.shippingFee) : base.shippingFee,
     freeShippingThreshold: pub ? (typeof pub.freeShippingThreshold === "number" ? pub.freeShippingThreshold : null) : base.freeShippingThreshold,
@@ -337,18 +327,8 @@ export function mergeSettings(pub: Doc | null, priv: Doc | null): AdminSettings 
       : { ...base.pickup },
     maxQtyPerItem: pub ? int(pub.maxQtyPerItem, base.maxQtyPerItem) : base.maxQtyPerItem,
     reservationMinutes: minutes
-      ? { flow: int(minutes.flow, base.reservationMinutes.flow), transfer: int(minutes.transfer, base.reservationMinutes.transfer) }
+      ? { flow: int(minutes.flow, base.reservationMinutes.flow) }
       : { ...base.reservationMinutes },
-    bank: bank
-      ? {
-          bankName: str(bank.bankName) ?? "",
-          accountType: str(bank.accountType) ?? "",
-          accountNumber: str(bank.accountNumber) ?? "",
-          holderName: str(bank.holderName) ?? "",
-          holderRut: str(bank.holderRut) ?? "",
-          ...(contactEmail ? { contactEmail } : {}),
-        }
-      : { ...base.bank },
   };
 }
 
@@ -369,15 +349,6 @@ export function buildSettingsWrites(settings: AdminSettings, rawPublic: Doc | nu
       "Los ajustes públicos aún no existen en Firestore (falta el sembrado inicial con las comunas). Pídeselo al tech-lead.",
     );
   }
-  const email = settings.bank.contactEmail?.trim();
-  const bank: Doc = {
-    bankName: settings.bank.bankName.trim(),
-    accountType: settings.bank.accountType.trim(),
-    accountNumber: settings.bank.accountNumber.trim(),
-    holderName: settings.bank.holderName.trim(),
-    holderRut: settings.bank.holderRut.trim(),
-    ...(email ? { contactEmail: email } : {}),
-  };
   const limits = rawPrivate && isRecord(rawPrivate.limits) ? { ...rawPrivate.limits } : { ...DEFAULT_LIMITS };
   return {
     publicDoc: {
@@ -388,8 +359,8 @@ export function buildSettingsWrites(settings: AdminSettings, rawPublic: Doc | nu
       maxQtyPerItem: settings.maxQtyPerItem,
     },
     privateDoc: {
-      reservationMinutes: { flow: settings.reservationMinutes.flow, transfer: settings.reservationMinutes.transfer },
-      bank,
+      // Sin datos bancarios ni reserva de transferencia (D-044): al guardar se borran los que hubiera.
+      reservationMinutes: { flow: settings.reservationMinutes.flow },
       orderNumberStart: rawPrivate ? int(rawPrivate.orderNumberStart, 1) : 1,
       limits,
     },

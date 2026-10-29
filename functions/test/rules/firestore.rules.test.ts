@@ -101,14 +101,7 @@ const publicSettings = (over: Record<string, unknown> = {}) => ({
 });
 
 const privateSettings = (over: Record<string, unknown> = {}) => ({
-  reservationMinutes: { flow: 30, transfer: 2880 },
-  bank: {
-    bankName: "BANCO DE PRUEBA",
-    accountType: "Cuenta corriente",
-    accountNumber: "000000000",
-    holderName: "Nutra Elements (prueba)",
-    holderRut: "11.111.111-1",
-  },
+  reservationMinutes: { flow: 30 },
   orderNumberStart: 1,
   limits: { createOrderPerIpPer10Min: 5, pendingOrdersPerEmail: 3, orderStatusPerIpPer10Min: 30, orderStatusFailuresPerOrder: 10 },
   updatedAt: serverNow(),
@@ -342,7 +335,7 @@ describe("products como admin", () => {
     await assertFails(db("admin").doc("products/2427831").update({ name: "Nuevo", updatedAt: ts() }));
   });
 
-  it("valida nombre, textos, imágenes, unitsPerPack y seo; family ya no se escribe (D-040)", async () => {
+  it("valida nombre, textos, imágenes, unitsPerPack, featured y seo; family ya no se escribe (D-040)", async () => {
     const upd = (data: Record<string, unknown>) => db("admin").doc("products/2427831").update({ ...data, updatedAt: serverNow() });
     await assertFails(upd({ name: "" }));
     await assertFails(upd({ name: "x".repeat(121) }));
@@ -358,6 +351,10 @@ describe("products como admin", () => {
     await assertFails(upd({ unitsPerPack: 1001 }));
     await assertFails(upd({ unitsPerPack: 1.5 }));
     await assertFails(upd({ unitsPerPack: "90" }));
+    await assertFails(upd({ featured: "si" }));
+    await assertFails(upd({ featured: null }));
+    await assertSucceeds(upd({ featured: true }));
+    await assertSucceeds(upd({ featured: false }));
     await assertFails(upd({ family: "citrato-de-magnesio" }));
     await assertFails(upd({ family: null }));
     await assertFails(upd({ format: "" }));
@@ -662,11 +659,9 @@ describe("settings/private como admin", () => {
   });
 
   it("rechaza tiempos de reserva e límites fuera de rango", async () => {
-    await assertFails(set({ reservationMinutes: { flow: 4, transfer: 2880 } }));
-    await assertFails(set({ reservationMinutes: { flow: 241, transfer: 2880 } }));
-    await assertFails(set({ reservationMinutes: { flow: 30, transfer: 59 } }));
-    await assertFails(set({ reservationMinutes: { flow: 30, transfer: 10081 } }));
-    await assertFails(set({ reservationMinutes: { flow: 30 } }));
+    await assertFails(set({ reservationMinutes: { flow: 4 } }));
+    await assertFails(set({ reservationMinutes: { flow: 241 } }));
+    await assertFails(set({ reservationMinutes: {} }));
     await assertFails(set({ orderNumberStart: 0 }));
     await assertFails(set({ orderNumberStart: 100000001 }));
     await assertSucceeds(set({ orderNumberStart: 100000000 }));
@@ -689,14 +684,9 @@ describe("settings/private como admin", () => {
     await assertFails(set({ limits: { orderStatusPerIpPer10Min: 1001 } }));
   });
 
-  it("valida los datos bancarios", async () => {
-    const bank = privateSettings().bank;
-    await assertFails(set({ bank: { ...bank, bankName: "" } }));
-    await assertFails(set({ bank: { ...bank, accountNumber: "x".repeat(101) } }));
-    await assertFails(set({ bank: { ...bank, extra: "no" } }));
-    await assertFails(set({ bank: "texto" }));
-    await assertFails(set({ bank: omit(bank, "holderRut") }));
-    await assertSucceeds(set({ bank: { ...bank, contactEmail: "pagos@example.com" } }));
+  it("rechaza datos bancarios y reserva de transferencia: solo Flow (D-044)", async () => {
+    await assertFails(set({ bank: { bankName: "BANCO", accountType: "Cuenta corriente", accountNumber: "1", holderName: "N", holderRut: "1-9" } }));
+    await assertFails(set({ reservationMinutes: { flow: 30, transfer: 2880 } }));
   });
 
   it("rechaza campos extra y updatedAt del cliente; no borra", async () => {

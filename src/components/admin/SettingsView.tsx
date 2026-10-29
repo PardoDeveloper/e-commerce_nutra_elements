@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { isTestBank } from "@/lib/bank";
 import { errorMessage } from "@/lib/admin/errors";
 import type { AdminSettings } from "@/lib/admin/types";
 import { useAdminService, useAdminState } from "./AdminProvider";
@@ -60,7 +59,7 @@ function SeedInitialData({ needsSettings, needsCategories }: { needsSettings: bo
     <section className={`${ui.card} ${ui.section}`} aria-label="Datos iniciales">
       <h2>Datos iniciales</h2>
       <p className={ui.help}>
-        Crean solo lo que falta (comunas de la Región Metropolitana, despacho de $3.990, retiro en tienda, reservas y las 6 categorías). Nunca reemplazan datos existentes. Los datos bancarios iniciales son de prueba: edítalos abajo.
+        Crean solo lo que falta (comunas de la Región Metropolitana, despacho de $3.990, retiro en tienda, reservas y las 6 categorías). Nunca reemplazan datos existentes.
       </p>
       <div className={ui.actions}>
         {needsSettings ? (
@@ -96,9 +95,7 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
   const [pickupAddress, setPickupAddress] = useState(initial.pickup.address);
   const [pickupHours, setPickupHours] = useState(initial.pickup.hours);
   const [maxQty, setMaxQty] = useState(String(initial.maxQtyPerItem));
-  const [bank, setBank] = useState(initial.bank);
   const [flowMinutes, setFlowMinutes] = useState(String(initial.reservationMinutes.flow));
-  const [transferHours, setTransferHours] = useState(String(initial.reservationMinutes.transfer / 60));
   const [notice, setNotice] = useState<Notice>(null);
 
   async function onSubmit(event: FormEvent) {
@@ -110,8 +107,7 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
       freeShippingThreshold: threshold.trim() === "" ? null : toInt(threshold),
       pickup: { enabled: pickupEnabled, address: pickupAddress.trim(), hours: pickupHours.trim() },
       maxQtyPerItem: toInt(maxQty),
-      reservationMinutes: { flow: toInt(flowMinutes), transfer: Math.round(Number(transferHours) * 60) },
-      bank: { ...bank, contactEmail: bank.contactEmail?.trim() || undefined },
+      reservationMinutes: { flow: toInt(flowMinutes) },
     };
     try {
       await service.saveSettings(next);
@@ -121,13 +117,11 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
     }
   }
 
-  const setBankField = (key: keyof AdminSettings["bank"]) => (value: string) => setBank((b) => ({ ...b, [key]: value }));
-
   return (
     <div className={ui.page}>
       <div>
         <h1>Ajustes</h1>
-        <p className={ui.lead}>Despacho, retiro en tienda, datos bancarios y tiempos de reserva.</p>
+        <p className={ui.lead}>Despacho, retiro en tienda y tiempo de reserva.</p>
       </div>
       <form className={ui.form} onSubmit={onSubmit} noValidate>
         <fieldset className={ui.group}>
@@ -188,40 +182,6 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
         </fieldset>
 
         <fieldset className={ui.group}>
-          <legend>Datos bancarios para transferencias</legend>
-          {isTestBank(bank) ? (
-            <p className={ui.alert}>Son datos de prueba hasta que se entreguen los reales. Se muestran solo a quien paga por transferencia.</p>
-          ) : (
-            <p className={ui.help}>Se muestran solo a quien paga por transferencia.</p>
-          )}
-          <div className={ui.fields}>
-            {(
-              [
-                ["bankName", "Banco"],
-                ["accountType", "Tipo de cuenta"],
-                ["accountNumber", "Número de cuenta"],
-                ["holderName", "Titular"],
-                ["holderRut", "RUT del titular"],
-                ["contactEmail", "Correo de contacto (opcional)"],
-              ] as const
-            ).map(([key, label]) => (
-              <div className={ui.field} key={key}>
-                <label className={ui.label} htmlFor={`${id}-bank-${key}`}>
-                  {label}
-                </label>
-                <input
-                  id={`${id}-bank-${key}`}
-                  className={ui.input}
-                  maxLength={100}
-                  value={bank[key] ?? ""}
-                  onChange={(e) => setBankField(key)(e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className={ui.group}>
           <legend>Reserva de stock</legend>
           <p className={ui.help}>Tiempo que se reserva el stock mientras el pedido espera el pago.</p>
           <div className={ui.fields}>
@@ -231,13 +191,6 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
               </label>
               <input id={`${id}-flow`} className={ui.input} inputMode="numeric" value={flowMinutes} onChange={(e) => setFlowMinutes(e.target.value)} />
               <span className={ui.help}>Entre 5 y 240 minutos.</span>
-            </div>
-            <div className={ui.field}>
-              <label className={ui.label} htmlFor={`${id}-transfer`}>
-                Transferencia (horas)
-              </label>
-              <input id={`${id}-transfer`} className={ui.input} inputMode="decimal" value={transferHours} onChange={(e) => setTransferHours(e.target.value)} />
-              <span className={ui.help}>Entre 1 y 168 horas (7 días).</span>
             </div>
           </div>
         </fieldset>

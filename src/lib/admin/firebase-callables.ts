@@ -39,7 +39,6 @@ const MESSAGES: Record<string, string> = {
   RATE_LIMITED: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
   INTERNAL: "Ocurrió un error inesperado en el servidor. Inténtalo de nuevo.",
   ORDER_NOT_FOUND: "El pedido no existe.",
-  ORDER_NOT_TRANSFER: "El pedido no se paga por transferencia.",
   ORDER_NOT_PAID: "Solo un pedido pagado tiene estado logístico.",
   REASON_REQUIRED: "Retroceder un estado exige un motivo (1 a 300 caracteres).",
   INVALID_REFUND_AMOUNT: "El monto del reembolso no es válido (entero entre 1 y el total del pedido).",
@@ -248,21 +247,6 @@ export interface OrderCallResult {
 
 export function createOrderCallables(invoke: CallableInvoker) {
   return {
-    async confirmTransferPayment(input: { orderNumber: string; reference?: string; note?: string }): Promise<OrderCallResult> {
-      const r = record(
-        await invoke("confirmTransferPayment", {
-          orderNumber: input.orderNumber,
-          ...(input.reference?.trim() ? { reference: input.reference.trim() } : {}),
-          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-        }),
-      );
-      return {
-        changed: r.alreadyPaid !== true,
-        ...(r.paymentStatus === "payment_review"
-          ? { message: "El pedido pasó a revisión de pago: la reserva había expirado y ya no hay stock. El dinero sí se recibió." }
-          : {}),
-      };
-    },
     async cancelOrder(input: { orderNumber: string; reason: string }): Promise<OrderCallResult> {
       await invoke("cancelOrder", { orderNumber: input.orderNumber, reason: input.reason.trim() });
       return { changed: true };

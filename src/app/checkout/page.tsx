@@ -15,13 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default async function CheckoutPage() {
-  const { catalog, settings, transferAvailable } = await loadCheckoutData();
+  const { catalog, settings } = await loadCheckoutData();
   return (
     <>
       <PrototypeBanner mode={resolvePaymentsMode(resolveDataSource())} />
       <Container className={styles.page}>
         <h1 className={styles.title}>Finalizar compra</h1>
-        <CheckoutForm catalog={catalog} settings={settings} transferAvailable={transferAvailable} dataSource={resolveDataSource()} />
+        <CheckoutForm catalog={catalog} settings={settings} dataSource={resolveDataSource()} />
       </Container>
     </>
   );

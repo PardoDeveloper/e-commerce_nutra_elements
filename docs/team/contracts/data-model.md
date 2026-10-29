@@ -31,7 +31,7 @@ Convenciones
 | `orders/{orderNumber}` | `NE-000123` (D-007) | Pedidos con snapshot de precios y reserva | Solo servidor |
 | `counters/orders` | fijo `orders` | Contador del número de pedido (el primero es NE-000001) | Solo servidor |
 | `settings/public` | fijo | Ajustes visibles al público (envío, comunas, tienda) | Admin directo |
-| `settings/private` | fijo | Datos bancarios y tiempos de reserva | Admin directo |
+| `settings/private` | fijo | Tiempo de reserva, numeración y límites (sin datos bancarios desde D-044) | Admin directo |
 | `metrics/daily/days/{YYYY-MM-DD}` | fecha en `America/Santiago` | Ventas por día | Solo servidor |
 | `metrics/products/items/{sku}` | SKU | Ventas por producto | Solo servidor |
 | `imports/{importId}` | ID automático | Reportes de importaciones y de operaciones masivas | Solo servidor |
@@ -56,9 +56,9 @@ ID del documento = `sku`. Siempre texto (`"2427831"`), nunca número, para no pe
 | `sourceName` | string | sí | 1–200 caracteres. NOMBRE original de la planilla, tal cual (D-018) | Servidor, en importación. Solo lectura para el admin |
 | `name` | string | sí | 1–120 caracteres. Nombre para mostrar | Servidor lo propone en formato título al crear; el admin lo edita (directo) |
 | `slug` | string \| null | no hasta publicar | `^[a-z0-9]+(-[a-z0-9]+)*$`, máx. 80. **Único** entre productos (se valida al publicar). Inmutable mientras `published == true` (regla) | Admin directo (solo si `published == false`) |
-| `description` | string \| null | no hasta publicar | máx. 5000. Texto plano. Sin afirmaciones de curar, tratar o prevenir (AGENTS.md) | Admin directo |
+| `description` | string \| null | no (tampoco para publicar, D-042) | máx. 5000. Texto plano. Sin afirmaciones de curar, tratar o prevenir (AGENTS.md) | Admin directo |
 | `shortDescription` | string \| null | no | máx. 300 | Admin directo |
-| `categoryId` | string \| null | no hasta publicar | debe existir en `categories` y estar publicada al publicar | Admin directo (la regla verifica que exista). Valores iniciales de `categories`: ver 2.2 |
+| `categoryId` | string \| null | no (opcional también para publicar, D-040) | si tiene valor, debe existir en `categories` y estar publicada al publicar | Admin directo (la regla verifica que exista). Valores iniciales de `categories`: ver 2.2 |
 | `images` | array de `{path, alt}` | no hasta publicar | 0–8 elementos. `path`: ruta en Storage `products/{sku}/{imageId}.{ext}`. `alt`: 1–140. La primera es la principal | Admin directo (después de subir el archivo a Storage) |
 | `price` | int | sí | 1–10.000.000. Precio de lista en CLP | Servidor (import, `importPrices`, `updateProductCommerce`) |
 | `discount` | map \| null | no | `{type: "percent"\|"fixed", value: int}`. `percent`: 1–99. `fixed`: 1 a `price-1`. Sin fechas de vigencia en el MVP | Servidor (`applyDiscount`) |
@@ -75,6 +75,7 @@ ID del documento = `sku`. Siempre texto (`"2427831"`), nunca número, para no pe
 | `gtin` | string \| null | no | solo si `barcodeValid` y **no** empieza con 978 o 979 (ISBN). El JSON-LD usa `gtin` y omite el campo si es null | Servidor, en importación |
 | `format` | string \| null | no | enum abierto, hoy `"capsulas"`. Si es string: **1 a 40 caracteres** (D-027) | Servidor propone al importar; admin directo |
 | `unitsPerPack` | int \| null | no | 1–1000 (30, 60, 90, 120…). Se extrae de "X 90" en el nombre | Servidor propone; admin directo |
+| `featured` | bool | no | Si falta, cuenta como `false`. Marca el producto para «Productos destacados» del inicio (D-043) | Admin directo |
 | ~~`family`~~ | — | — | **Eliminado (D-040).** Ya no se escribe ni se lee; los documentos antiguos pueden conservarlo y se ignora | — |
 | `seo` | map \| null | no | `{title?: string ≤ 70, description?: string ≤ 170}`. Desde D-040 el admin no lo edita (lo deja en `null`): el título y la descripción SEO salen de `name` y `description` | Admin directo |
 | `source` | string | sí | `"controlfarma-xls"` o `"manual"` | Servidor |
@@ -160,6 +161,7 @@ interface ProductDoc {
   gtin: string | null;
   format: string | null;
   unitsPerPack: number | null;
+  featured?: boolean;
   family: string | null;
   seo: { title?: string; description?: string } | null;
   source: 'controlfarma-xls' | 'manual';
@@ -221,7 +223,7 @@ ID = número legible `NE-000123` (D-007). El primer pedido es **`NE-000001`** (D
 |---|---|---|---|---|
 | `orderNumber` | string | sí | `^NE-\d{6,}$`, igual al ID | `createOrder` |
 | `number` | int | sí | el entero detrás del prefijo | `createOrder` |
-| `paymentMethod` | `"flow"\|"transfer"` | sí | inmutable | `createOrder` |
+| `paymentMethod` | `"flow"` | sí | inmutable. Solo Flow (D-044); `createOrder` rechaza `"transfer"` | `createOrder` |
 | `paymentStatus` | `"pending_payment"\|"paid"\|"payment_review"\|"expired"\|"cancelled"\|"refunded"` | sí | ver sección 6. `refunded` es terminal y solo se alcanza desde `paid` | Servidor |
 | `fulfillmentStatus` | `null\|"preparing"\|"ready_for_pickup"\|"on_route"\|"delivered"` | sí | `null` hasta que el pedido está `paid` | Servidor |
 | `stockState` | `"reserved"\|"committed"\|"released"` | sí | si el stock del pedido está reservado, vendido o devuelto. Evita liberar o reponer dos veces. Un pedido `refunded` queda `committed` (sin reposición) o `released` (con `restock: true`) | Servidor |
@@ -236,7 +238,7 @@ ID = número legible `NE-000123` (D-007). El primer pedido es **`NE-000001`** (D
 | `freeShippingApplied` | bool | sí | informativo | `createOrder` |
 | `accessTokenHash` | string | sí | SHA-256 hex del token de acceso (el token en claro se entrega una vez y no se guarda) | `createOrder` (y rotación en un reintento idempotente) |
 | `flow` | map \| null | no | `{commerceOrder, token, flowOrder, paymentUrl, attempt, lastStatus, lastCheckedAt, paidAt, amountPaid, paidFlowOrder}`; `paidFlowOrder` (v1.4, int \| null) es el `flowOrder` del pago que se aceptó (o puso en revisión); un `getStatus` pagado con otro `flowOrder` es un segundo cobro (`DUPLICATE_PAYMENT`); solo si `paymentMethod == "flow"` | `createFlowPayment`, `flowConfirm` |
-| `transfer` | map \| null | no | `{confirmedBy (uid), confirmedAt, reference?, note?}` | `confirmTransferPayment` |
+| `transfer` | null | no | Siempre `null` (D-044: ya no hay pago por transferencia ni `confirmTransferPayment`) | `createOrder` |
 | `refund` | map \| null | no | Solo si `paymentStatus == "refunded"`: `{amount: int (1..total), method: "flow"\|"transfer", refundedAt: Timestamp (fecha del reembolso hecho a mano), note (1..300), restock: bool, restocked: bool (true si se repuso stock), recordedBy: uid, recordedAt: Timestamp}` | `recordManualRefund` |
 | `review` | map \| null | no | `{reason, openedAt, resolvedBy?, resolvedAt?, resolution?: "accepted"\|"cancelled", note?}`; razones: `AMOUNT_MISMATCH`, `NO_STOCK_AFTER_EXPIRY`, `PAID_AFTER_CANCEL`, `CURRENCY_MISMATCH` | Servidor |
 | `statusHistory` | array | sí | `{at, kind:"payment"\|"fulfillment"\|"stock", from, to, by:"system"\|"flow"\|<uid>, note?, reason?, direction?: "backward", refund?: {amount, method, restock}}`. `reason` es obligatorio al retroceder un estado logístico (6.2); en un reembolso, `note` y `refund` resumen el campo `refund`. Máx. 50 entradas | Servidor |
@@ -336,8 +338,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 
 | Campo | Tipo | Oblig. | Validación |
 |---|---|---|---|
-| `reservationMinutes` | map `{flow: int, transfer: int}` | sí | `flow`: 5–240 (por defecto **30**). `transfer`: 60–10080 (por defecto **2880 = 48 h**). Pendiente de confirmar por el jefe (D-006, PREGUNTA ABIERTA 2); son valores configurables |
-| `bank` | map | sí | `{bankName, accountType, accountNumber, holderName, holderRut, contactEmail?}` strings ≤100. **Datos de prueba hasta que Carlos entregue los reales.** No son secretos de acceso, pero se entregan solo al comprador con transferencia vía `getOrderStatus` |
+| `reservationMinutes` | map `{flow: int}` | sí | `flow`: 5–240 (por defecto **30**). Solo Flow (D-044) |
 | `orderNumberStart` | int | sí | 1 a **100.000.000** (D-027), por defecto 1 (primer pedido `NE-000001`) |
 | `limits` | map | sí | Límites anti-abuso, valores iniciales configurables (D-024): `{createOrderPerIpPer10Min: int 1..100 (5), pendingOrdersPerEmail: int 1..50 (3), orderStatusPerIpPer10Min: int 1..1000 (120; v1.4, antes 30), orderStatusFailuresPerOrder: int 1..100 (10), flowConfirmPerIpPer10Min: int 1..10000 (300; v1.4, opcional: no se siembra; v1.4.1: `firestore.rules` ya lo admite)}`; todas las claves son opcionales y cualquier otra clave se rechaza. Si falta un valor, la Function usa el inicial |
 | `updatedAt` | Timestamp | sí | |
@@ -354,8 +355,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 }
 // settings/private
 {
-  "reservationMinutes": { "flow": 30, "transfer": 2880 },
-  "bank": { "bankName": "BANCO DE PRUEBA", "accountType": "Cuenta corriente", "accountNumber": "000000000", "holderName": "Nutra Elements (prueba)", "holderRut": "11.111.111-1" },
+  "reservationMinutes": { "flow": 30 },
   "orderNumberStart": 1,
   "limits": { "createOrderPerIpPer10Min": 5, "pendingOrdersPerEmail": 3, "orderStatusPerIpPer10Min": 120, "orderStatusFailuresPerOrder": 10 },
   "updatedAt": "<Timestamp>"
@@ -625,10 +625,10 @@ Etiquetas para mostrar (el campo guarda el código)
 | Desde | Hacia | Quién lo ejecuta | Condición | Stock |
 |---|---|---|---|---|
 | (nuevo) | `pending_payment` | `createOrder` (invitado, vía Function) | stock suficiente | Se **reserva** (`stock -= qty`, `reserved += qty`, `stockState = reserved`) |
-| `pending_payment` | `paid` | `flowConfirm` (Flow) o `confirmTransferPayment` (admin) | Flow: `getStatus` pagado, monto y moneda correctos. Transferencia: el admin verificó el depósito | Se **confirma** la venta: `reserved -= qty`, `stockState = committed`. `stock` no cambia (ya estaba descontado) |
+| `pending_payment` | `paid` | `flowConfirm` (Flow) | `getStatus` pagado, monto y moneda correctos | Se **confirma** la venta: `reserved -= qty`, `stockState = committed`. `stock` no cambia (ya estaba descontado) |
 | `pending_payment` | `expired` | `releaseExpiredReservations` (sistema) | `reservedUntil <= now` y, si hay `flow.token`, `getStatus` no está pagado | Se **libera**: `stock += qty`, `reserved -= qty`, `stockState = released` |
 | `pending_payment` | `cancelled` | `cancelOrder` (admin) | | Se **libera** |
-| `expired` | `paid` | `flowConfirm` (pago tardío) o `confirmTransferPayment` (admin) | hay stock para **todos** los ítems: se re-reserva y se confirma en la misma transacción | `stock -= qty` y queda `committed` |
+| `expired` | `paid` | `flowConfirm` (pago tardío) | hay stock para **todos** los ítems: se re-reserva y se confirma en la misma transacción | `stock -= qty` y queda `committed` |
 | `expired` | `payment_review` | los mismos | **no** hay stock suficiente (`review.reason = NO_STOCK_AFTER_EXPIRY`) | Sin cambios (sigue `released`) |
 | `cancelled` | `payment_review` | `flowConfirm` | llegó un pago de Flow a un pedido cancelado (`PAID_AFTER_CANCEL`) | Sin cambios (`released`) |
 | `pending_payment` | `payment_review` | `flowConfirm` | monto o moneda distintos al `total` del snapshot (`AMOUNT_MISMATCH`, `CURRENCY_MISMATCH`) | La reserva **se mantiene** (`reserved`) hasta que el admin resuelva; el job **no** libera pedidos en revisión |
@@ -738,7 +738,7 @@ Los tests de concurrencia de stock, manipulación de precio e idempotencia de Fl
 
 ## 10. PREGUNTAS ABIERTAS
 
-2. **Reservas configurables, pendientes del jefe.** Reserva de 30 min para Flow y de 48 h para transferencias (D-006). Mientras tanto son valores de `settings/private.reservationMinutes`.
+2. **Reservas configurables, pendientes del jefe.** Reserva de 30 min para Flow (D-006); la transferencia se eliminó (D-044). Mientras tanto son valores de `settings/private.reservationMinutes`.
 7. **Retención de datos personales de los pedidos** (cuánto tiempo y cómo se borran; incluye el RUT). Después del lanzamiento, con revisión legal (Ley 21.719).
 
 ## 11. Resueltas (referencia: D-024, salvo indicación)

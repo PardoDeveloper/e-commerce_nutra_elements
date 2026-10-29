@@ -85,7 +85,8 @@ export const createOrderRequestSchema = z.strictObject({
     .min(1)
     .max(20)
     .refine((items) => new Set(items.map((i) => i.sku)).size === items.length, { message: "SKU repetido" }),
-  paymentMethod: z.enum(["flow", "transfer"]),
+  // Solo Flow (D-044): ya no se aceptan pedidos por transferencia.
+  paymentMethod: z.literal("flow"),
   customer: customerSchema,
   delivery: deliverySchema,
 });

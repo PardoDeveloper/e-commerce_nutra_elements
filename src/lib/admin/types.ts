@@ -40,6 +40,8 @@ export interface AdminProduct {
   published: boolean;
   format: string | null;
   unitsPerPack: number | null;
+  /** Se muestra en «Productos destacados» del inicio. Lo edita el admin (contenido). */
+  featured: boolean;
   seo: { title?: string; description?: string } | null;
   source: "controlfarma-xls" | "manual";
   /** Comisión del químico en CLP por unidad vendida, o null si aún no se define. La escribe el servidor. */
@@ -53,7 +55,7 @@ export interface AdminProduct {
 export type ProductContentPatch = Partial<
   Pick<
     AdminProduct,
-    "name" | "description" | "shortDescription" | "categoryId" | "images" | "slug" | "format" | "unitsPerPack" | "seo"
+    "name" | "description" | "shortDescription" | "categoryId" | "images" | "slug" | "format" | "unitsPerPack" | "featured" | "seo"
   >
 >;
 
@@ -67,9 +69,11 @@ export interface AdminCategory {
 }
 
 // ---------- Pedidos ----------
-export type PaymentMethod = "flow" | "transfer";
+/** Solo Flow (D-044). */
+export type PaymentMethod = "flow";
 export type PaymentStatus = "pending_payment" | "paid" | "payment_review" | "expired" | "cancelled" | "refunded";
 export type FulfillmentStatus = "preparing" | "ready_for_pickup" | "on_route" | "delivered";
+/** Cómo se devolvió el dinero fuera del sistema: por Flow o por transferencia al cliente. */
 export type RefundMethod = "flow" | "transfer";
 export type StockState = "reserved" | "committed" | "released";
 
@@ -127,7 +131,6 @@ export interface AdminOrder {
   shipping: Clp;
   total: Clp;
   freeShippingApplied: boolean;
-  transfer: { confirmedBy: string; confirmedAt: string; reference?: string; note?: string } | null;
   refund: OrderRefund | null;
   statusHistory: StatusHistoryEntry[];
   paidAt: string | null;
@@ -143,15 +146,7 @@ export interface AdminSettings {
   pickup: { enabled: boolean; address: string; hours: string };
   maxQtyPerItem: number;
   /** settings/private */
-  reservationMinutes: { flow: number; transfer: number };
-  bank: {
-    bankName: string;
-    accountType: string;
-    accountNumber: string;
-    holderName: string;
-    holderRut: string;
-    contactEmail?: string;
-  };
+  reservationMinutes: { flow: number };
 }
 
 // ---------- Lotes (functions.md 5) ----------

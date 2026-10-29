@@ -73,5 +73,5 @@ export async function handleGetOrderStatus(deps: GetStatusDeps, data: unknown, c
     }
   }
 
-  return buildStatusResponse(current, settings.bank);
+  return buildStatusResponse(current);
 }

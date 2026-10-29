@@ -49,14 +49,8 @@ export function validateSettings(s: AdminSettings): void {
   if (s.freeShippingThreshold !== null && !int(s.freeShippingThreshold, 1, 10_000_000)) fields.push("freeShippingThreshold");
   if (!int(s.maxQtyPerItem, 1, 100)) fields.push("maxQtyPerItem");
   if (!int(s.reservationMinutes.flow, 5, 240)) fields.push("reservationMinutes.flow");
-  if (!int(s.reservationMinutes.transfer, 60, 10_080)) fields.push("reservationMinutes.transfer");
   if (s.pickup.address.length > 200 || (s.pickup.enabled && s.pickup.address.trim() === "")) fields.push("pickup.address");
   if (s.pickup.hours.length > 200 || (s.pickup.enabled && s.pickup.hours.trim() === "")) fields.push("pickup.hours");
-  for (const key of ["bankName", "accountType", "accountNumber", "holderName", "holderRut"] as const) {
-    const v = s.bank[key];
-    if (v.trim() === "" || v.length > 100) fields.push(`bank.${key}`);
-  }
-  if ((s.bank.contactEmail?.length ?? 0) > 100) fields.push("bank.contactEmail");
   if (fields.length > 0) throw new AdminServiceError("INVALID_INPUT", `Revisa estos campos: ${fields.join(", ")}.`);
 }
 
@@ -71,7 +65,6 @@ export function publishBlocker(p: AdminProduct, others: Iterable<AdminProduct>, 
     if (o.sku !== p.sku && o.slug === p.slug) return { code: "DUPLICATE_SLUG", message: "Otro producto usa el mismo slug." };
   }
   if (pendingSlugs.has(p.slug)) return { code: "DUPLICATE_SLUG", message: "Otro producto del mismo lote usa el mismo slug." };
-  if (!p.description || p.description.trim() === "") return { code: "MISSING_DESCRIPTION", message: "Falta la descripción." };
   if (p.images.length === 0 || p.images.some((i) => i.alt.trim() === "")) {
     return { code: "MISSING_IMAGE", message: "Falta al menos una imagen con texto alternativo." };
   }
@@ -138,6 +131,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
             published: false,
             format: null,
             unitsPerPack: null,
+            featured: false,
             seo: null,
             source: "controlfarma-xls",
             commissionPerUnit: null,
@@ -300,6 +294,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
         published: false,
         format: null,
         unitsPerPack: null,
+        featured: false,
         seo: null,
         source: "manual",
         commissionPerUnit: null,
@@ -397,21 +392,6 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       set({ products: state.products.map((p) => (p.sku === sku ? { ...p, active, published: active ? p.published : false } : p)) });
     },
 
-    async confirmTransferPayment({ orderNumber, reference, note }) {
-      const order = findOrder(orderNumber);
-      const map = productMap();
-      const hasStock = order.items.every((it) => (map.get(it.sku)?.stock ?? 0) >= it.qty);
-      const result = orderLogic.confirmTransferPayment(order, { reference, note }, { now: nowIso(), by: ADMIN_ID, hasStock });
-      // Un pedido expirado que se paga tarde vuelve a reservar el stock (queda vendido).
-      if (result.ok && result.changed && order.paymentStatus === "expired" && result.order.paymentStatus === "paid") {
-        for (const it of order.items) {
-          const p = map.get(it.sku);
-          if (p) map.set(it.sku, recompute({ ...p, stock: p.stock - it.qty }));
-        }
-        set({ products: [...map.values()] });
-      }
-      return commitOrder(result, order);
-    },
 
     async cancelOrder({ orderNumber, reason }) {
       const order = findOrder(orderNumber);

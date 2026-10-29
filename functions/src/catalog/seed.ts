@@ -1,5 +1,5 @@
 // Datos iniciales del proyecto (data-model.md 2.2, 2.5 y 7.5; D-023). Función pura: no toca Firestore.
-// El script `functions/scripts/seed.mjs` las escribe. Los datos bancarios son DE PRUEBA (hasta que Carlos entregue los reales).
+// El script `functions/scripts/seed.mjs` las escribe.
 
 export interface SeedCategory {
   slug: string;
@@ -25,8 +25,7 @@ export interface SeedSettingsPublic {
 }
 
 export interface SeedSettingsPrivate {
-  reservationMinutes: { flow: number; transfer: number };
-  bank: { bankName: string; accountType: string; accountNumber: string; holderName: string; holderRut: string };
+  reservationMinutes: { flow: number };
   orderNumberStart: number;
   limits: {
     createOrderPerIpPer10Min: number;
@@ -87,15 +86,7 @@ export function buildSeedData(): SeedData {
       maxQtyPerItem: 10,
     },
     settingsPrivate: {
-      reservationMinutes: { flow: 30, transfer: 2880 },
-      // DATOS DE PRUEBA: reemplazar por los reales desde el panel de administración.
-      bank: {
-        bankName: "BANCO DE PRUEBA",
-        accountType: "Cuenta corriente",
-        accountNumber: "000000000",
-        holderName: "Nutra Elements (prueba)",
-        holderRut: "11.111.111-1",
-      },
+      reservationMinutes: { flow: 30 },
       orderNumberStart: 1,
       limits: {
         createOrderPerIpPer10Min: 5,

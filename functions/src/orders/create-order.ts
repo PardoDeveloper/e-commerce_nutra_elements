@@ -85,8 +85,10 @@ export async function handleCreateOrder(deps: Deps, data: unknown, ctx: CreateOr
         if (!orderData) throw appError("INTERNAL");
         const order = parseOrder(orderData);
         if (order.paymentStatus !== "pending_payment") throw appError("ORDER_NOT_PAYABLE");
+        // Un pedido antiguo por transferencia (D-044) no coincide con un request nuevo, que siempre es Flow.
+        if (order.paymentMethod !== "flow") throw appError("INVALID_INPUT");
         if (order.accessTokenHash !== tokenHash) throw appError("INTERNAL"); // pedido creado con otro esquema de token: no debería existir
-        return buildCreateResponse(order, token);
+        return buildCreateResponse({ ...order, paymentMethod: order.paymentMethod }, token);
       }
 
       const settings = parsePublicSettings(publicDoc);

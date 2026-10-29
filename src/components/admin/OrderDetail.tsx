@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { errorMessage } from "@/lib/admin/errors";
-import { FULFILLMENT_LABELS, METHOD_LABELS, PAYMENT_LABELS, statusLabel } from "@/lib/admin/labels";
+import { FULFILLMENT_LABELS, METHOD_LABELS, PAYMENT_LABELS, REFUND_METHOD_LABELS, statusLabel } from "@/lib/admin/labels";
 import { allowedActions } from "@/lib/admin/orders";
 import type { AdminOrder, RefundMethod, StatusHistoryEntry } from "@/lib/admin/types";
 import { formatClp } from "@/lib/format";
@@ -95,7 +95,7 @@ function actor(by: string): string {
 
 function Detail({ order }: { order: AdminOrder }) {
   const actions = allowedActions(order);
-  const hasActions = actions.confirmTransfer || actions.cancel || actions.advanceTo || actions.backTo || actions.refund;
+  const hasActions = actions.cancel || actions.advanceTo || actions.backTo || actions.refund;
   const [notice, setNotice] = useState<Notice>(null);
 
   return (
@@ -259,34 +259,13 @@ function Detail({ order }: { order: AdminOrder }) {
             <dt>Monto</dt>
             <dd>{formatClp(order.refund.amount)}</dd>
             <dt>Medio</dt>
-            <dd>{METHOD_LABELS[order.refund.method]}</dd>
+            <dd>{REFUND_METHOD_LABELS[order.refund.method]}</dd>
             <dt>Fecha</dt>
             <dd>{formatDateTime(order.refund.refundedAt)}</dd>
             <dt>Nota</dt>
             <dd>{order.refund.note}</dd>
             <dt>Stock</dt>
             <dd>{order.refund.restocked ? "Se repuso el stock" : "No se repuso el stock"}</dd>
-          </dl>
-        </section>
-      ) : null}
-      {order.transfer ? (
-        <section className={`${ui.card} ${ui.section}`} aria-labelledby="transfer">
-          <h2 id="transfer">Transferencia confirmada</h2>
-          <dl className={ui.dl}>
-            <dt>Fecha</dt>
-            <dd>{formatDateTime(order.transfer.confirmedAt)}</dd>
-            {order.transfer.reference ? (
-              <>
-                <dt>Referencia</dt>
-                <dd>{order.transfer.reference}</dd>
-              </>
-            ) : null}
-            {order.transfer.note ? (
-              <>
-                <dt>Nota</dt>
-                <dd>{order.transfer.note}</dd>
-              </>
-            ) : null}
           </dl>
         </section>
       ) : null}
@@ -299,7 +278,6 @@ function Detail({ order }: { order: AdminOrder }) {
           </p>
         ) : (
           <div className={ui.stack}>
-            {actions.confirmTransfer ? <ConfirmTransferForm order={order} onNotice={setNotice} /> : null}
             {actions.advanceTo ? <AdvanceButton order={order} to={actions.advanceTo} onNotice={setNotice} /> : null}
             {actions.backTo ? <BackwardForm order={order} to={actions.backTo} onNotice={setNotice} /> : null}
             {actions.refund ? <RefundForm order={order} onNotice={setNotice} /> : null}
@@ -321,7 +299,7 @@ function Detail({ order }: { order: AdminOrder }) {
               {h.note ? <div>Nota: {h.note}</div> : null}
               {h.refund ? (
                 <div>
-                  Reembolso de {formatClp(h.refund.amount)} por {METHOD_LABELS[h.refund.method]}
+                  Reembolso de {formatClp(h.refund.amount)} por {REFUND_METHOD_LABELS[h.refund.method]}
                   {h.refund.restock ? ", con reposición de stock" : ", sin reposición de stock"}.
                 </div>
               ) : null}
@@ -344,57 +322,6 @@ function ActionBox({ title, children }: { title: string; children: ReactNode }) 
       <legend>{title}</legend>
       {children}
     </fieldset>
-  );
-}
-
-function ConfirmTransferForm({ order, onNotice }: ActionProps) {
-  const service = useAdminService();
-  const id = useId();
-  const [reference, setReference] = useState("");
-  const [note, setNote] = useState("");
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    try {
-      const r = await service.confirmTransferPayment({
-        orderNumber: order.orderNumber,
-        reference: reference.trim() || undefined,
-        note: note.trim() || undefined,
-      });
-      onNotice({ kind: "ok", text: r.message ?? sim("Transferencia confirmada (simulado): el pedido quedó pagado y en preparación.") });
-    } catch (e) {
-      onNotice({ kind: "error", text: errorMessage(e) });
-    }
-  }
-
-  return (
-    <form onSubmit={onSubmit}>
-      <ActionBox title="Confirmar transferencia">
-        <p className={ui.help}>
-          Verifica el depósito en la cartola antes de confirmar.
-          {order.paymentStatus === "expired" ? " La reserva había expirado: se volverá a reservar el stock; si no alcanza, el pedido pasa a revisión de pago." : ""}
-        </p>
-        <div className={ui.fields}>
-          <div className={ui.field}>
-            <label className={ui.label} htmlFor={`${id}-ref`}>
-              Referencia (opcional)
-            </label>
-            <input id={`${id}-ref`} className={ui.input} maxLength={100} value={reference} onChange={(e) => setReference(e.target.value)} />
-          </div>
-          <div className={ui.field}>
-            <label className={ui.label} htmlFor={`${id}-note`}>
-              Nota (opcional)
-            </label>
-            <input id={`${id}-note`} className={ui.input} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-        </div>
-        <div className={ui.actions}>
-          <button type="submit" className={ui.btn}>
-            Confirmar transferencia recibida
-          </button>
-        </div>
-      </ActionBox>
-    </form>
   );
 }
 
@@ -572,7 +499,7 @@ function RefundForm({ order, onNotice }: ActionProps) {
             </label>
             <select id={`${id}-method`} className={ui.select} value={method} onChange={(e) => setMethod(e.target.value as RefundMethod)}>
               <option value="flow">Flow</option>
-              <option value="transfer">Transferencia bancaria</option>
+              <option value="transfer">Transferencia al cliente</option>
             </select>
           </div>
           <div className={ui.field}>

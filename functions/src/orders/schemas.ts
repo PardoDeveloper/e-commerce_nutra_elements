@@ -22,12 +22,6 @@ const accessToken = z.string().min(10).max(100).regex(/^[A-Za-z0-9_-]+$/);
 
 export const orderAccessSchema = z.strictObject({ orderNumber, accessToken });
 
-export const confirmTransferSchema = z.strictObject({
-  orderNumber,
-  reference: text(1, 100).optional(),
-  note: text(1, 300).optional(),
-});
-
 export const resolveReviewSchema = z.strictObject({
   orderNumber,
   action: z.enum(["accept", "cancel"]),

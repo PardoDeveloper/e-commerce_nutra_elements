@@ -56,6 +56,7 @@ function toProduct(row: CatalogRow): Product {
     inStock: row.inStock,
     format: row.format,
     unitsPerPack: row.unitsPerPack,
+    featured: false,
     seo: null,
   };
 }

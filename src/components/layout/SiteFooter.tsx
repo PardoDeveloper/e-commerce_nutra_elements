@@ -85,7 +85,6 @@ export async function SiteFooter() {
           <h2 className={styles.heading}>Medios de pago</h2>
           <ul className={styles.payments}>
             <li className={styles.payment}>Flow</li>
-            <li className={styles.payment}>Transferencia bancaria</li>
           </ul>
         </div>
       </div>

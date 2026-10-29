@@ -103,7 +103,7 @@ export default async function ContactPage() {
             </span>
             <div>
               <h2 id="con-horario">Horario de atención</h2>
-              <p>{settings.pickup.hours}.</p>
+              <p>{settings.pickup.hours} hrs.</p>
               <p>Para retirar, indica tu número de pedido (formato NE-xxxxxx).</p>
             </div>
           </section>

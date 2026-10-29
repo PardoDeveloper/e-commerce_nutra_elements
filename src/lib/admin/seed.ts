@@ -57,6 +57,7 @@ export function toAdminProduct(p: Product): AdminProduct {
     published: true,
     format: p.format,
     unitsPerPack: p.unitsPerPack,
+    featured: p.featured,
     seo: p.seo,
     source: "controlfarma-xls",
     // Demostración: comisión ficticia y determinista para ver el cálculo en Ventas.
@@ -77,14 +78,7 @@ export function defaultSettings(base: {
     freeShippingThreshold: base.freeShippingThreshold,
     pickup: { ...base.pickup },
     maxQtyPerItem: base.maxQtyPerItem,
-    reservationMinutes: { flow: 30, transfer: 2880 },
-    bank: {
-      bankName: "BANCO DE PRUEBA",
-      accountType: "Cuenta corriente",
-      accountNumber: "000000000",
-      holderName: "Nutra Elements (prueba)",
-      holderRut: "11.111.111-1",
-    },
+    reservationMinutes: { flow: 30 },
   };
 }
 
@@ -143,7 +137,8 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
   const pool = ctx.products.filter((p) => p.inStock);
   if (pool.length === 0) return [];
   const nowMs = ctx.now.getTime();
-  const raw: Array<{ createdMs: number; paid: boolean; method: "flow" | "transfer" }> = [];
+  // `slow`: pedidos que tardan en pagarse (pueden quedar pendientes, vencer o cancelarse). Todos se pagan con Flow (D-044).
+  const raw: Array<{ createdMs: number; paid: boolean; slow: boolean }> = [];
 
   for (let d = days - 1; d >= 0; d--) {
     // Más actividad hacia el presente, con variación por día.
@@ -151,7 +146,7 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
     for (let k = 0; k < perDay; k++) {
       const window = d === 0 ? 6 * HOUR_MS : DAY_MS;
       const createdMs = nowMs - d * DAY_MS - Math.floor(rng() * window);
-      raw.push({ createdMs, paid: true, method: rng() < 0.7 ? "flow" : "transfer" });
+      raw.push({ createdMs, paid: true, slow: rng() >= 0.7 });
     }
   }
   raw.sort((a, b) => a.createdMs - b.createdMs);
@@ -160,7 +155,7 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
   const FORCED: Record<number, "pending" | "expired" | "cancelled"> = { 0: "pending", 3: "pending", 12: "expired", 16: "cancelled" };
   for (const fromEnd of Object.keys(FORCED).map(Number)) {
     const target = raw[raw.length - 1 - fromEnd];
-    if (target) target.method = "transfer";
+    if (target) target.slow = true;
   }
 
   const orders: AdminOrder[] = raw.map((r, index) => {
@@ -176,12 +171,12 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
     const shipping = pickup || freeShip ? 0 : ctx.settings.shippingFee;
     const ageDays = (nowMs - r.createdMs) / DAY_MS;
     const createdAt = new Date(r.createdMs).toISOString();
-    const paidMs = Math.min(nowMs, r.createdMs + (r.method === "flow" ? 2 * 60_000 : (1 + Math.floor(rng() * 20)) * HOUR_MS));
+    const paidMs = Math.min(nowMs, r.createdMs + (r.slow ? (1 + Math.floor(rng() * 20)) * HOUR_MS : 2 * 60_000));
 
     const base = {
       orderNumber,
       number,
-      paymentMethod: r.method,
+      paymentMethod: "flow" as const,
       customer: {
         firstName: first,
         lastName: last,
@@ -202,7 +197,6 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
       shipping,
       total: subtotal + shipping,
       freeShippingApplied: freeShip && !pickup,
-      transfer: null,
       refund: null,
       createdAt,
     };
@@ -210,8 +204,8 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
     const history: StatusHistoryEntry[] = [{ at: createdAt, kind: "payment", from: null, to: "pending_payment", by: "system" }];
 
     const forced = FORCED[raw.length - 1 - index];
-    // Pedidos por transferencia que siguen pendientes, vencidos o cancelados.
-    if (forced === "pending" || (!forced && r.method === "transfer" && ageDays < 1.2 && rng() < 0.6)) {
+    // Pedidos que siguen pendientes, vencidos o cancelados.
+    if (forced === "pending" || (!forced && r.slow && ageDays < 1.2 && rng() < 0.6)) {
       return {
         ...base,
         paymentStatus: "pending_payment",
@@ -222,7 +216,7 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
         updatedAt: createdAt,
       } satisfies AdminOrder;
     }
-    if (forced === "expired" || forced === "cancelled" || (!forced && r.method === "transfer" && ageDays >= 1.2 && ageDays < 4 && rng() < 0.15)) {
+    if (forced === "expired" || forced === "cancelled" || (!forced && r.slow && ageDays >= 1.2 && ageDays < 4 && rng() < 0.15)) {
       const expired = forced ? forced === "expired" : rng() < 0.6;
       const at = new Date(Math.min(nowMs, r.createdMs + 2 * DAY_MS)).toISOString();
       return {
@@ -235,14 +229,14 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
           ...history,
           expired
             ? { at, kind: "payment", from: "pending_payment", to: "expired", by: "system" }
-            : { at, kind: "payment", from: "pending_payment", to: "cancelled", by: "demo-admin", reason: "El cliente no realizó la transferencia." },
+            : { at, kind: "payment", from: "pending_payment", to: "cancelled", by: "demo-admin", reason: "El cliente no completó el pago." },
         ],
         updatedAt: at,
       } satisfies AdminOrder;
     }
 
     const paidAt = new Date(paidMs).toISOString();
-    history.push({ at: paidAt, kind: "payment", from: "pending_payment", to: "paid", by: r.method === "flow" ? "flow" : "demo-admin" });
+    history.push({ at: paidAt, kind: "payment", from: "pending_payment", to: "paid", by: "flow" });
     history.push({ at: paidAt, kind: "fulfillment", from: null, to: "preparing", by: "system" });
     const chain: FulfillmentStatus[] = ["preparing", base.delivery.type === "pickup" ? "ready_for_pickup" : "on_route", "delivered"];
     const reach = ageDays > 5 ? 2 : ageDays > 2 ? Math.floor(rng() * 3) : ageDays > 0.7 ? Math.floor(rng() * 2) : 0;
@@ -260,7 +254,6 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
       paymentStatus: "paid",
       fulfillmentStatus: chain[reach]!,
       stockState: "committed",
-      transfer: r.method === "transfer" ? { confirmedBy: "demo-admin", confirmedAt: paidAt } : null,
       paidAt,
       statusHistory: history,
       updatedAt: history[history.length - 1]!.at,
@@ -278,7 +271,7 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
         stockState: restock ? "released" : "committed",
         refund: {
           amount,
-          method: r.method,
+          method: "flow",
           refundedAt,
           note: "Reembolso de demostración.",
           restock,
@@ -295,7 +288,7 @@ export function generateOrders(ctx: SeedContext): AdminOrder[] {
             to: "refunded",
             by: "demo-admin",
             note: "Reembolso de demostración.",
-            refund: { amount, method: r.method, restock },
+            refund: { amount, method: "flow", restock },
           },
         ],
         updatedAt: refundedAt,

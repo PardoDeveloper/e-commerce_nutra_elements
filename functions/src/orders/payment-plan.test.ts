@@ -97,22 +97,6 @@ describe("planPaymentConfirmation - Flow", () => {
   });
 });
 
-describe("planPaymentConfirmation - transferencia", () => {
-  it("pending_payment -> paid", () => {
-    expect(confirm("pending_payment", "transfer").kind).toBe("paid");
-  });
-  it("expired con stock -> paid; sin stock -> review (el dinero ya llegó)", () => {
-    expect(confirm("expired", "transfer", { products: stock(9, 9) }).kind).toBe("paid");
-    expect(confirm("expired", "transfer", { products: stock(0, 9) })).toMatchObject({ kind: "review", reason: "NO_STOCK_AFTER_EXPIRY" });
-  });
-  it("paid -> noop (alreadyPaid)", () => {
-    expect(confirm("paid", "transfer")).toEqual({ kind: "noop", reason: "already_paid" });
-  });
-  it.each(["cancelled", "payment_review", "refunded"] as const)("%s -> transición inválida", (status) => {
-    expect(confirm(status, "transfer")).toEqual({ kind: "invalid" });
-  });
-});
-
 describe("planPaymentConfirmation - aceptar una revisión", () => {
   it("payment_review con reserva -> paid y deja la resolución en review", () => {
     const plan = confirm("payment_review", "accept_review", { note: "Pago verificado" });
@@ -143,18 +127,17 @@ describe("matriz completa de transiciones de pago (data-model.md 6.1)", () => {
       results.push(`${label}:${to}`);
     };
     add("flow", confirm(status, "flow"));
-    add("transfer", confirm(status, "transfer"));
     add("accept", confirm(status, "accept_review"));
     return results;
   };
 
   it("sí/no por estado de partida", () => {
-    expect(outcomes("pending_payment")).toEqual(["flow:paid", "transfer:paid", "accept:invalid"]);
-    expect(outcomes("expired")).toEqual(["flow:paid", "transfer:paid", "accept:invalid"]);
-    expect(outcomes("cancelled")).toEqual(["flow:payment_review", "transfer:invalid", "accept:invalid"]);
-    expect(outcomes("payment_review")).toEqual(["flow:noop", "transfer:invalid", "accept:paid"]);
-    expect(outcomes("paid")).toEqual(["flow:noop", "transfer:noop", "accept:invalid"]);
-    expect(outcomes("refunded")).toEqual(["flow:noop", "transfer:invalid", "accept:invalid"]);
+    expect(outcomes("pending_payment")).toEqual(["flow:paid", "accept:invalid"]);
+    expect(outcomes("expired")).toEqual(["flow:paid", "accept:invalid"]);
+    expect(outcomes("cancelled")).toEqual(["flow:payment_review", "accept:invalid"]);
+    expect(outcomes("payment_review")).toEqual(["flow:noop", "accept:paid"]);
+    expect(outcomes("paid")).toEqual(["flow:noop", "accept:invalid"]);
+    expect(outcomes("refunded")).toEqual(["flow:noop", "accept:invalid"]);
   });
 
   it("canCancel solo permite pending_payment (cancelled es idempotente)", () => {
@@ -172,7 +155,7 @@ describe("confirmNeedsProducts", () => {
   });
   it("lee productos cuando puede haber venta", () => {
     expect(confirmNeedsProducts(o, "flow", undefined)).toBe(true);
-    expect(confirmNeedsProducts(order({ paymentStatus: "expired" }), "transfer", undefined)).toBe(true);
+    expect(confirmNeedsProducts(order({ paymentStatus: "expired" }), "flow", undefined)).toBe(true);
     expect(confirmNeedsProducts(order({ paymentStatus: "payment_review" }), "accept_review", undefined)).toBe(true);
   });
 });

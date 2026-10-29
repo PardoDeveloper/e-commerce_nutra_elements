@@ -88,11 +88,10 @@ describe("createOrder - caso feliz", () => {
     expect(env.db.peek("counters/orders")).toMatchObject({ last: 1 });
   });
 
-  it("transferencia: reserva de 48 h y next show_transfer_instructions", async () => {
+  it("transferencia ya no se acepta (D-044): INVALID_INPUT y no crea pedido", async () => {
     const env = makeEnv();
-    const res = await create(env, validCreateRequest({ paymentMethod: "transfer" }));
-    expect(res.next).toBe("show_transfer_instructions");
-    expect(res.reservedUntil).toBe(new Date(env.clock().getTime() + 2880 * 60_000).toISOString());
+    expect(await codeOf(create(env, validCreateRequest({ paymentMethod: "transfer" })))).toBe("INVALID_INPUT");
+    expect(env.db.paths("orders/")).toEqual([]);
   });
 
   it("retiro en tienda: sin envío y snapshot con la tienda", async () => {

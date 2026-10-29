@@ -41,12 +41,12 @@ describe("buildSeedData", () => {
     expect(s.maxQtyPerItem).toBe(10);
   });
 
-  it("settings/private respeta rangos del contrato y marca banco de prueba", () => {
+  it("settings/private respeta rangos del contrato y no trae datos bancarios (D-044)", () => {
     const p = data.settingsPrivate;
     expect(p.reservationMinutes.flow).toBeGreaterThanOrEqual(5);
-    expect(p.reservationMinutes.transfer).toBeGreaterThanOrEqual(60);
     expect(p.orderNumberStart).toBe(1);
-    expect(p.bank.bankName).toContain("PRUEBA");
+    expect(p).not.toHaveProperty("bank");
+    expect(p.reservationMinutes).not.toHaveProperty("transfer");
     expect(Object.keys(p.limits)).toHaveLength(4);
   });
 

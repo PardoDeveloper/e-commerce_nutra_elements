@@ -2,7 +2,6 @@
 // createFlowPayment y flowConfirm están en payments/.
 export {
   cancelOrder,
-  confirmTransferPayment,
   createOrder,
   getOrderStatus,
   recordManualRefund,

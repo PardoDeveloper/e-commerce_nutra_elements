@@ -21,9 +21,6 @@ export function LegalPage({ title, lead, children }: LegalPageProps) {
         <h1>{title}</h1>
         <p className={styles.lead}>{lead}</p>
       </header>
-      <p className={styles.draft} role="note">
-        Borrador: pendiente de revisión legal
-      </p>
       <div className={styles.text}>{children}</div>
     </Container>
   );

@@ -121,7 +121,6 @@ export interface AdminService {
   createOrderHistory?(): OrderHistorySource;
   /** Solo Firebase: lee un pedido que no está entre los escuchados y lo deja en `extraOrders`. null si no existe. */
   loadOrder?(orderNumber: string): Promise<AdminOrder | null>;
-  confirmTransferPayment(input: { orderNumber: string; reference?: string; note?: string }): Promise<OrderActionResponse>;
   cancelOrder(input: { orderNumber: string; reason: string }): Promise<OrderActionResponse>;
   updateFulfillment(input: { orderNumber: string; to: FulfillmentStatus; note?: string; reason?: string }): Promise<OrderActionResponse>;
   recordManualRefund(input: { orderNumber: string } & RefundInput): Promise<OrderActionResponse>;

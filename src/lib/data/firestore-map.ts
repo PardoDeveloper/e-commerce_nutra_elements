@@ -64,6 +64,7 @@ export function mapProduct(id: string, data: Doc, toUrl: UrlBuilder): Product | 
     inStock: data.inStock === true,
     format: str(data.format),
     unitsPerPack,
+    featured: data.featured === true,
     seo: mapSeo(data.seo),
   };
 }

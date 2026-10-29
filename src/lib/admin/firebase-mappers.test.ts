@@ -64,7 +64,7 @@ describe("storageUrl y toIso", () => {
 describe("mapOrder", () => {
   it("convierte fechas del historial y del reembolso", () => {
     const o = mapOrder("NE-000001", {
-      paymentMethod: "transfer",
+      paymentMethod: "flow",
       paymentStatus: "refunded",
       fulfillmentStatus: "delivered",
       stockState: "committed",
@@ -137,6 +137,7 @@ describe("ajustes", () => {
   const rawPrivate = {
     limits: { createOrderPerIpPer10Min: 9 },
     orderNumberStart: 50,
+    // Datos antiguos (D-044): la reserva de transferencia y el banco se ignoran.
     reservationMinutes: { flow: 20, transfer: 100 },
     bank: { bankName: "B", accountType: "C", accountNumber: "1", holderName: "H", holderRut: "1-9" },
   };
@@ -149,8 +150,8 @@ describe("ajustes", () => {
   it("une settings/public y settings/private", () => {
     const s = mergeSettings(rawPublic, rawPrivate);
     expect(s.shippingFee).toBe(1);
-    expect(s.reservationMinutes).toEqual({ flow: 20, transfer: 100 });
-    expect(s.bank.bankName).toBe("B");
+    expect(s.reservationMinutes).toEqual({ flow: 20 });
+    expect(s).not.toHaveProperty("bank");
   });
 
   it("al guardar conserva comunas, límites y orderNumberStart, con exactamente las claves de las reglas", () => {
@@ -159,7 +160,8 @@ describe("ajustes", () => {
     expect(Object.keys(publicDoc).sort()).toEqual(["communes", "freeShippingThreshold", "maxQtyPerItem", "pickup", "shippingFee"]);
     expect(publicDoc.shippingFee).toBe(2990);
     expect(publicDoc.communes).toBe(rawPublic.communes);
-    expect(Object.keys(privateDoc).sort()).toEqual(["bank", "limits", "orderNumberStart", "reservationMinutes"]);
+    expect(Object.keys(privateDoc).sort()).toEqual(["limits", "orderNumberStart", "reservationMinutes"]);
+    expect(privateDoc.reservationMinutes).toEqual({ flow: 20 });
     expect(privateDoc.orderNumberStart).toBe(50);
     expect(privateDoc.limits).toEqual({ createOrderPerIpPer10Min: 9 });
   });
