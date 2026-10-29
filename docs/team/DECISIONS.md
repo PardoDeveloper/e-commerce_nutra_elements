@@ -452,3 +452,8 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **Se mantiene:** en el reembolso manual, el medio «Transferencia al cliente» (cómo se devolvió el dinero fuera del sistema). No es un medio de pago. Las Functions siguen leyendo pedidos antiguos con `paymentMethod: "transfer"`; en producción no debería haber ninguno, porque la opción nunca se ofreció con Firebase.
 - **Pendiente para que rija en producción (con confirmación de Carlos):** desplegar reglas de Firestore y Functions (borra `confirmTransferPayment`) y publicar App Hosting. Las reglas y el admin nuevo deben salir juntos: con las reglas antiguas, guardar Ajustes sin banco falla.
 - **Sin verificar:** los tests de reglas (`npm --prefix functions run test:rules`) requieren el emulador (Java).
+
+## D-045 · 2026-10-29 · Destacados del inicio: solo los marcados en el admin — vigente (pedido de Carlos)
+- Reemplaza la selección automática de D-043: «Productos destacados» muestra solo los productos con `featured` marcado (publicados, primero con stock, hasta 12). Si no hay ninguno marcado, la sección no se muestra.
+- Motivo: el inicio mostraba productos que el admin no había marcado y eso confundía.
+- Cambia el contrato SEO 01 (destacados): debe revisarlo el seo-specialist.

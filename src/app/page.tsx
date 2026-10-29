@@ -31,7 +31,7 @@ export default async function HomePage() {
     getProducts(),
     getPublicSettings(),
   ]);
-  const featured = pickFeatured(products, categories.map((c) => c.slug));
+  const featured = pickFeatured(products);
   const counts = new Map<string, number>();
   for (const p of products) if (p.categoryId) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
   const categoryNames = new Map(categories.map((c) => [c.slug as string, c.name]));
@@ -84,24 +84,26 @@ export default async function HomePage() {
         </CategoryCarousel>
       </section>
 
-      <section className={styles.block} aria-labelledby="home-destacados">
-        <SectionHeading
-          id="home-destacados"
-          title="Productos destacados"
-          action={
-            <Link href="/productos" className={styles.inlineLink}>
-              Ver todo el catálogo
-            </Link>
-          }
-        />
-        <ul className="product-grid">
-          {featured.map((p) => (
-            <li key={p.sku}>
-              <ProductCard product={p} categoryName={p.categoryId ? categoryNames.get(p.categoryId) : undefined} />
-            </li>
-          ))}
-        </ul>
-      </section>
+      {featured.length > 0 ? (
+        <section className={styles.block} aria-labelledby="home-destacados">
+          <SectionHeading
+            id="home-destacados"
+            title="Productos destacados"
+            action={
+              <Link href="/productos" className={styles.inlineLink}>
+                Ver todo el catálogo
+              </Link>
+            }
+          />
+          <ul className="product-grid">
+            {featured.map((p) => (
+              <li key={p.sku}>
+                <ProductCard product={p} categoryName={p.categoryId ? categoryNames.get(p.categoryId) : undefined} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className={styles.block} aria-labelledby="home-despacho">
         <SectionHeading id="home-despacho" title="Despacho en la RM y retiro en tienda en Puente Alto" />
