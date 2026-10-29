@@ -2,10 +2,10 @@
 // se necesite (carrito, checkout, admin): no debe llegar a las páginas públicas
 // estáticas (contrato SEO 06, sección 10). El Admin SDK nunca va aquí.
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { getToken as getAppCheckToken, initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from "firebase/app-check";
 import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
-import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
+import { connectFunctionsEmulator, getFunctions, httpsCallable, type Functions } from "firebase/functions";
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 import {
   EMULATOR_HOST,
@@ -14,6 +14,7 @@ import {
   getFirebaseConfig,
   shouldUseEmulators,
 } from "./config";
+import { withTokenRetry } from "./token-retry";
 
 declare global {
   // Token de depuración de App Check (solo desarrollo)
@@ -27,6 +28,7 @@ interface FirebaseState {
   db?: Firestore;
   storage?: FirebaseStorage;
   functions?: Functions;
+  appCheck?: AppCheck;
 }
 const globalState = globalThis as typeof globalThis & { __neFirebase?: FirebaseState };
 const state: FirebaseState = (globalState.__neFirebase ??= {});
@@ -47,7 +49,7 @@ function setupAppCheck(app: FirebaseApp): void {
     globalThis.FIREBASE_APPCHECK_DEBUG_TOKEN =
       process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN || true;
   }
-  initializeAppCheck(app, {
+  state.appCheck = initializeAppCheck(app, {
     provider: new ReCaptchaEnterpriseProvider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
@@ -104,4 +106,20 @@ export function getFirebaseFunctions(): Functions {
   }
   state.functions = functions;
   return functions;
+}
+
+/** Fuerza tokens nuevos de App Check y de sesión (el SDK de Functions toma después los renovados). */
+async function refreshFirebaseTokens(): Promise<void> {
+  getFirebaseApp();
+  if (state.appCheck) await getAppCheckToken(state.appCheck, true);
+  await getFirebaseAuth().currentUser?.getIdToken(true);
+}
+
+/**
+ * Invoca una callable y devuelve `data`. Si el servidor rechaza un token vencido (App Check o
+ * sesión) antes de ejecutar la función, renueva los tokens y reintenta una vez.
+ */
+export function callFunction(name: string, data: unknown, timeout: number): Promise<unknown> {
+  const callable = httpsCallable(getFirebaseFunctions(), name, { timeout });
+  return withTokenRetry(async () => (await callable(data)).data, refreshFirebaseTokens);
 }
