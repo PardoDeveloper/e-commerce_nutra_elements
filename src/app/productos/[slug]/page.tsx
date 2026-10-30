@@ -12,7 +12,18 @@ import { ProductPurchase } from "@/components/store/ProductPurchase";
 import styles from "@/components/store/store.module.css";
 import { getCategory, getProduct, getProducts, getPublicSettings, getRelatedProducts } from "@/lib/data";
 import { formatClp } from "@/lib/format";
-import { absoluteUrl, baseName, breadcrumbList, displayName, graph, metaDescriptionFrom, pageMetadata, productMetaDescription, productNode, withBrand } from "@/lib/seo";
+import {
+  absoluteUrl,
+  breadcrumbList,
+  displayName,
+  graph,
+  metaDescriptionFrom,
+  pageMetadata,
+  productDescription,
+  productMetaDescription,
+  productNode,
+  withBrand,
+} from "@/lib/seo";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -48,9 +59,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const name = displayName(product.name);
   // La categoría es opcional (D-040): sin categoría publicada, la ficha no la muestra ni la enlaza.
   const categoryCrumb = category ? [{ name: category.name, path: `/categorias/${category.slug}` }] : [];
-  const description =
-    product.description ??
-    `${baseName(product.name)} en ${product.unitsPerPack ? `frasco de ${product.unitsPerPack} cápsulas` : "cápsulas"}. Suplemento alimentario de Nutra Elements.`;
+  const description = productDescription(product);
   // JSON-LD: solo URL absolutas de imágenes reales (las de la demo son rutas propias; se completan con SITE_URL).
   const images = product.images.flatMap((i) => (i.url ? [/^https?:\/\//.test(i.url) ? i.url : absoluteUrl(i.url)] : []));
   const photo = mainImage(product);
@@ -69,6 +78,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             inStock: product.inStock,
             shippingFee: settings.shippingFee,
             images,
+            gtin13: product.gtin ?? null,
           }),
           breadcrumbList([
             { name: "Inicio", path: "/" },
