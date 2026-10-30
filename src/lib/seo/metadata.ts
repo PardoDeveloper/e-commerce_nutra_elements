@@ -61,6 +61,14 @@ export function baseName(name: string): string {
   return displayName(name).replace(/\s+\d+\s+cápsulas$/i, "").trim();
 }
 
+/** Descripción del producto; sin texto cargado, una neutra sin declaraciones de salud. */
+export function productDescription(product: { name: string; description: string | null; unitsPerPack: number | null }): string {
+  return (
+    product.description ??
+    `${baseName(product.name)} en ${product.unitsPerPack ? `frasco de ${product.unitsPerPack} cápsulas` : "cápsulas"}. Suplemento alimentario de Nutra Elements.`
+  );
+}
+
 /** Meta descripción a partir de la descripción del producto: una línea, hasta 160 caracteres sin cortar palabras. */
 export function metaDescriptionFrom(text: string, max = 160): string {
   const flat = text.replace(/\s+/g, " ").trim();

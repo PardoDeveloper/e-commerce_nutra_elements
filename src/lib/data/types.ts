@@ -43,6 +43,8 @@ export interface Product {
   unitsPerPack: number | null;
   /** Marcado por el admin para la sección «Productos destacados» del inicio. */
   featured: boolean;
+  /** GTIN ya validado por la importación (functions.md 5.1). Opcional: la demo no lo tiene. */
+  gtin?: string | null;
   seo: { title?: string; description?: string } | null;
 }
 
