@@ -1,7 +1,8 @@
 "use client";
 
 // Importar la planilla de Control Farma desde Productos (functions.md 5.1). El SKU (ID) manda: los nuevos se crean sin
-// publicar y los existentes actualizan precio, stock y datos de la planilla, sin tocar contenido ni descuentos.
+// publicar y los existentes actualizan precio, stock, descripción (si viene) y datos de la planilla, sin tocar el resto
+// del contenido ni los descuentos.
 // El archivo se lee en el navegador; primero se muestra la vista previa (dryRun) y luego se aplica.
 import { useId, useRef, useState, type DragEvent } from "react";
 import { errorMessage } from "@/lib/admin/errors";
@@ -19,11 +20,18 @@ const FIELD_LABEL: Record<PlannedChange["field"], string> = {
   stock: "Stock",
   discount: "Precio final",
   create: "Nuevo",
+  description: "Descripción",
 };
+
+const PREVIEW_TEXT = 40;
 
 function formatCell(change: PlannedChange, value: Cell): string {
   if (value === null) return "—";
   if (change.field === "stock") return String(value);
+  if (change.field === "description") {
+    const text = String(value);
+    return text.length > PREVIEW_TEXT ? `${text.slice(0, PREVIEW_TEXT)}…` : text;
+  }
   return typeof value === "number" ? formatClp(value) : String(value);
 }
 

@@ -10,7 +10,7 @@ export function buildCreateData<T>(op: CreateOp, now: T): Record<string, unknown
     sourceName: f.sourceName,
     name: f.name,
     slug: null,
-    description: null,
+    description: f.description,
     shortDescription: null,
     categoryId: null,
     images: [],

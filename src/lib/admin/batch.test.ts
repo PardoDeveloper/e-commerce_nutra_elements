@@ -148,6 +148,34 @@ describe("importCatalog", () => {
   });
 });
 
+describe("importCatalog: DESCRIPCION (D-046)", () => {
+  const row = (over: Record<string, unknown>) => ({
+    ID: "1001",
+    NOMBRE: "PRODUCTO",
+    CODIGO_BARRA: null,
+    STOCK_ACTUAL: products.get("1001")!.stock + products.get("1001")!.reserved,
+    PRECIO_VENTA_PUBLICO: products.get("1001")!.price,
+    ACTIVO: products.get("1001")!.active ? "SI" : "NO",
+    LABORATORIO: "NUTRA ELEMENTS",
+    ...over,
+  });
+  it("pisa la descripción de un producto existente cuando la celda trae texto", () => {
+    const { report, ops } = planImportCatalog([row({ DESCRIPCION: " Nueva descripción " })] as never, products);
+    expect(report.updated).toBe(1);
+    expect(report.changes).toMatchObject([{ field: "description", to: "Nueva descripción" }]);
+    expect(ops).toEqual([{ type: "update", sku: "1001", description: "Nueva descripción" }]);
+  });
+  it("vacía no toca la descripción; en un producto nuevo se guarda", () => {
+    expect(planImportCatalog([row({ DESCRIPCION: "" })] as never, products).report.unchanged).toBe(1);
+    const { ops } = planImportCatalog([row({ ID: "5009", DESCRIPCION: "Texto" })] as never, products);
+    expect(ops[0]).toMatchObject({ type: "create", description: "Texto" });
+  });
+  it("extractRows lee la columna DESCRIPCION", () => {
+    const r = extractRows([["ID", "NOMBRE", "DESCRIPCION", "PRECIO_VENTA_PUBLICO", "ACTIVO"], [1, "X", "Hola", 100, "SI"]], "catalog");
+    expect(r.ok && r.rows[0]?.DESCRIPCION).toBe("Hola");
+  });
+});
+
 describe("applyDiscount", () => {
   it("calcula el precio final antes -> después y valida el monto fijo", () => {
     const { report } = planApplyDiscount(["1001", "1002", "7777"], { type: "fixed", value: 6000 }, products, { dryRun: true });

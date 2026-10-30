@@ -85,7 +85,7 @@ export function parseStock(cell: Cell | undefined): StockParse {
 // ---------- Operaciones a aplicar ----------
 
 export type BatchOp =
-  | { type: "update"; sku: string; price?: number; stock?: number; active?: boolean; removeDiscount?: boolean }
+  | { type: "update"; sku: string; price?: number; stock?: number; active?: boolean; description?: string; removeDiscount?: boolean }
   | {
       type: "create";
       sku: string;
@@ -95,6 +95,7 @@ export type BatchOp =
       stock: number;
       active: boolean;
       barcode: string | null;
+      description: string | null;
     }
   | { type: "discount"; sku: string; discount: ProductDiscount | null };
 
@@ -236,6 +237,18 @@ export function planImportStock(rows: StockRow[], products: ProductMap, options:
 // ---------- importCatalog ----------
 
 const LAB = "NUTRA ELEMENTS";
+const MAX_DESCRIPTION = 5000;
+// En la descripción se admiten saltos de línea y tabulaciones; el resto de los caracteres de control no.
+const DESCRIPTION_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
+
+/** DESCRIPCION es opcional: vacía no borra la descripción guardada; inválida se advierte y no se guarda. */
+function parseDescription(cell: Cell | undefined): { kind: "empty" } | { kind: "ok"; value: string } | { kind: "invalid" } {
+  if (isEmptyCell(cell)) return { kind: "empty" };
+  const text = String(cell).replace(/\r\n?/g, "\n").trim();
+  if (text.length === 0) return { kind: "empty" };
+  if (text.length > MAX_DESCRIPTION || DESCRIPTION_CONTROL_CHARS.test(text)) return { kind: "invalid" };
+  return { kind: "ok", value: text };
+}
 
 export function planImportCatalog(rows: CatalogRow[], products: ProductMap, options: BatchOptions = {}): BatchPlan {
   assertBatch(rows);
@@ -273,6 +286,14 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
     if (typeof r.LABORATORIO === "string" && r.LABORATORIO.trim().toUpperCase() !== LAB) {
       c.warnings.push({ sku, code: "LABORATORY_MISMATCH", message: `LABORATORIO distinto de "${LAB}".` });
     }
+    const description = parseDescription(r.DESCRIPCION);
+    if (description.kind === "invalid") {
+      c.warnings.push({
+        sku,
+        code: "INVALID_DESCRIPTION",
+        message: `DESCRIPCION de más de ${MAX_DESCRIPTION} caracteres o con caracteres no permitidos: no se guarda.`,
+      });
+    }
 
     if (!product) {
       // Importación inicial: stock vacío o negativo pasa a 0 y se informa (D-018).
@@ -290,12 +311,14 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
         stock: initial,
         active,
         barcode: isEmptyCell(r.CODIGO_BARRA) ? null : String(r.CODIGO_BARRA),
+        description: description.kind === "ok" ? description.value : null,
       });
       c.created++;
       return;
     }
 
-    // Reimportación: pisa precio y stock; nunca toca el contenido ni los descuentos.
+    // Reimportación: pisa precio y stock; del contenido solo la descripción, si la celda trae texto (D-046).
+    // Nunca toca los descuentos.
     let changed = planPrice(c, product, row, price.value);
     let newStock = product.stock;
     if (stock.kind === "ok" || stock.kind === "corrected") {
@@ -305,6 +328,11 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
     if (newStock !== product.stock) {
       c.changes.push({ row, sku, name: product.name, field: "stock", from: product.stock, to: newStock });
       c.ops.push({ type: "update", sku, stock: newStock });
+      changed = true;
+    }
+    if (description.kind === "ok" && description.value !== product.description) {
+      c.changes.push({ row, sku, name: product.name, field: "description", from: product.description, to: description.value });
+      c.ops.push({ type: "update", sku, description: description.value });
       changed = true;
     }
     if (active !== product.active) {
@@ -364,7 +392,7 @@ export function planApplyDiscount(
 export type SheetKind = "catalog" | "prices" | "stock";
 
 export const SHEET_COLUMNS: Record<SheetKind, readonly string[]> = {
-  catalog: ["ID", "NOMBRE", "CODIGO_BARRA", "STOCK_ACTUAL", "PRECIO_VENTA_PUBLICO", "ACTIVO", "LABORATORIO"],
+  catalog: ["ID", "NOMBRE", "DESCRIPCION", "CODIGO_BARRA", "STOCK_ACTUAL", "PRECIO_VENTA_PUBLICO", "ACTIVO", "LABORATORIO"],
   prices: ["SKU", "PRECIO"],
   stock: ["SKU", "STOCK"],
 };

@@ -167,6 +167,7 @@ export async function handleCreateProduct(store: CatalogStore, data: unknown, ui
             sku: req.sku,
             sourceName: req.name,
             name: req.name,
+            description: null,
             price: req.price,
             stock: req.stock,
             active: true,

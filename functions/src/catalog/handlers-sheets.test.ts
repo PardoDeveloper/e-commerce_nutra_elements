@@ -124,6 +124,26 @@ describe("importCatalog: producto nuevo", () => {
     expect([...store.products.keys()].sort()).toEqual(["10", "15"]);
   });
 
+  it("D-046: DESCRIPCION se guarda en description; vacía o ausente deja description en null", async () => {
+    const store = new MemoryStore();
+    await handleImportCatalog(
+      store,
+      { rows: [catalogRow({ ID: 1, DESCRIPCION: "  Aporta magnesio.\r\nFormato de 120.  " }), catalogRow({ ID: 2, DESCRIPCION: "" }), catalogRow({ ID: 3 })] },
+      UID,
+    );
+    expect(store.product("1")["description"]).toBe("Aporta magnesio.\nFormato de 120.");
+    expect(store.product("2")["description"]).toBeNull();
+    expect(store.product("3")["description"]).toBeNull();
+  });
+
+  it("D-046: DESCRIPCION demasiado larga se advierte y no bloquea la fila", async () => {
+    const store = new MemoryStore();
+    const report = await handleImportCatalog(store, { rows: [catalogRow({ DESCRIPCION: "a".repeat(5001) })] }, UID);
+    expect(report.created).toBe(1);
+    expect(report.warnings.map((w) => w.code)).toEqual(["INVALID_DESCRIPTION"]);
+    expect(store.product("2427831")["description"]).toBeNull();
+  });
+
   it("registra la auditoría en imports", async () => {
     const store = new MemoryStore();
     await handleImportCatalog(store, { rows: [catalogRow(), catalogRow({ ID: "mal/sku" })], fileName: "productos.xls" }, UID);
@@ -187,6 +207,18 @@ describe("importCatalog: reimportación (P13)", () => {
       importedAt: store.clock,
     });
     expect(store.product("2427831")["images"]).toEqual([{ path: "products/2427831/a.webp", alt: "x" }]);
+  });
+
+  it("D-046: DESCRIPCION con texto pisa la descripción; vacía no la toca", async () => {
+    const store = seeded();
+    const report = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 10000, STOCK_ACTUAL: 5, DESCRIPCION: "Nueva" })] }, UID);
+    expect(report).toMatchObject({ updated: 1, unchanged: 0 });
+    expect(report.changes).toEqual([{ row: 2, sku: "2427831", name: "Nombre editado por el admin", field: "description", from: "Texto", to: "Nueva" }]);
+    expect(store.product("2427831")).toMatchObject({ description: "Nueva", name: "Nombre editado por el admin" });
+
+    const empty = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 10000, STOCK_ACTUAL: 5, DESCRIPCION: null })] }, UID);
+    expect(empty).toMatchObject({ updated: 0, unchanged: 1 });
+    expect(store.product("2427831")["description"]).toBe("Nueva");
   });
 
   it("es idempotente: repetir la misma planilla da unchanged y no escribe", async () => {
