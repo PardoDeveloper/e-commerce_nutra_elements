@@ -117,7 +117,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
             sourceName: op.sourceName,
             name: titleCase(op.name),
             slug: null,
-            description: null,
+            description: op.description,
             shortDescription: null,
             categoryId: null,
             images: [],
@@ -152,6 +152,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       if (op.removeDiscount) next.discount = null;
       if (op.stock !== undefined) next.stock = op.stock;
       if (op.active !== undefined) next.active = op.active;
+      if (op.description !== undefined) next.description = op.description;
       next = recompute(next);
       map.set(op.sku, next);
     }

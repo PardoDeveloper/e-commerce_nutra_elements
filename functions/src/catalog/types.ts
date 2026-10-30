@@ -32,7 +32,7 @@ export interface PlannedChange {
   row: number;
   sku: string;
   name: string;
-  field: "price" | "stock" | "discount" | "create";
+  field: "price" | "stock" | "discount" | "create" | "description";
   from: Cell;
   to: Cell;
 }
@@ -98,6 +98,7 @@ export interface ProductPatch {
   active?: boolean;
   published?: boolean;
   sourceName?: string;
+  description?: string;
   barcode?: string | null;
   barcodeValid?: boolean;
   gtin?: string | null;
@@ -108,6 +109,7 @@ export interface NewProductFields {
   sku: string;
   sourceName: string;
   name: string;
+  description: string | null;
   price: number;
   stock: number;
   active: boolean;

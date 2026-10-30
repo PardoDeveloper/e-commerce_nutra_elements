@@ -457,3 +457,10 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - Reemplaza la selección automática de D-043: «Productos destacados» muestra solo los productos con `featured` marcado (publicados, primero con stock, hasta 12). Si no hay ninguno marcado, la sección no se muestra.
 - Motivo: el inicio mostraba productos que el admin no había marcado y eso confundía.
 - Cambia el contrato SEO 01 (destacados): debe revisarlo el seo-specialist.
+
+## D-046 · 2026-10-30 · La planilla de catálogo carga la descripción de los productos — vigente (pedido de Carlos)
+- **Decisión:** la hoja ARTICULO admite la columna opcional `DESCRIPCION`. Al crear un producto se guarda en `description`; en la reimportación, si la celda trae texto, **pisa** la descripción guardada (también la editada en el admin). Una celda vacía no la toca (como el stock vacío, D-024).
+- **Cambia P13 / functions.md 5.1:** la reimportación ya no deja intacto todo el contenido: la descripción es la excepción. El resto (`name`, imágenes, slug, categoría, etc.) sigue sin tocarse.
+- **Validación:** máximo 5000 caracteres tras recortar, sin caracteres de control salvo salto de línea y tabulación. Si no cumple → advertencia `INVALID_DESCRIPTION` y la fila se aplica sin la descripción. La vista previa muestra los cambios de descripción.
+- **Contenido:** los textos deben respetar la normativa de suplementos (sin curar, tratar ni prevenir); la planilla no lo valida.
+- **Pendiente para que rija en producción (con confirmación de Carlos):** desplegar las Functions (`importCatalog`) y publicar App Hosting. Con las Functions actuales, la columna se ignora.
