@@ -522,3 +522,11 @@
     aspect-ratio: 16 / 9;
   }
 }
+
+/* Buscador destacado bajo el carrusel del inicio: centrado, más angosto que el banner. */
+.heroSearch {
+  position: relative;
+  z-index: 5;
+  max-width: 52rem;
+  margin: var(--space-4) auto 0;
+}

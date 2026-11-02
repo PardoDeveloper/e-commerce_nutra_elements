@@ -23,6 +23,10 @@ function loadIndex(): Promise<SearchEntry[]> {
 interface SearchBoxProps {
   /** Se llama al elegir una sugerencia (por ejemplo, para cerrar el menú móvil). */
   onNavigate?: () => void;
+  /** "hero": barra grande a todo el ancho bajo el carrusel del inicio, con el panel flotando debajo. */
+  variant?: "header" | "hero";
+  /** Texto de ejemplo del campo. */
+  placeholder?: string;
 }
 
 /**
@@ -30,7 +34,7 @@ interface SearchBoxProps {
  * Sin JavaScript sigue siendo un formulario GET a /productos?q=. El índice del catálogo se pide
  * al primer foco, no al cargar la página.
  */
-export function SearchBox({ onNavigate }: SearchBoxProps) {
+export function SearchBox({ onNavigate, variant = "header", placeholder = "Buscar productos" }: SearchBoxProps) {
   const id = useId();
   const listId = `${id}-list`;
   const router = useRouter();
@@ -94,7 +98,7 @@ export function SearchBox({ onNavigate }: SearchBoxProps) {
       action="/productos"
       method="get"
       role="search"
-      className={styles.search}
+      className={`${styles.search} ${variant === "hero" ? styles.hero : ""}`}
       onSubmit={() => {
         setOpen(false);
         onNavigate?.();
@@ -104,11 +108,17 @@ export function SearchBox({ onNavigate }: SearchBoxProps) {
         Buscar productos
       </label>
       <div className={styles.field}>
+        {variant === "hero" ? (
+          <svg className={styles.leadIcon} viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+            <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="M15 15l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        ) : null}
         <input
           id={`${id}-q`}
           name="q"
           type="search"
-          placeholder="Buscar productos"
+          placeholder={placeholder}
           autoComplete="off"
           className={styles.input}
           role="combobox"
@@ -130,11 +140,17 @@ export function SearchBox({ onNavigate }: SearchBoxProps) {
           onKeyDown={onKeyDown}
         />
         <button type="submit" className={styles.submit}>
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-            <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
-            <path d="M15 15l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <span className="visually-hidden">Buscar</span>
+          {variant === "hero" ? (
+            <span className={styles.submitText}>Buscar</span>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M15 15l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="visually-hidden">Buscar</span>
+            </>
+          )}
         </button>
       </div>
 
