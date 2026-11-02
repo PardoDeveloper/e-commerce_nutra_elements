@@ -2,9 +2,10 @@ import { getCategories, getProducts } from "@/lib/data";
 import { buildMerchantFeed } from "@/lib/seo";
 import { isIndexable } from "@/lib/site";
 
-// Feed de productos para Google Merchant Center (feed programado). Estático con ISR: se regenera cada hora,
+// Feed de productos para Google Merchant Center (feed programado). Estático con ISR: se regenera cada 2 minutos (D-047),
 // igual que las fichas. Antes del lanzamiento (sin SITE_INDEXABLE="true") no se publica.
-export const revalidate = 3600;
+// Respaldo del ISR para precios y ofertas: 120 s (D-047). La revalidación bajo demanda no alcanza a todas las instancias.
+export const revalidate = 120;
 
 export async function GET(): Promise<Response> {
   if (!isIndexable()) return new Response("Not Found", { status: 404 });

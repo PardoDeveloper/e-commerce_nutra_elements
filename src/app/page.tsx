@@ -16,7 +16,8 @@ import { pickFeatured } from "@/lib/featured";
 import { formatClp } from "@/lib/format";
 import { faqPageNode, graph, organizationNode, pageMetadata, websiteNode } from "@/lib/seo";
 
-export const revalidate = 3600;
+// Respaldo del ISR para precios y ofertas: 120 s (D-047). La revalidación bajo demanda no alcanza a todas las instancias.
+export const revalidate = 120;
 
 export const metadata = pageMetadata({
   title: "Nutra Elements | Suplementos en cápsulas, Puente Alto y RM",
@@ -69,6 +70,19 @@ export default async function HomePage() {
                 </Button>
               </div>
             </Fragment>,
+            // Banner de ofertas (1024×572): tiene texto en todo el cuadro, así que no se recorta. Se ajusta
+            // completo al alto de la 1.ª diapositiva y los costados se rellenan con la misma imagen desenfocada.
+            <Link key="banner-ofertas" href="/productos" className={styles.heroPromo}>
+              <Image src="/banner_ofertas.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
+              <Image
+                src="/banner_ofertas.jpg"
+                alt="Ofertas imperdibles: Bisglicinato de magnesio a $9.990 (antes $14.990), Omega 369 a $14.990 (antes $18.990) y Colágeno a $14.990 (antes $18.990). Ver catálogo."
+                fill
+                sizes="(min-width: 640px) 760px, 100vw"
+                quality={80}
+                className={styles.heroPromoImage}
+              />
+            </Link>,
           ]}
         />
       </section>

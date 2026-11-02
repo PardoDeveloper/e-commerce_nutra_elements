@@ -464,3 +464,9 @@ Se aceptan `contracts/data-model.md` y `contracts/functions.md` como base, con e
 - **Validación:** máximo 5000 caracteres tras recortar, sin caracteres de control salvo salto de línea y tabulación. Si no cumple → advertencia `INVALID_DESCRIPTION` y la fila se aplica sin la descripción. La vista previa muestra los cambios de descripción.
 - **Contenido:** los textos deben respetar la normativa de suplementos (sin curar, tratar ni prevenir); la planilla no lo valida.
 - **Pendiente para que rija en producción (con confirmación de Carlos):** desplegar las Functions (`importCatalog`) y publicar App Hosting. Con las Functions actuales, la columna se ignora.
+
+## D-047 · 2026-11-02 · Respaldo del ISR del catálogo: 120 s — vigente (pedido de Carlos)
+- **Decisión:** `/`, `/productos`, `/productos/[slug]`, `/categorias/[slug]`, `/api/search-index` y el feed de Merchant usan `revalidate = 120` (antes 3600, D-023). El resto de las páginas públicas sigue en 3600.
+- **Motivo:** en producción, descuentos aplicados en el admin se veían en la ficha pero no en `/productos` ni en el inicio. El servidor (no solo el CDN) entregaba `/productos` desde su caché (`x-nextjs-cache: HIT`) con 3 de 8 ofertas. La caché ISR de Next.js es local a cada instancia de App Hosting (hasta 2, escala a cero), así que `revalidatePath` desde `/api/revalidate` no alcanza a todas, y una instancia nueva arranca con el HTML del build.
+- **Efecto:** precios y ofertas se ven en unos 2 a 4 minutos como máximo (ISR + `s-maxage` del CDN). Las páginas siguen siendo estáticas (SEO sin cambios). Costo: algunas lecturas extra de Firestore, despreciable con 33 productos. El precio cobrado no cambia: lo recalcula el servidor (D-005).
+- **Pendiente:** revisar en los logs de Functions si `onProductWritten` registra «Revalidación enviada» o «Revalidación fallida». La solución de fondo es un manejador de caché compartido entre instancias (tarea aparte).

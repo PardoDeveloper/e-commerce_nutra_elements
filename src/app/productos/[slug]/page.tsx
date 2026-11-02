@@ -25,7 +25,8 @@ import {
   withBrand,
 } from "@/lib/seo";
 
-export const revalidate = 3600;
+// Respaldo del ISR para precios y ofertas: 120 s (D-047). La revalidación bajo demanda no alcanza a todas las instancias.
+export const revalidate = 120;
 export const dynamicParams = true;
 
 export async function generateStaticParams() {
