@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import { Button } from "@/components/Button";
 import { CategoryCard } from "@/components/CategoryCard";
 import { Container } from "@/components/Container";
+import { SearchBox } from "@/components/layout/SearchBox";
 import { ProductCard } from "@/components/ProductCard";
 import { SectionHeading } from "@/components/SectionHeading";
 import { CategoryCarousel } from "@/components/store/CategoryCarousel";
@@ -70,15 +71,16 @@ export default async function HomePage() {
                 </Button>
               </div>
             </Fragment>,
-            // Banner de ofertas (1024×572): tiene texto en todo el cuadro, así que no se recorta. Se ajusta
-            // completo al alto de la 1.ª diapositiva y los costados se rellenan con la misma imagen desenfocada.
+            // Banner de ofertas (1824×576): tiene texto de borde a borde, así que no se recorta. Se ajusta completo
+            // al alto de la 1.ª diapositiva y el espacio que sobra (arriba y abajo en móvil) se rellena con la misma
+            // imagen desenfocada. El nombre del archivo cambia con cada versión para no servir la anterior desde caché.
             <Link key="banner-ofertas" href="/productos" className={styles.heroPromo}>
-              <Image src="/banner_ofertas.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
+              <Image src="/banner_ofertas_v2.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
               <Image
-                src="/banner_ofertas.jpg"
-                alt="Ofertas imperdibles: Bisglicinato de magnesio a $9.990 (antes $14.990), Omega 369 a $14.990 (antes $18.990) y Colágeno a $14.990 (antes $18.990). Ver catálogo."
+                src="/banner_ofertas_v2.jpg"
+                alt="Ofertas imperdibles: Bisglicinato de magnesio a $9.990 (antes $14.990), Omega 369 a $11.990 (antes $19.990) y Colágeno a $14.990 (antes $18.990). Ver catálogo."
                 fill
-                sizes="(min-width: 640px) 760px, 100vw"
+                sizes="(min-width: 1280px) 1200px, 100vw"
                 quality={80}
                 className={styles.heroPromoImage}
               />
@@ -86,6 +88,11 @@ export default async function HomePage() {
           ]}
         />
       </section>
+
+      {/* Buscador destacado bajo el carrusel: mismas sugerencias que el de la cabecera. */}
+      <div className={styles.heroSearch}>
+        <SearchBox variant="hero" placeholder="¿Qué estás buscando? Prueba con colágeno, magnesio u omega…" />
+      </div>
 
       <section className={styles.block} aria-labelledby="home-categorias">
         <SectionHeading id="home-categorias" title="Compra por categoría" />
