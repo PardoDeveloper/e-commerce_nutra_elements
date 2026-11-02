@@ -109,10 +109,11 @@ export interface AdminService {
   /** Crea una categoría publicada; el slug sale del nombre. Devuelve el slug. */
   createCategory(input: { name: string }): Promise<{ slug: string }>;
   /**
-   * Cambia el nombre. El slug (ID y URL) siempre sale del nombre: si cambia, la categoría pasa al slug nuevo y sus
-   * productos se mueven con ella. Devuelve el slug resultante.
+   * Cambia el nombre y la descripción. El slug (ID y URL) siempre sale del nombre: si cambia, la categoría pasa al
+   * slug nuevo y sus productos se mueven con ella. `description` vacía o null = texto por defecto; sin `description`
+   * no se toca. Devuelve el slug resultante.
    */
-  updateCategory(slug: string, input: { name: string }): Promise<{ slug: string }>;
+  updateCategory(slug: string, input: { name: string; description?: string | null }): Promise<{ slug: string }>;
   /** Elimina la categoría y deja sin categoría a los productos que la usaban. Devuelve cuántos productos cambió. */
   deleteCategory(slug: string): Promise<{ productsUpdated: number }>;
 

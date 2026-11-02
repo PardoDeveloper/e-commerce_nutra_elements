@@ -53,7 +53,7 @@ import {
   validateContentPatch,
   type Doc,
 } from "./firebase-mappers";
-import { cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
+import { cleanCategoryDescription, cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
 import { AdminServiceError } from "./errors";
 import { buildInitialCategories, buildInitialPrivateSettings, buildInitialPublicSettings } from "./firebase-seed";
 import { validateSettings } from "./demo-service";
@@ -385,14 +385,16 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
       return { slug };
     },
 
-    async updateCategory(slug, { name }) {
+    async updateCategory(slug, { name, description }) {
       const clean = cleanCategoryName(name);
+      // undefined = no se toca; null = se borra y la tienda vuelve al texto por defecto (las reglas aceptan null).
+      const text = description === undefined ? undefined : cleanCategoryDescription(description);
       if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
       const next = renamedCategorySlug(slug, clean, state.categories);
       const oldRef = doc(db, "categories", slug);
       try {
         if (next === slug) {
-          await updateDoc(oldRef, { name: clean, updatedAt: serverTimestamp() });
+          await updateDoc(oldRef, { name: clean, ...(text !== undefined ? { description: text } : {}), updatedAt: serverTimestamp() });
           return { slug };
         }
         // El slug es el ID (inmutable en las reglas): se crea la categoría con el ID nuevo, se mueven sus productos
@@ -409,7 +411,7 @@ export function createFirebaseAdminService(deps: FirebaseAdminDeps): AdminServic
             name: clean,
             order: d.order,
             published: d.published,
-            ...(d.description != null ? { description: d.description } : {}),
+            ...(text !== undefined ? (text !== null ? { description: text } : {}) : d.description != null ? { description: d.description } : {}),
             ...(d.seo != null ? { seo: d.seo } : {}),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

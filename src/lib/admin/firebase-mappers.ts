@@ -78,7 +78,7 @@ function mapSeo(v: unknown): AdminProduct["seo"] {
 export function mapAdminCategory(id: string, d: Doc): AdminCategory | null {
   const name = str(d.name);
   if (!name) return null;
-  return { slug: id, name, order: int(d.order, 9999), published: bool(d.published) };
+  return { slug: id, name, description: str(d.description), order: int(d.order, 9999), published: bool(d.published) };
 }
 
 export function mapProduct(sku: string, d: Doc, bucket: string): AdminProduct {

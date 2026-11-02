@@ -64,6 +64,8 @@ export type ProductContentPatch = Partial<
 export interface AdminCategory {
   slug: CategoryId;
   name: string;
+  /** Texto de presentación de /categorias/[slug]. null = se usa el texto por defecto de la tienda. */
+  description: string | null;
   order: number;
   published: boolean;
 }

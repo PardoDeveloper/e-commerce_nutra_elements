@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { breadcrumbList, isValidGtin13, productNode, serializeJsonLd } from "./jsonld";
+import { categorySeo } from "./content";
 import { baseName, displayName, productMetaDescription } from "./metadata";
 
 describe("displayName y baseName", () => {
@@ -43,5 +44,16 @@ describe("JSON-LD", () => {
   it("la última miga no lleva item", () => {
     const b = breadcrumbList([{ name: "Inicio", path: "/" }, { name: "Fin" }]) as { itemListElement: Array<Record<string, unknown>> };
     expect(b.itemListElement[1]).not.toHaveProperty("item");
+  });
+});
+
+describe("categorySeo", () => {
+  const base = { slug: "minerales", name: "Minerales", seo: null };
+  it("usa la descripción del admin como texto de la página y mantiene el título fijo", () => {
+    const fixed = categorySeo({ ...base, description: null });
+    const custom = categorySeo({ ...base, description: "Texto del admin" });
+    expect(custom.intro).toBe("Texto del admin");
+    expect(custom.title).toBe(fixed.title);
+    expect(categorySeo({ ...base, description: "   " }).intro).toBe(fixed.intro);
   });
 });

@@ -69,8 +69,10 @@ export const CATEGORY_SEO: Record<string, CategorySeo> = {
  * nombre y descripción.
  */
 export function categorySeo(category: Pick<Category, "slug" | "name" | "description" | "seo">): CategorySeo {
+  // La descripción escrita en el admin manda sobre el texto fijo; título y meta descripción siguen fijos.
+  const custom = category.description?.trim() || null;
   const fixed = CATEGORY_SEO[category.slug];
-  if (fixed) return fixed;
+  if (fixed) return custom ? { ...fixed, intro: custom } : fixed;
   const intro = category.description ?? `Productos de ${category.name} de Nutra Elements. Cada producto tiene su propia ficha con precio y disponibilidad.`;
   return {
     title: category.seo?.title ?? withBrand(category.name),

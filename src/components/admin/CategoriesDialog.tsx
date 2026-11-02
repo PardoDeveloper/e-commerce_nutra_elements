@@ -1,10 +1,11 @@
 "use client";
 
-import { useId, useMemo, useState, type FormEvent } from "react";
-import { MAX_CATEGORY_NAME } from "@/lib/admin/categories";
+import { Fragment, useId, useMemo, useState, type FormEvent } from "react";
+import { MAX_CATEGORY_DESCRIPTION, MAX_CATEGORY_NAME } from "@/lib/admin/categories";
 import { errorMessage } from "@/lib/admin/errors";
 import { sim } from "@/lib/admin/mode";
 import type { AdminCategory } from "@/lib/admin/types";
+import { categorySeo } from "@/lib/seo/content";
 import { slugify } from "@/lib/slug";
 import { AdminDialog } from "./AdminDialog";
 import { useAdminService, useAdminState } from "./AdminProvider";
@@ -24,7 +25,7 @@ function NoticeBox({ notice }: { notice: Notice }) {
   );
 }
 
-// Mantenedor de categorías (D-040) en un modal de Productos: crear, renombrar y eliminar. Son opcionales en los productos.
+// Mantenedor de categorías (D-040) en un modal de Productos: crear, editar (nombre y descripción) y eliminar. Son opcionales en los productos.
 export function CategoriesDialog({ onClose }: { onClose: () => void }) {
   const { categories, products } = useAdminState();
   const [notice, setNotice] = useState<Notice>(null);
@@ -125,15 +126,25 @@ function CategoryRow({ category, count, onNotice }: { category: AdminCategory; c
   const id = useId();
   const [mode, setMode] = useState<"view" | "edit" | "confirmDelete">("view");
   const [name, setName] = useState(category.name);
+  // Texto que muestra hoy la página de la categoría: el del admin o, si no hay, el texto por defecto de la tienda.
+  const defaultIntro = categorySeo({ ...category, description: null, seo: null }).intro;
+  const [description, setDescription] = useState(category.description ?? defaultIntro);
   const [busy, setBusy] = useState(false);
 
-  async function rename(event: FormEvent) {
+  function resetForm() {
+    setName(category.name);
+    setDescription(category.description ?? defaultIntro);
+  }
+
+  async function save(event: FormEvent) {
     event.preventDefault();
     onNotice(null);
     setBusy(true);
     try {
-      await service.updateCategory(category.slug, { name });
-      onNotice({ kind: "ok", text: sim(`Categoría renombrada a «${name.trim()}» (simulado).`) });
+      // Si queda igual al texto por defecto (o vacía) se guarda null: la página sigue usando el texto por defecto.
+      const text = description.trim();
+      await service.updateCategory(category.slug, { name, description: text === "" || text === defaultIntro ? null : text });
+      onNotice({ kind: "ok", text: sim(`Categoría «${name.trim()}» guardada (simulado).`) });
       setMode("view");
     } catch (error) {
       onNotice({ kind: "error", text: errorMessage(error) });
@@ -159,71 +170,103 @@ function CategoryRow({ category, count, onNotice }: { category: AdminCategory; c
   }
 
   return (
-    <tr>
-      <td>
-        {mode === "edit" ? (
-          <form id={`${id}-form`} onSubmit={rename}>
-            <label className="visually-hidden" htmlFor={`${id}-name`}>
-              Nombre de la categoría
-            </label>
-            <input
-              id={`${id}-name`}
-              className={ui.input}
-              value={name}
-              maxLength={MAX_CATEGORY_NAME}
-              required
-              autoFocus
-              onChange={(e) => setName(e.target.value)}
-            />
-          </form>
-        ) : (
-          category.name
-        )}
-      </td>
-      <td>{count}</td>
-      <td>
-        <div className={ui.actions}>
-          {mode === "view" ? (
-            <>
-              <button type="button" className={`${ui.btn} ${ui.btnOutline}`} onClick={() => setMode("edit")}>
-                Renombrar
-              </button>
-              <button type="button" className={`${ui.btn} ${ui.btnDangerOutline}`} onClick={() => setMode("confirmDelete")}>
-                Eliminar
-              </button>
-            </>
-          ) : null}
+    <Fragment>
+      <tr>
+        <td>
           {mode === "edit" ? (
+            <form id={`${id}-form`} onSubmit={save}>
+              <label className="visually-hidden" htmlFor={`${id}-name`}>
+                Nombre de la categoría
+              </label>
+              <input
+                id={`${id}-name`}
+                className={ui.input}
+                value={name}
+                maxLength={MAX_CATEGORY_NAME}
+                required
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+              />
+            </form>
+          ) : (
             <>
-              <button type="submit" form={`${id}-form`} className={ui.btn} disabled={busy}>
-                {busy ? "Guardando…" : "Guardar"}
-              </button>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnOutline}`}
-                disabled={busy}
-                onClick={() => {
-                  setName(category.name);
-                  setMode("view");
-                }}
-              >
-                Cancelar
-              </button>
+              {category.name}
+              <span className={ui.help} style={{ display: "block" }}>
+                {category.description ? "Descripción personalizada" : "Descripción por defecto"}
+              </span>
             </>
-          ) : null}
-          {mode === "confirmDelete" ? (
-            <>
-              <span role="status">{count > 0 ? `¿Eliminar? ${count} productos quedarán sin categoría.` : "¿Eliminar?"}</span>
-              <button type="button" className={`${ui.btn} ${ui.btnDangerOutline}`} disabled={busy} onClick={() => void remove()}>
-                {busy ? "Eliminando…" : "Sí, eliminar"}
-              </button>
-              <button type="button" className={`${ui.btn} ${ui.btnOutline}`} disabled={busy} onClick={() => setMode("view")}>
-                Cancelar
-              </button>
-            </>
-          ) : null}
-        </div>
-      </td>
-    </tr>
+          )}
+        </td>
+        <td>{count}</td>
+        <td>
+          <div className={ui.actions}>
+            {mode === "view" ? (
+              <>
+                <button type="button" className={`${ui.btn} ${ui.btnOutline}`} onClick={() => setMode("edit")}>
+                  Editar
+                </button>
+                <button type="button" className={`${ui.btn} ${ui.btnDangerOutline}`} onClick={() => setMode("confirmDelete")}>
+                  Eliminar
+                </button>
+              </>
+            ) : null}
+            {mode === "edit" ? (
+              <>
+                <button type="submit" form={`${id}-form`} className={ui.btn} disabled={busy}>
+                  {busy ? "Guardando…" : "Guardar"}
+                </button>
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.btnOutline}`}
+                  disabled={busy}
+                  onClick={() => {
+                    resetForm();
+                    setMode("view");
+                  }}
+                >
+                  Cancelar
+                </button>
+              </>
+            ) : null}
+            {mode === "confirmDelete" ? (
+              <>
+                <span role="status">{count > 0 ? `¿Eliminar? ${count} productos quedarán sin categoría.` : "¿Eliminar?"}</span>
+                <button type="button" className={`${ui.btn} ${ui.btnDangerOutline}`} disabled={busy} onClick={() => void remove()}>
+                  {busy ? "Eliminando…" : "Sí, eliminar"}
+                </button>
+                <button type="button" className={`${ui.btn} ${ui.btnOutline}`} disabled={busy} onClick={() => setMode("view")}>
+                  Cancelar
+                </button>
+              </>
+            ) : null}
+          </div>
+        </td>
+      </tr>
+      {mode === "edit" ? (
+        <tr>
+          <td colSpan={3}>
+            <div className={ui.field}>
+              <label className={ui.label} htmlFor={`${id}-desc`}>
+                Descripción de la página de la categoría
+              </label>
+              <textarea
+                id={`${id}-desc`}
+                form={`${id}-form`}
+                className={ui.textarea}
+                rows={5}
+                maxLength={MAX_CATEGORY_DESCRIPTION}
+                value={description}
+                aria-describedby={`${id}-desc-help`}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <span id={`${id}-desc-help`} className={ui.help}>
+                Se muestra bajo el título en /categorias/{category.slug}. Si la dejas vacía, se usa el texto por defecto. Sin
+                declaraciones de curar, tratar ni prevenir enfermedades. {description.length}/{MAX_CATEGORY_DESCRIPTION}
+              </span>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
   );
 }
