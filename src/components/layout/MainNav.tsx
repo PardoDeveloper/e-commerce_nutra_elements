@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./MainNav.module.css";
+import { SearchBox } from "./SearchBox";
 
 const LINKS = [
   { href: "/productos", label: "Productos" },
@@ -14,7 +15,7 @@ const LINKS = [
 /**
  * Navegación principal. En móvil es un panel desplegable (botón con aria-expanded,
  * cierra con Escape o al elegir un enlace); desde 1100 px es una barra en línea.
- * Incluye el buscador (formulario GET a /productos?q=, funciona sin JavaScript).
+ * Incluye el buscador con sugerencias (SearchBox; sin JavaScript es un formulario GET a /productos?q=).
  */
 export function MainNav() {
   const [open, setOpen] = useState(false);
@@ -57,26 +58,7 @@ export function MainNav() {
       </button>
 
       <nav id={panelId} aria-label="Principal" className={`${styles.panel} ${open ? styles.open : ""}`}>
-        <form action="/productos" method="get" role="search" className={styles.search}>
-          <label htmlFor={`${panelId}-q`} className="visually-hidden">
-            Buscar productos
-          </label>
-          <input
-            id={`${panelId}-q`}
-            name="q"
-            type="search"
-            placeholder="Buscar productos"
-            autoComplete="off"
-            className={styles.input}
-          />
-          <button type="submit" className={styles.submit}>
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-              <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
-              <path d="M15 15l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span className="visually-hidden">Buscar</span>
-          </button>
-        </form>
+        <SearchBox onNavigate={close} />
         <ul className={styles.list}>
           {LINKS.map((l) => (
             <li key={l.href}>

@@ -9,7 +9,8 @@ import { getCategories, getProducts } from "@/lib/data";
 import { breadcrumbList, collectionPageNode, graph, pageMetadata } from "@/lib/seo";
 
 // Estática con ISR (D-022). No lee searchParams: el filtro y ?q= se resuelven en el cliente.
-export const revalidate = 3600;
+// Respaldo del ISR para precios y ofertas: 120 s (D-047). La revalidación bajo demanda no alcanza a todas las instancias.
+export const revalidate = 120;
 
 export async function generateMetadata() {
   const products = await getProducts();

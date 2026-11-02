@@ -10,7 +10,8 @@ import { getCategories, getCategory, getProducts, getPublicSettings } from "@/li
 import { formatClp } from "@/lib/format";
 import { breadcrumbList, categorySeo, collectionPageNode, graph, pageMetadata } from "@/lib/seo";
 
-export const revalidate = 3600;
+// Respaldo del ISR para precios y ofertas: 120 s (D-047). La revalidación bajo demanda no alcanza a todas las instancias.
+export const revalidate = 120;
 export const dynamicParams = true;
 
 // Contrato 03: menos de 3 productos publicados = noindex,follow y fuera del sitemap.

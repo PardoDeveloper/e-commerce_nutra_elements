@@ -25,6 +25,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!body) return NextResponse.json({ error: "BAD_REQUEST" }, { status: 400, headers: NO_STORE });
 
   for (const path of body.paths) revalidatePath(path);
+  // Cualquier cambio en productos también deja desactualizadas las sugerencias del buscador.
+  if (body.paths.some((p) => p.startsWith("/productos"))) revalidatePath("/api/search-index");
   // Las lecturas no usan etiquetas de caché, así que cada etiqueta se traduce a rutas.
   // "settings" afecta la oferta de envío en todas las fichas de producto.
   if (body.tags.includes("settings")) revalidatePath("/productos/[slug]", "page");
