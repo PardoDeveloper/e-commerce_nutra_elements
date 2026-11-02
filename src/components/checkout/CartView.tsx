@@ -5,9 +5,11 @@ import { useState } from "react";
 import { Button } from "@/components/Button";
 import { Price } from "@/components/Price";
 import { ProductImage } from "@/components/ProductImage";
+import { SubscribeLink } from "@/components/store/SubscriptionCta";
 import { toOrderItems, useCart, DEFAULT_MAX_QTY } from "@/lib/cart";
 import { computeSummary, type CatalogEntry } from "@/lib/checkout";
 import { formatClp } from "@/lib/format";
+import { subscriptionUrl } from "@/lib/subscription";
 import styles from "./checkout.module.css";
 import { OrderSummary } from "./OrderSummary";
 
@@ -147,6 +149,9 @@ export function CartView({ catalog, settings }: CartViewProps) {
 
       <aside className={styles.aside} aria-label="Resumen y pago">
         <OrderSummary summary={summary} delivery={null} headingId="cart-summary-title" />
+        <SubscribeLink href={subscriptionUrl("carrito")} className={styles.subscribeBtn}>
+          Suscribirse
+        </SubscribeLink>
         {blocked ? (
           <Button fullWidth size="lg" disabled aria-disabled="true">
             Ir a pagar

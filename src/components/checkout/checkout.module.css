@@ -228,6 +228,32 @@
   color: var(--color-navy);
   font-weight: 700;
 }
+/* Suscripción mensual (D-048): secundario respecto de «Ir a pagar», abre el formulario externo */
+.subscribeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--tap-min);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  /* Degradado hacia --color-gold-text para que el texto blanco cumpla contraste AA */
+  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-gold-text) 100%);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.2);
+  box-shadow: 0 4px 12px rgb(138 97 48 / 0.3);
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+.subscribeBtn:hover {
+  color: #fff;
+  filter: brightness(0.92);
+  box-shadow: 0 6px 16px rgb(138 97 48 / 0.4);
+}
 .summaryNote {
   margin: var(--space-3) 0 0;
   font-size: var(--text-sm);
