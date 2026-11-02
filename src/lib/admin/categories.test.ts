@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { cleanCategoryName, newCategorySlug, nextCategoryOrder, sortCategories } from "./categories";
+import { cleanCategoryDescription, cleanCategoryName, newCategorySlug, nextCategoryOrder, sortCategories } from "./categories";
 import { createDemoService, publishBlocker } from "./demo-service";
 import { AdminServiceError } from "./errors";
 import { mapAdminCategory } from "./firebase-mappers";
 import { defaultSettings } from "./seed";
 import { makeProduct } from "./testing";
 
-const cat = (slug: string, name: string, order: number) => ({ slug, name, order, published: true });
+const cat = (slug: string, name: string, order: number) => ({ slug, name, description: null, order, published: true });
 
 function setup() {
   const settings = defaultSettings({
@@ -30,6 +30,13 @@ describe("reglas de categorías", () => {
     expect(() => cleanCategoryName("x".repeat(81))).toThrow(AdminServiceError);
   });
 
+  it("limpia la descripción: vacía es null, unifica saltos de línea y exige hasta 2000 caracteres", () => {
+    expect(cleanCategoryDescription("  Hola\r\nmundo  ")).toBe("Hola\nmundo");
+    expect(cleanCategoryDescription("   ")).toBeNull();
+    expect(cleanCategoryDescription(null)).toBeNull();
+    expect(() => cleanCategoryDescription("x".repeat(2001))).toThrow(/2000/);
+  });
+
   it("genera el slug del nombre y rechaza uno repetido o vacío", () => {
     expect(newCategorySlug("Proteínas y Más", [])).toBe("proteinas-y-mas");
     expect(() => newCategorySlug("¡¡!!", [])).toThrow(AdminServiceError);
@@ -43,7 +50,8 @@ describe("reglas de categorías", () => {
   });
 
   it("mapea el documento de Firestore (con o sin publicar) y descarta uno sin nombre", () => {
-    expect(mapAdminCategory("proteinas", { name: "Proteínas", order: 70, published: false })).toEqual({ slug: "proteinas", name: "Proteínas", order: 70, published: false });
+    expect(mapAdminCategory("proteinas", { name: "Proteínas", order: 70, published: false })).toEqual({ slug: "proteinas", name: "Proteínas", description: null, order: 70, published: false });
+    expect(mapAdminCategory("zinc", { name: "Zinc", description: "Texto", order: 1, published: true })?.description).toBe("Texto");
     expect(mapAdminCategory("x", { order: 1 })).toBeNull();
   });
 });
@@ -70,6 +78,16 @@ describe("categorías en el servicio simulado", () => {
     expect(svc.getState().categories.some((c) => c.slug === "vitaminas")).toBe(false);
     expect(svc.getState().products.find((p) => p.sku === "1001")?.categoryId).toBeNull();
     await expect(svc.deleteCategory("vitaminas")).rejects.toMatchObject({ code: "CATEGORY_NOT_FOUND" });
+  });
+
+  it("guarda la descripción al editar y la conserva si no se envía", async () => {
+    const svc = setup();
+    await svc.updateCategory("vitaminas", { name: "Vitaminas", description: "  Nuevo texto  " });
+    expect(svc.getState().categories.find((c) => c.slug === "vitaminas")?.description).toBe("Nuevo texto");
+    await svc.updateCategory("vitaminas", { name: "Vitaminas y más" });
+    expect(svc.getState().categories.find((c) => c.slug === "vitaminas-y-mas")?.description).toBe("Nuevo texto");
+    await svc.updateCategory("vitaminas-y-mas", { name: "Vitaminas y más", description: "" });
+    expect(svc.getState().categories.find((c) => c.slug === "vitaminas-y-mas")?.description).toBeNull();
   });
 
   it("no asigna a un producto una categoría que no existe, pero sí ninguna", async () => {

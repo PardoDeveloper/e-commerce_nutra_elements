@@ -6,6 +6,8 @@ import type { AdminCategory } from "./types";
 
 export const MAX_CATEGORY_NAME = 80;
 export const MAX_CATEGORY_SLUG = 60;
+/** Igual que `validCategory` en firestore.rules (description: 0 a 2000). */
+export const MAX_CATEGORY_DESCRIPTION = 2000;
 const MAX_ORDER = 9999;
 
 /** Nombre limpio y válido, o lanza INVALID_NAME. */
@@ -13,6 +15,19 @@ export function cleanCategoryName(name: string): string {
   const trimmed = name.trim().replace(/\s+/g, " ");
   if (trimmed.length < 1 || trimmed.length > MAX_CATEGORY_NAME) {
     throw new AdminServiceError("INVALID_NAME", `El nombre de la categoría debe tener entre 1 y ${MAX_CATEGORY_NAME} caracteres.`);
+  }
+  return trimmed;
+}
+
+/**
+ * Descripción limpia: recorta espacios y unifica saltos de línea. Vacía = null (vuelve al texto por defecto).
+ * Lanza INVALID_DESCRIPTION si supera el máximo.
+ */
+export function cleanCategoryDescription(description: string | null | undefined): string | null {
+  const trimmed = (description ?? "").replace(/\r\n?/g, "\n").trim();
+  if (trimmed === "") return null;
+  if (trimmed.length > MAX_CATEGORY_DESCRIPTION) {
+    throw new AdminServiceError("INVALID_DESCRIPTION", `La descripción puede tener hasta ${MAX_CATEGORY_DESCRIPTION} caracteres.`);
   }
   return trimmed;
 }

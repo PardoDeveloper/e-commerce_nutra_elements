@@ -13,7 +13,7 @@ import {
   SKU_PATTERN,
 } from "./batch";
 import { DEFAULT_CATEGORIES } from "@/lib/data/defaults";
-import { cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
+import { cleanCategoryDescription, cleanCategoryName, newCategorySlug, nextCategoryOrder, renamedCategorySlug, sortCategories } from "./categories";
 import { AdminServiceError } from "./errors";
 import * as orderLogic from "./orders";
 import { computeFinalPrice, validateDiscount } from "./pricing";
@@ -95,7 +95,7 @@ function classifyDeletion(skus: string[], map: Map<string, AdminProduct>, mode: 
 }
 
 export function createDemoService(seed: DemoSeed, clock: () => Date = () => new Date()): AdminService {
-  const initialCategories = seed.categories ?? DEFAULT_CATEGORIES.map((c) => ({ slug: c.slug, name: c.name, order: c.order, published: true }));
+  const initialCategories = seed.categories ?? DEFAULT_CATEGORIES.map((c) => ({ slug: c.slug, name: c.name, description: null, order: c.order, published: true }));
   let state: AdminState = { products: seed.products, categories: sortCategories(initialCategories), orders: seed.orders, settings: seed.settings };
   const listeners = new Set<() => void>();
   const set = (next: Partial<AdminState>) => {
@@ -358,16 +358,19 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
     async createCategory({ name }) {
       const clean = cleanCategoryName(name);
       const slug = newCategorySlug(clean, state.categories);
-      set({ categories: sortCategories([...state.categories, { slug, name: clean, order: nextCategoryOrder(state.categories), published: true }]) });
+      set({ categories: sortCategories([...state.categories, { slug, name: clean, description: null, order: nextCategoryOrder(state.categories), published: true }]) });
       return { slug };
     },
 
-    async updateCategory(slug, { name }) {
+    async updateCategory(slug, { name, description }) {
       const clean = cleanCategoryName(name);
+      const text = description === undefined ? undefined : cleanCategoryDescription(description);
       if (!state.categories.some((c) => c.slug === slug)) throw new AdminServiceError("CATEGORY_NOT_FOUND", "La categoría no existe.");
       const next = renamedCategorySlug(slug, clean, state.categories);
       set({
-        categories: sortCategories(state.categories.map((c) => (c.slug === slug ? { ...c, slug: next, name: clean } : c))),
+        categories: sortCategories(
+          state.categories.map((c) => (c.slug === slug ? { ...c, slug: next, name: clean, ...(text !== undefined ? { description: text } : {}) } : c)),
+        ),
         products: next === slug ? state.products : state.products.map((p) => (p.categoryId === slug ? { ...p, categoryId: next } : p)),
       });
       return { slug: next };
