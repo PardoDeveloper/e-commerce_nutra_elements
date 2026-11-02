@@ -113,6 +113,15 @@ export const FAQ_SECTIONS: Array<{ title: string; items: Array<{ q: string; a: s
     ],
   },
   {
+    title: "Suscripción mensual",
+    items: [
+      {
+        q: "¿Puedo suscribirme para recibir mis productos cada mes?",
+        a: "Sí. Con la suscripción mensual reservas tus productos cada mes y siempre los tienes disponibles. Revisa cómo funciona en la página Suscripción mensual (/suscripcion).",
+      },
+    ],
+  },
+  {
     title: "Productos y uso responsable",
     items: [
       { q: "¿Los suplementos reemplazan una alimentación variada?", a: "No. Son suplementos alimentarios y no reemplazan una alimentación variada y equilibrada." },

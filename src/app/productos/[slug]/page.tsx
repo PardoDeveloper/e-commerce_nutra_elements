@@ -9,6 +9,7 @@ import { ProductImage } from "@/components/ProductImage";
 import { StockBadge } from "@/components/StockBadge";
 import { JsonLd } from "@/components/store/JsonLd";
 import { ProductPurchase } from "@/components/store/ProductPurchase";
+import { SubscriptionCard } from "@/components/store/SubscriptionCta";
 import styles from "@/components/store/store.module.css";
 import { getCategory, getProduct, getProducts, getPublicSettings, getRelatedProducts } from "@/lib/data";
 import { formatClp } from "@/lib/format";
@@ -115,6 +116,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <Price price={product.price} finalPrice={product.finalPrice} size="lg" />
           <StockBadge inStock={product.inStock} />
           <ProductPurchase product={product} max={settings.maxQtyPerItem} />
+          <SubscriptionCard productSlug={product.slug} />
           <p className={styles.meta}>
             Despacho en la RM {formatClp(settings.shippingFee)} o retiro en tienda en Puente Alto.
           </p>

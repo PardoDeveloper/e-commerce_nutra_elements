@@ -283,7 +283,8 @@
 }
 
 /* Beneficios */
-.benefits {
+.benefits,
+.steps {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-3);
@@ -293,7 +294,8 @@
 }
 
 @media (min-width: 768px) {
-  .benefits {
+  .benefits,
+  .steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -529,4 +531,9 @@
   z-index: 5;
   max-width: 52rem;
   margin: var(--space-4) auto 0;
+}
+
+/* Suscripción (D-048): botón bajo la introducción. */
+.subscribeTop {
+  margin: var(--space-4) 0 0;
 }
