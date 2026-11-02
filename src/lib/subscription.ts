@@ -4,7 +4,7 @@ export const SUBSCRIPTION_URL = "https://farmaciaestrella.apio.cl/";
 export const SUBSCRIPTION_PAGE = "/suscripcion";
 
 /** Desde dónde se pulsa el enlace. Va en utm_content para medir qué punto genera más suscripciones. */
-export type SubscriptionPlacement = "pagina" | "ficha" | "inicio";
+export type SubscriptionPlacement = "pagina" | "ficha" | "inicio" | "carrito";
 
 /** Enlace al formulario externo con parámetros UTM (y el producto, si se pulsó desde una ficha). */
 export function subscriptionUrl(placement: SubscriptionPlacement, productSlug?: string): string {

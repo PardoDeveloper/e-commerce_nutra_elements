@@ -60,14 +60,24 @@ export function SubscriptionCard({ productSlug }: { productSlug: string }) {
 export function SubscriptionBand() {
   return (
     <section className={styles.band} aria-labelledby="home-suscripcion">
+      <svg className={styles.bandLeaf} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+        <path d="M6 34C6 17 16 7 34 6c0 17-10 27-28 28z" fill="currentColor" />
+      </svg>
+      <svg className={`${styles.bandLeaf} ${styles.bandLeafGold}`} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+        <path d="M6 34C6 17 16 7 34 6c0 17-10 27-28 28z" fill="currentColor" />
+      </svg>
       <span className={styles.bandIcon}>
-        <CalendarIcon size={34} />
+        <CalendarIcon size={30} />
       </span>
       <div className={styles.bandBody}>
-        <p className={styles.eyebrow}>Nuevo · Suscripción mensual</p>
+        <p className={styles.eyebrow}>
+          <span className={styles.badge}>Nuevo</span>
+          Suscripción mensual
+        </p>
         <h2 id="home-suscripcion" className={styles.bandTitle}>
-          Reserva tus suplementos cada mes y nunca te quedes sin ellos
+          Reserva tus suplementos cada mes y <span className={styles.bandTitleAccent}>nunca te quedes sin ellos</span>
         </h2>
+        <span className={styles.rule} aria-hidden="true" />
         <p className={styles.bandText}>
           Elige los productos que usas siempre, resérvalos mensualmente y olvídate de recordar la compra.
         </p>
