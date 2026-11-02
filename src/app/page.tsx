@@ -11,6 +11,7 @@ import { CategoryCarousel } from "@/components/store/CategoryCarousel";
 import { HeroCarousel } from "@/components/store/HeroCarousel";
 import { HomeFaq } from "@/components/store/HomeFaq";
 import { JsonLd } from "@/components/store/JsonLd";
+import { SubscriptionBand } from "@/components/store/SubscriptionCta";
 import styles from "@/components/store/store.module.css";
 import { getCategories, getProducts, getPublicSettings } from "@/lib/data";
 import { pickFeatured } from "@/lib/featured";
@@ -125,6 +126,8 @@ export default async function HomePage() {
           </ul>
         </section>
       ) : null}
+
+      <SubscriptionBand />
 
       <section className={styles.block} aria-labelledby="home-despacho">
         <SectionHeading id="home-despacho" title="Despacho en la RM y retiro en tienda en Puente Alto" />

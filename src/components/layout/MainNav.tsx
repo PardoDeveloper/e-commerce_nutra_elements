@@ -8,6 +8,7 @@ import { SearchBox } from "./SearchBox";
 
 const LINKS = [
   { href: "/productos", label: "Productos" },
+  { href: "/suscripcion", label: "Suscripción" },
   { href: "/nosotros", label: "Sobre nosotros" },
   { href: "/contacto", label: "Contáctanos" },
 ];

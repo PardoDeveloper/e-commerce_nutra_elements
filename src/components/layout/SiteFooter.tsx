@@ -29,6 +29,11 @@ export async function SiteFooter() {
                 Todos los productos
               </Link>
             </li>
+            <li>
+              <Link href="/suscripcion" className={styles.link}>
+                Suscripción mensual
+              </Link>
+            </li>
             {categories.map((c) => (
               <li key={c.slug}>
                 <Link href={`/categorias/${c.slug}`} className={styles.link}>
