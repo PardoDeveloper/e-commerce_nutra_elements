@@ -72,14 +72,25 @@ export default async function HomePage() {
                 </Button>
               </div>
             </Fragment>,
-            // Banner de ofertas (1824×576): tiene texto de borde a borde, así que no se recorta. Se ajusta completo
+            // Banners de ofertas (1024×348): tienen texto de borde a borde, así que no se recortan. Se ajustan completos
             // al alto de la 1.ª diapositiva y el espacio que sobra (arriba y abajo en móvil) se rellena con la misma
             // imagen desenfocada. El nombre del archivo cambia con cada versión para no servir la anterior desde caché.
-            <Link key="banner-ofertas" href="/productos" className={styles.heroPromo}>
-              <Image src="/banner_ofertas_v2.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
+            <Link key="banner-ofertas-magnesio-colageno" href="/productos" className={styles.heroPromo}>
+              <Image src="/banner_ofertas_magnesio_colageno.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
               <Image
-                src="/banner_ofertas_v2.jpg"
-                alt="Ofertas imperdibles: Bisglicinato de magnesio a $9.990 (antes $14.990), Omega 369 a $11.990 (antes $19.990) y Colágeno a $14.990 (antes $18.990). Ver catálogo."
+                src="/banner_ofertas_magnesio_colageno.jpg"
+                alt="Ofertas: Bisglicinato de magnesio a $9.990 (antes $13.990) y Colágeno a $14.990 (antes $18.990). Ver catálogo."
+                fill
+                sizes="(min-width: 1280px) 1200px, 100vw"
+                quality={80}
+                className={styles.heroPromoImage}
+              />
+            </Link>,
+            <Link key="banner-ofertas-omega-vitamina-c" href="/productos" className={styles.heroPromo}>
+              <Image src="/banner_ofertas_omega_vitamina_c.jpg" alt="" fill sizes="100vw" quality={40} className={styles.heroPromoBackdrop} />
+              <Image
+                src="/banner_ofertas_omega_vitamina_c.jpg"
+                alt="Ofertas: Omega 369 a $14.990 (antes $18.990) y Vitamina C a $10.990 (antes $14.990). Ver catálogo."
                 fill
                 sizes="(min-width: 1280px) 1200px, 100vw"
                 quality={80}
