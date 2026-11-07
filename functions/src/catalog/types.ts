@@ -32,7 +32,7 @@ export interface PlannedChange {
   row: number;
   sku: string;
   name: string;
-  field: "price" | "stock" | "discount" | "create" | "description";
+  field: "price" | "stock" | "discount" | "create" | "description" | "commission";
   from: Cell;
   to: Cell;
 }
@@ -110,6 +110,8 @@ export interface NewProductFields {
   sourceName: string;
   name: string;
   description: string | null;
+  /** Comisión del químico (COMISION de la planilla); null si no viene. Ausente = null (alta manual). */
+  commissionPerUnit?: number | null;
   price: number;
   stock: number;
   active: boolean;

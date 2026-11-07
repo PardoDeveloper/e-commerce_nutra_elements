@@ -69,3 +69,17 @@ export function parseStock(cell: Cell | undefined): StockParse {
   if (parsed.value > MAX_STOCK) return { kind: "invalid" };
   return { kind: "ok", value: parsed.value };
 }
+
+export type CommissionParse = { kind: "ok"; value: number } | { kind: "empty" } | { kind: "invalid" };
+
+/**
+ * COMISION de la planilla: comisión del químico en CLP por unidad (data-model 2.1 `commissionPerUnit`),
+ * entero 0..10.000.000; acepta "1.500" y "$1.500". Vacía = `empty` (no se toca la guardada, como DESCRIPCION).
+ * Decimales, negativos, porcentajes ("10%") o texto = `invalid`.
+ */
+export function parseCommission(cell: Cell | undefined): CommissionParse {
+  if (isEmptyCell(cell)) return { kind: "empty" };
+  const parsed = parseIntegerCell(cell);
+  if (!parsed.ok || parsed.value < 0 || parsed.value > MAX_PRICE) return { kind: "invalid" };
+  return { kind: "ok", value: parsed.value };
+}

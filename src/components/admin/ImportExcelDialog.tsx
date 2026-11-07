@@ -1,7 +1,7 @@
 "use client";
 
 // Importar la planilla de Control Farma desde Productos (functions.md 5.1). El SKU (ID) manda: los nuevos se crean sin
-// publicar y los existentes actualizan precio, stock, descripción (si viene) y datos de la planilla, sin tocar el resto
+// publicar y los existentes actualizan precio, stock, descripción y comisión (si vienen) y datos de la planilla, sin tocar el resto
 // del contenido ni los descuentos.
 // El archivo se lee en el navegador; primero se muestra la vista previa (dryRun) y luego se aplica.
 import { useId, useRef, useState, type DragEvent } from "react";
@@ -21,6 +21,7 @@ const FIELD_LABEL: Record<PlannedChange["field"], string> = {
   discount: "Precio final",
   create: "Nuevo",
   description: "Descripción",
+  commission: "Comisión",
 };
 
 const PREVIEW_TEXT = 40;
@@ -126,7 +127,7 @@ export function ImportExcelDialog({ onClose, onApplied }: { onClose: () => void;
 
       {!prepared ? (
         <p className={ui.help}>
-          El SKU (ID) manda: los productos nuevos se crean sin publicar y los existentes actualizan precio y stock. El contenido y los descuentos no se tocan.
+          El SKU (ID) manda: los productos nuevos se crean sin publicar y los existentes actualizan precio, stock y comisión (columna COMISION, en CLP por unidad; vacía no la cambia). El contenido y los descuentos no se tocan.
         </p>
       ) : null}
 

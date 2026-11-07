@@ -71,7 +71,7 @@ ID del documento = `sku`. Siempre texto (`"2427831"`), nunca número, para no pe
 | `publishedAt` | Timestamp \| null | no | primera publicación | Servidor |
 | `barcode` | string \| null | no | CODIGO_BARRA tal cual | Servidor, en importación |
 | `barcodeValid` | bool | sí | dígito verificador GTIN-8/12/13/14 correcto | Servidor, en importación |
-| `commissionPerUnit` | int \| null | no | Comisión del químico en **CLP por unidad vendida** (monto fijo, no porcentaje), 0..10.000.000. `null` = aún no definida. Se congela en cada pedido al crearlo | Servidor (`updateProductCommerce`); nuevo producto: null |
+| `commissionPerUnit` | int \| null | no | Comisión del químico en **CLP por unidad vendida** (monto fijo, no porcentaje), 0..10.000.000. `null` = aún no definida. Se congela en cada pedido al crearlo | Servidor (`updateProductCommerce`, `importCatalog` columna `COMISION`, D-050); nuevo producto: `COMISION` o null |
 | `gtin` | string \| null | no | solo si `barcodeValid` y **no** empieza con 978 o 979 (ISBN). El JSON-LD usa `gtin` y omite el campo si es null | Servidor, en importación |
 | `format` | string \| null | no | enum abierto, hoy `"capsulas"`. Si es string: **1 a 40 caracteres** (D-027) | Servidor propone al importar; admin directo |
 | `unitsPerPack` | int \| null | no | 1–1000 (30, 60, 90, 120…). Se extrae de "X 90" en el nombre | Servidor propone; admin directo |

@@ -26,8 +26,8 @@ export function buildCreateData<T>(op: CreateOp, now: T): Record<string, unknown
     barcode: f.barcode,
     barcodeValid: f.barcodeValid,
     gtin: f.gtin,
-    // Comisión del químico: se define después desde el admin (updateProductCommerce).
-    commissionPerUnit: null,
+    // Comisión del químico: la columna COMISION de la planilla (D-050) o, si no viene, se define después desde el admin.
+    commissionPerUnit: f.commissionPerUnit ?? null,
     format: f.format,
     unitsPerPack: f.unitsPerPack,
     seo: null,

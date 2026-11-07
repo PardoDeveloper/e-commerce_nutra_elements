@@ -221,6 +221,46 @@ describe("importCatalog: reimportación (P13)", () => {
     expect(store.product("2427831")["description"]).toBe("Nueva");
   });
 
+  it("D-050: COMISION guarda commissionPerUnit al crear; vacía o ausente la deja en null", async () => {
+    const store = new MemoryStore();
+    await handleImportCatalog(
+      store,
+      { rows: [catalogRow({ ID: 1, COMISION: 1500 }), catalogRow({ ID: 2, COMISION: "$2.000" }), catalogRow({ ID: 3, COMISION: "" }), catalogRow({ ID: 4 })] },
+      UID,
+    );
+    expect(store.product("1")["commissionPerUnit"]).toBe(1500);
+    expect(store.product("2")["commissionPerUnit"]).toBe(2000);
+    expect(store.product("3")["commissionPerUnit"]).toBeNull();
+    expect(store.product("4")["commissionPerUnit"]).toBeNull();
+  });
+
+  it("D-050: COMISION actualiza la comisión de un producto existente; vacía no la toca", async () => {
+    const store = seeded();
+    const report = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 10000, STOCK_ACTUAL: 5, COMISION: 1200 })] }, UID);
+    expect(report).toMatchObject({ updated: 1, unchanged: 0 });
+    expect(report.changes).toEqual([{ row: 2, sku: "2427831", name: "Nombre editado por el admin", field: "commission", from: null, to: 1200 }]);
+    expect(store.product("2427831")["commissionPerUnit"]).toBe(1200);
+
+    const changed = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 10000, STOCK_ACTUAL: 5, COMISION: "900" })] }, UID);
+    expect(changed.changes[0]).toMatchObject({ field: "commission", from: 1200, to: 900 });
+    expect(store.product("2427831")["commissionPerUnit"]).toBe(900);
+
+    const empty = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 10000, STOCK_ACTUAL: 5, COMISION: null })] }, UID);
+    expect(empty).toMatchObject({ updated: 0, unchanged: 1 });
+    expect(store.product("2427831")["commissionPerUnit"]).toBe(900);
+  });
+
+  it("D-050: COMISION inválida se advierte, no se guarda y no bloquea la fila", async () => {
+    const store = seeded();
+    for (const bad of ["10%", -5, 12.5, "mucho", 10_000_001]) {
+      const report = await handleImportCatalog(store, { rows: [catalogRow({ PRECIO_VENTA_PUBLICO: 11000, STOCK_ACTUAL: 5, COMISION: bad })] }, UID);
+      expect(report.warnings.map((w) => w.code)).toContain("INVALID_COMMISSION");
+      expect(report.invalid).toEqual([]);
+    }
+    expect(store.product("2427831")["price"]).toBe(11000);
+    expect(store.product("2427831")["commissionPerUnit"] ?? null).toBeNull();
+  });
+
   it("es idempotente: repetir la misma planilla da unchanged y no escribe", async () => {
     const store = seeded();
     const row = catalogRow({ PRECIO_VENTA_PUBLICO: 20000, STOCK_ACTUAL: 12 });

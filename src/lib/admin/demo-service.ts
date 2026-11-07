@@ -134,7 +134,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
             featured: false,
             seo: null,
             source: "controlfarma-xls",
-            commissionPerUnit: null,
+            commissionPerUnit: op.commissionPerUnit,
             deletedAt: null,
             deletedBy: null,
           }),
@@ -153,6 +153,7 @@ export function createDemoService(seed: DemoSeed, clock: () => Date = () => new 
       if (op.stock !== undefined) next.stock = op.stock;
       if (op.active !== undefined) next.active = op.active;
       if (op.description !== undefined) next.description = op.description;
+      if (op.commissionPerUnit !== undefined) next.commissionPerUnit = op.commissionPerUnit;
       next = recompute(next);
       map.set(op.sku, next);
     }
