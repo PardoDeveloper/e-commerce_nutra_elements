@@ -22,7 +22,7 @@ interface HeroCarouselProps {
 
 /**
  * Carrusel del inicio. El desplazamiento es CSS (scroll-snap), así que funciona con el dedo o el
- * trackpad aunque el JS no cargue. El JS solo agrega los puntos, el avance automático y la pausa.
+ * trackpad aunque el JS no cargue. El JS solo agrega las flechas, el avance automático y la pausa.
  * El avance automático se detiene con el puntero encima, con el foco dentro, con la pestaña oculta,
  * con "reducir movimiento" o con el botón de pausa (WCAG 2.2.2).
  */
@@ -109,7 +109,25 @@ export function HeroCarousel({ slides, label }: HeroCarouselProps) {
       </div>
 
       {count > 1 ? (
-        <div className={styles.controls}>
+        <>
+          {/* Flechas a los lados: avisan que hay más diapositivas y dan la vuelta al llegar al final. */}
+          <button
+            type="button"
+            className={`${styles.arrow} ${styles.arrowPrev}`}
+            onClick={() => goTo((active - 1 + count) % count)}
+            aria-label="Diapositiva anterior"
+          >
+            <Chevron direction="left" />
+          </button>
+          <button
+            type="button"
+            className={`${styles.arrow} ${styles.arrowNext}`}
+            onClick={() => goTo((active + 1) % count)}
+            aria-label="Diapositiva siguiente"
+          >
+            <Chevron direction="right" />
+          </button>
+          {/* Pausa del avance automático (WCAG 2.2.2), discreta en la esquina. */}
           <button
             type="button"
             className={styles.pause}
@@ -118,18 +136,23 @@ export function HeroCarousel({ slides, label }: HeroCarouselProps) {
           >
             <span aria-hidden="true">{paused ? "▶" : "❚❚"}</span>
           </button>
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              className={styles.dot}
-              onClick={() => goTo(i)}
-              aria-label={`Ir a la diapositiva ${i + 1}`}
-              aria-current={i === active ? "true" : undefined}
-            />
-          ))}
-        </div>
+        </>
       ) : null}
     </div>
+  );
+}
+
+function Chevron({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+      <path
+        d={direction === "left" ? "M14.5 5.5 8 12l6.5 6.5" : "M9.5 5.5 16 12l-6.5 6.5"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

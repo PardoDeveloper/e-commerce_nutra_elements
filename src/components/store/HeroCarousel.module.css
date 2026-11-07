@@ -21,82 +21,121 @@
   scroll-snap-stop: always;
 }
 
-/* Pausa y puntos, abajo al centro sobre la imagen. */
-.controls {
+/*
+ * Flechas laterales: círculo blanco translúcido con desenfoque y chevron verde de marca. Siempre visibles
+ * (avisan que hay más diapositivas); al pasar el puntero se vuelven opacas, crecen un poco y el chevron
+ * avanza hacia su lado.
+ */
+.arrow {
   position: absolute;
-  left: 50%;
-  bottom: var(--space-2);
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border-radius: 999px;
-  background: rgb(0 0 0 / 0.5);
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--color-primary);
+  box-shadow:
+    0 8px 22px -8px rgb(0 40 20 / 0.4),
+    0 2px 6px -2px rgb(0 0 0 / 0.15);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.25s ease;
+}
+.arrowPrev {
+  left: var(--space-3);
+}
+.arrowNext {
+  right: var(--space-3);
+}
+.arrow svg {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.arrow:hover {
+  background: #fff;
+  color: var(--color-navy);
+  transform: translateY(-50%) scale(1.06);
+  box-shadow:
+    0 12px 28px -10px rgb(0 40 20 / 0.5),
+    0 0 0 4px rgb(255 255 255 / 0.35);
+}
+.arrowPrev:hover svg {
+  transform: translateX(-2px);
+}
+.arrowNext:hover svg {
+  transform: translateX(2px);
+}
+.arrow:active {
+  transform: translateY(-50%) scale(0.97);
+}
+.arrow:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
-.pause,
-.dot {
-  display: inline-grid;
+/* Pausa del avance automático: discreta, abajo a la derecha. */
+.pause {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 2;
+  display: grid;
   place-items: center;
-  /* Área táctil de 24 px como mínimo (WCAG 2.5.8); el punto visible es más chico. */
-  width: 24px;
-  height: 24px;
+  /* Área táctil de 24 px como mínimo (WCAG 2.5.8). */
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  background: transparent;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.35);
   color: #fff;
-  cursor: pointer;
-}
-
-.pause {
   font-size: 0.625rem;
   letter-spacing: -1px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
 }
-
-.dot::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 0.55);
-  transition:
-    width 0.2s ease,
-    background-color 0.2s ease;
+.pause:hover,
+.pause:focus-visible {
+  opacity: 1;
 }
-.dot[aria-current="true"]::before {
-  width: 18px;
-  border-radius: 4px;
-  background: #fff;
-}
-
-.pause:focus-visible,
-.dot:focus-visible {
+.pause:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 1px;
-  border-radius: 4px;
 }
 
-/* En móvil la imagen es baja y el botón ocupa la esquina: los controles van bajo la imagen. */
+/* En móvil el banner es bajo: flechas más chicas y pegadas al borde. */
 @media (max-width: 639px) {
-  .controls {
-    position: static;
-    transform: none;
-    width: fit-content;
-    margin: var(--space-1) auto;
-    background: transparent;
+  .arrow {
+    width: 34px;
+    height: 34px;
   }
+  .arrow svg {
+    width: 18px;
+    height: 18px;
+  }
+  .arrowPrev {
+    left: var(--space-1);
+  }
+  .arrowNext {
+    right: var(--space-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow,
+  .arrow svg,
   .pause {
-    color: var(--color-text);
-  }
-  .dot::before {
-    background: var(--color-border-strong);
-  }
-  .dot[aria-current="true"]::before {
-    background: var(--color-primary);
-  }
-  .pause:focus-visible,
-  .dot:focus-visible {
-    outline-color: var(--color-focus);
+    transition: none;
   }
 }
