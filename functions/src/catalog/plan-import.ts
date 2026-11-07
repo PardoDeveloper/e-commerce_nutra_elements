@@ -1,5 +1,5 @@
 import { analyzeBarcode } from "./barcode.js";
-import { parsePrice, parseStock, type Cell } from "./cells.js";
+import { parseCommission, parsePrice, parseStock, type Cell } from "./cells.js";
 import { availableStock, planPriceChange } from "./discount.js";
 import { extractPackInfo, proposeDisplayName } from "./names.js";
 import { loadProduct } from "./product.js";
@@ -22,6 +22,7 @@ export interface CatalogRow {
   ACTIVO?: MaybeCell;
   LABORATORIO?: MaybeCell;
   DESCRIPCION?: MaybeCell;
+  COMISION?: MaybeCell;
 }
 export interface PriceRow {
   SKU?: MaybeCell;
@@ -201,6 +202,11 @@ export function planImportCatalog(items: readonly Item<CatalogRow>[], raw: RawPr
     if (description.kind === "invalid") {
       c.warn("INVALID_DESCRIPTION", `DESCRIPCION de más de ${MAX_DESCRIPTION} caracteres o con caracteres no permitidos: no se guarda.`, sku);
     }
+    // COMISION es opcional: vacía no toca la guardada; inválida se advierte y no se guarda (no bloquea la fila).
+    const commission = parseCommission(input.COMISION);
+    if (commission.kind === "invalid") {
+      c.warn("INVALID_COMMISSION", "COMISION debe ser un monto entero en CLP por unidad, entre 0 y 10.000.000: no se guarda.", sku);
+    }
     const barcode = analyzeBarcode(input.CODIGO_BARRA);
     if (barcode.isbnRange) c.warn("BARCODE_ISBN_RANGE", "El código de barras empieza con 978 o 979; no se publicará como GTIN.", sku);
     if (barcode.tooLong) c.warn("BARCODE_TOO_LONG", "El código de barras tiene más de 32 caracteres y se descartó.", sku);
@@ -217,6 +223,7 @@ export function planImportCatalog(items: readonly Item<CatalogRow>[], raw: RawPr
         sourceName,
         name: proposeDisplayName(sourceName) || sourceName.slice(0, 120),
         description: description.kind === "ok" ? description.value : null,
+        commissionPerUnit: commission.kind === "ok" ? commission.value : null,
         price: price.value,
         stock: initial,
         active,
@@ -233,7 +240,8 @@ export function planImportCatalog(items: readonly Item<CatalogRow>[], raw: RawPr
       continue;
     }
 
-    // Reimportación: pisa precio y stock; del contenido solo la descripción, si la celda trae texto (D-046).
+    // Reimportación: pisa precio y stock; del contenido solo la descripción, si la celda trae texto (D-046), y la
+    // comisión si COMISION trae un monto (D-050).
     // Nunca toca los descuentos (P13).
     const patch: ProductPatch = {};
     const priceChange = planPriceChange(existing, price.value);
@@ -254,6 +262,10 @@ export function planImportCatalog(items: readonly Item<CatalogRow>[], raw: RawPr
     if (description.kind === "ok" && description.value !== existing.description) {
       patch.description = description.value;
       c.changes.push({ row, sku, name: existing.name, field: "description", from: existing.description, to: description.value });
+    }
+    if (commission.kind === "ok" && commission.value !== existing.commissionPerUnit) {
+      patch.commissionPerUnit = commission.value;
+      c.changes.push({ row, sku, name: existing.name, field: "commission", from: existing.commissionPerUnit, to: commission.value });
     }
     if (active !== existing.active) patch.active = active;
     if (sourceName !== existing.sourceName) patch.sourceName = sourceName;

@@ -37,6 +37,7 @@ export const catalogRowSchema = z.object({
   LABORATORIO: cell,
   // Texto largo: el límite real (5000 tras recortar) lo valida el planificador, para no rechazar el lote entero.
   DESCRIPCION: z.union([z.string().max(10_000), z.number(), z.null()]).optional(),
+  COMISION: cell,
 });
 export const priceRowSchema = z.object({ SKU: cell, PRECIO: cell });
 export const stockRowSchema = z.object({ SKU: cell, STOCK: cell });

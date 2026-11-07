@@ -85,7 +85,16 @@ export function parseStock(cell: Cell | undefined): StockParse {
 // ---------- Operaciones a aplicar ----------
 
 export type BatchOp =
-  | { type: "update"; sku: string; price?: number; stock?: number; active?: boolean; description?: string; removeDiscount?: boolean }
+  | {
+      type: "update";
+      sku: string;
+      price?: number;
+      stock?: number;
+      active?: boolean;
+      description?: string;
+      commissionPerUnit?: number;
+      removeDiscount?: boolean;
+    }
   | {
       type: "create";
       sku: string;
@@ -96,6 +105,7 @@ export type BatchOp =
       active: boolean;
       barcode: string | null;
       description: string | null;
+      commissionPerUnit: number | null;
     }
   | { type: "discount"; sku: string; discount: ProductDiscount | null };
 
@@ -250,6 +260,16 @@ function parseDescription(cell: Cell | undefined): { kind: "empty" } | { kind: "
   return { kind: "ok", value: text };
 }
 
+export type CommissionParse = { kind: "ok"; value: number } | { kind: "empty" } | { kind: "invalid" };
+
+/** COMISION es opcional (D-050): CLP por unidad, entero 0..10.000.000. Vacía no toca la guardada. */
+export function parseCommissionCell(cell: Cell | undefined): CommissionParse {
+  if (isEmptyCell(cell)) return { kind: "empty" };
+  const parsed = parseIntegerCell(cell, true);
+  if (!parsed.ok || parsed.value < 0 || parsed.value > MAX_PRICE) return { kind: "invalid" };
+  return { kind: "ok", value: parsed.value };
+}
+
 export function planImportCatalog(rows: CatalogRow[], products: ProductMap, options: BatchOptions = {}): BatchPlan {
   assertBatch(rows);
   const c = newCollector();
@@ -294,6 +314,14 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
         message: `DESCRIPCION de más de ${MAX_DESCRIPTION} caracteres o con caracteres no permitidos: no se guarda.`,
       });
     }
+    const commission = parseCommissionCell(r.COMISION);
+    if (commission.kind === "invalid") {
+      c.warnings.push({
+        sku,
+        code: "INVALID_COMMISSION",
+        message: "COMISION debe ser un monto entero en CLP por unidad, entre 0 y 10.000.000: no se guarda.",
+      });
+    }
 
     if (!product) {
       // Importación inicial: stock vacío o negativo pasa a 0 y se informa (D-018).
@@ -312,6 +340,7 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
         active,
         barcode: isEmptyCell(r.CODIGO_BARRA) ? null : String(r.CODIGO_BARRA),
         description: description.kind === "ok" ? description.value : null,
+        commissionPerUnit: commission.kind === "ok" ? commission.value : null,
       });
       c.created++;
       return;
@@ -333,6 +362,11 @@ export function planImportCatalog(rows: CatalogRow[], products: ProductMap, opti
     if (description.kind === "ok" && description.value !== product.description) {
       c.changes.push({ row, sku, name: product.name, field: "description", from: product.description, to: description.value });
       c.ops.push({ type: "update", sku, description: description.value });
+      changed = true;
+    }
+    if (commission.kind === "ok" && commission.value !== product.commissionPerUnit) {
+      c.changes.push({ row, sku, name: product.name, field: "commission", from: product.commissionPerUnit, to: commission.value });
+      c.ops.push({ type: "update", sku, commissionPerUnit: commission.value });
       changed = true;
     }
     if (active !== product.active) {
@@ -392,7 +426,7 @@ export function planApplyDiscount(
 export type SheetKind = "catalog" | "prices" | "stock";
 
 export const SHEET_COLUMNS: Record<SheetKind, readonly string[]> = {
-  catalog: ["ID", "NOMBRE", "DESCRIPCION", "CODIGO_BARRA", "STOCK_ACTUAL", "PRECIO_VENTA_PUBLICO", "ACTIVO", "LABORATORIO"],
+  catalog: ["ID", "NOMBRE", "DESCRIPCION", "CODIGO_BARRA", "STOCK_ACTUAL", "PRECIO_VENTA_PUBLICO", "ACTIVO", "LABORATORIO", "COMISION"],
   prices: ["SKU", "PRECIO"],
   stock: ["SKU", "STOCK"],
 };

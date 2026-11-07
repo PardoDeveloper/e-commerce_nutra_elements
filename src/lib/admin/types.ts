@@ -180,7 +180,7 @@ export interface PlannedChange {
   row: number;
   sku: string;
   name: string;
-  field: "price" | "stock" | "discount" | "create" | "description";
+  field: "price" | "stock" | "discount" | "create" | "description" | "commission";
   from: Cell;
   to: Cell;
 }
@@ -209,6 +209,7 @@ export interface CatalogRow {
   ACTIVO: Cell;
   LABORATORIO: Cell;
   DESCRIPCION?: Cell;
+  COMISION?: Cell;
 }
 export interface PriceRow {
   SKU: Cell;

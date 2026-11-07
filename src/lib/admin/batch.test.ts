@@ -134,6 +134,21 @@ describe("importCatalog", () => {
     expect(report.corrected.map((c) => c.sku)).toEqual(["5000", "5001"]);
     expect(ops[0]).toMatchObject({ type: "create", stock: 0 });
   });
+  it("D-050: COMISION se guarda al crear y al actualizar; vacía no cambia; inválida se advierte", () => {
+    const created = planImportCatalog([row({ COMISION: "1.500" })] as never, products);
+    expect(created.ops[0]).toMatchObject({ type: "create", commissionPerUnit: 1500 });
+    const existing = products.get("1001")!;
+    const updated = planImportCatalog([row({ ID: "1001", NOMBRE: existing.sourceName, PRECIO_VENTA_PUBLICO: existing.price, STOCK_ACTUAL: existing.stock + existing.reserved, ACTIVO: existing.active ? "SI" : "NO", COMISION: 777 })] as never, products);
+    expect(updated.report.changes.filter((c) => c.field === "commission")).toEqual([
+      expect.objectContaining({ sku: "1001", from: existing.commissionPerUnit, to: 777 }),
+    ]);
+    expect(updated.ops).toContainEqual({ type: "update", sku: "1001", commissionPerUnit: 777 });
+    const empty = planImportCatalog([row({ ID: "1001", COMISION: "" })] as never, products);
+    expect(empty.report.changes.some((c) => c.field === "commission")).toBe(false);
+    const bad = planImportCatalog([row({ COMISION: "10%" })] as never, products);
+    expect(bad.report.warnings.map((w) => w.code)).toContain("INVALID_COMMISSION");
+    expect(bad.ops[0]).toMatchObject({ type: "create", commissionPerUnit: null });
+  });
   it("en un producto existente, stock vacío es EMPTY_STOCK", () => {
     const { report } = planImportCatalog([row({ ID: "1001", STOCK_ACTUAL: "" })] as never, products);
     expect(report.invalid[0]?.code).toBe("EMPTY_STOCK");
