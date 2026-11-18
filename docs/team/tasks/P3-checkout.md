@@ -11,7 +11,7 @@ Todo es dinámico y con **noindex**.
 2. `/checkout`, en una sola página:
    - **Datos:** nombre, correo, teléfono y **RUT obligatorio** (módulo 11, normalizado a `12345678-K`, igual que `functions/src/common/rut.ts`; anota en el handoff que hay que unificarlos).
    - **Entrega:** despacho en la RM con comuna y dirección ($3.990), o retiro en Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00 (gratis).
-   - **Envío gratis:** si el subtotal con descuentos es `>=` al umbral; sin umbral, no hay envío gratis.
+   - **Envío gratis:** si el subtotal con descuentos es `>= $20.000`; un ajuste `null` hereda este umbral promocional.
    - **Pago:** Flow o transferencia.
    - **Resumen:** con la nota "el total final lo confirma el servidor" (D-005).
    - Errores accesibles por campo, `autocomplete` y `inputmode` correctos.

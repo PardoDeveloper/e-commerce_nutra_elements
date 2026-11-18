@@ -108,9 +108,9 @@ describe("computePricing: caso base", () => {
     expect(r.listSubtotal).toBe(10990 * 2 + 8990);
     expect(r.discountTotal).toBe(r.listSubtotal - 28772);
     expect(r.discountTotal).toBe((10990 - 9891) * 2);
-    expect(r.shipping).toBe(3990);
-    expect(r.total).toBe(32762);
-    expect(r.freeShippingApplied).toBe(false);
+    expect(r.shipping).toBe(0);
+    expect(r.total).toBe(28772);
+    expect(r.freeShippingApplied).toBe(true);
     expect(r.delivery).toEqual({ type: "shipping", communeCode: "puente-alto", communeName: "Puente Alto" });
   });
 
@@ -182,11 +182,18 @@ describe("computePricing: envío", () => {
     expect(r.total).toBe(13990);
   });
 
-  it("umbral sin configurar (null): nunca hay envío gratis, ni con carritos enormes", () => {
-    const big = mapOf(product("A", { price: 5_000_000 }));
-    const r = computePricing({ items: [{ sku: "A", qty: 5 }], products: big, settings: SETTINGS, delivery: SHIP });
-    expect(r.shipping).toBe(3990);
-    expect(r.freeShippingApplied).toBe(false);
+  it("con null aplica envío gratis desde $20.000", () => {
+    const below = computePricing({ ...base, settings: SETTINGS, delivery: SHIP });
+    const atThreshold = computePricing({
+      items: [{ sku: "A", qty: 2 }],
+      products,
+      settings: SETTINGS,
+      delivery: SHIP,
+    });
+    expect(below.shipping).toBe(3990);
+    expect(below.freeShippingApplied).toBe(false);
+    expect(atThreshold.shipping).toBe(0);
+    expect(atThreshold.freeShippingApplied).toBe(true);
   });
 
   it("subtotal exactamente igual al umbral: envío gratis (>=)", () => {
@@ -392,7 +399,14 @@ describe("computePricing: total", () => {
 
   it("con despacho, el envío cuenta para el tope", () => {
     const products = mapOf(product("A", { price: 10_000_000 }));
-    const e = errorOf(() => computePricing({ items: [{ sku: "A", qty: 5 }], products, settings: SETTINGS, delivery: SHIP }));
+    const e = errorOf(() =>
+      computePricing({
+        items: [{ sku: "A", qty: 5 }],
+        products,
+        settings: { ...SETTINGS, freeShippingThreshold: 0 },
+        delivery: SHIP,
+      }),
+    );
     expect(e.code).toBe("ORDER_TOO_LARGE");
   });
 });

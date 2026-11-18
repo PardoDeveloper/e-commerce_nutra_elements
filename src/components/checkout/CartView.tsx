@@ -62,6 +62,18 @@ export function CartView({ catalog, settings }: CartViewProps) {
             <p>Hay productos sin stock o que ya no están disponibles. Quítalos para continuar.</p>
           </div>
         ) : null}
+        <div
+          className={`${styles.notice} ${summary.threshold !== null && summary.subtotal >= summary.threshold ? styles.noticeSuccess : ""}`}
+          role="status"
+        >
+          {summary.threshold !== null && summary.subtotal >= summary.threshold ? (
+            <p className={styles.noticeTitle}>¡Tu compra califica para despacho gratis en la RM!</p>
+          ) : summary.missingForFreeShipping !== null ? (
+            <p>Agrega {formatClp(summary.missingForFreeShipping)} más para obtener despacho gratis en la RM.</p>
+          ) : (
+            <p>Despacho gratis en compras desde {formatClp(summary.threshold ?? 20_000)} en la RM.</p>
+          )}
+        </div>
         <ul className={styles.lines}>
           {cart.lines.map((line) => {
             const entry = catalog[line.sku];

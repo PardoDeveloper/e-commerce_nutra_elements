@@ -24,7 +24,7 @@ function slugifyCommune(name: string): string {
 
 export const DEFAULT_SETTINGS: PublicSettings = {
   shippingFee: 3990,
-  freeShippingThreshold: null,
+  freeShippingThreshold: 20_000,
   communes: COMMUNE_NAMES.map((name) => ({ code: slugifyCommune(name), name })),
   pickup: {
     enabled: true,

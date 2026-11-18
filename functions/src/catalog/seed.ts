@@ -80,7 +80,7 @@ export function buildSeedData(): SeedData {
     categories: CATEGORY_BASE.map((c) => ({ ...c, imagePath: null, published: true, seo: null })),
     settingsPublic: {
       shippingFee: 3990,
-      freeShippingThreshold: null,
+      freeShippingThreshold: 20_000,
       communes,
       pickup: { enabled: true, address: "Av. Concha y Toro 180, Puente Alto", hours: "Lunes a viernes de 9:00 a 20:00" },
       maxQtyPerItem: 10,

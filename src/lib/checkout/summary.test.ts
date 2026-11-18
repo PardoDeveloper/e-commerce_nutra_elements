@@ -65,8 +65,29 @@ describe("computeSummary", () => {
     expect(r.missingForFreeShipping).toBe(1000);
   });
 
-  it("sin umbral (o inválido) no hay envío gratis", () => {
-    for (const t of [null, 0, -5, 1.5]) {
+  it("usa el umbral vigente de $20.000 cuando el ajuste es null", () => {
+    const below = computeSummary({
+      items: [{ sku: "A", qty: 1 }],
+      catalog,
+      settings,
+      delivery: "shipping",
+    });
+    expect(below.freeShippingApplied).toBe(false);
+    expect(below.missingForFreeShipping).toBe(10000);
+
+    const reached = computeSummary({
+      items: [{ sku: "A", qty: 2 }],
+      catalog,
+      settings,
+      delivery: "shipping",
+    });
+    expect(reached.freeShippingApplied).toBe(true);
+    expect(reached.shipping).toBe(0);
+    expect(effectiveThreshold(null)).toBe(20000);
+  });
+
+  it("ignora umbrales inválidos", () => {
+    for (const t of [0, -5, 1.5]) {
       const r = computeSummary({
         items: [{ sku: "A", qty: 5 }],
         catalog,

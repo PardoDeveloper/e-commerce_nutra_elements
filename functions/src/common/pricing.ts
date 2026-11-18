@@ -9,6 +9,7 @@ export const MAX_ORDER_TOTAL = 50_000_000;
 const MAX_PRICE = 10_000_000;
 const MAX_SHIPPING_FEE = 100_000;
 const DEFAULT_MAX_QTY_PER_ITEM = 10;
+const DEFAULT_FREE_SHIPPING_THRESHOLD = 20_000;
 
 export type ProductDiscount = { type: "percent" | "fixed"; value: number };
 
@@ -100,12 +101,12 @@ export function computeFinalPrice(price: number, discount?: ProductDiscount | nu
 }
 
 /**
- * Umbral de envío gratis efectivo. Contrato: `null` = no hay envío gratis; si es entero,
+ * Umbral de envío gratis efectivo. `null` aplica la promoción vigente de $20.000; si es entero,
  * 1..10.000.000. Un valor fuera de contrato (0, negativo, decimal) se IGNORA (sin envío gratis):
  * lo más seguro para el negocio, ya que un 0 regalaría el envío a todos.
  */
 function effectiveThreshold(threshold: number | null): number | null {
-  if (threshold === null) return null;
+  if (threshold === null) return DEFAULT_FREE_SHIPPING_THRESHOLD;
   return isInt(threshold) && threshold >= 1 && threshold <= MAX_PRICE ? threshold : null;
 }
 
