@@ -131,7 +131,7 @@ Estado: **vigente** (decidida) · **propuesta** (espera la aprobación de Carlos
 - **Riesgo aceptado:** la primera vez que el código corre en la nube real es en el proyecto de prod, antes del lanzamiento público.
 
 ## Datos de negocio confirmados el 2026-10-14
-- Envío gratis: monto configurable en el admin, sin valor por defecto (desactivado hasta que se configure).
+- Envío gratis: vigente desde $20.000 de subtotal con descuentos; si el ajuste es `null`, se aplica ese umbral.
 - Retiro en tienda: Av. Concha y Toro 180, Puente Alto, de lunes a viernes de 9:00 a 20:00.
 - Reserva de 48 horas para transferencias (D-006): PENDIENTE. Mientras tanto, 48 h configurable en settings. Formato NE-000123: Carlos confirma que DispatchTrack lo acepta.
 

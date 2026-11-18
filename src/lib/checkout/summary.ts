@@ -2,8 +2,8 @@
 // SOLO PARA MOSTRAR en el prototipo: en producción el total lo calcula y confirma el
 // servidor (D-005). Replica las reglas de functions/src/common/pricing.ts:
 //   - subtotal = Σ precio final × cantidad (ya con descuentos);
-//   - envío gratis si subtotal >= umbral; un umbral inválido (null, 0, negativo, decimal) se
-//     ignora, es decir, no hay envío gratis (D-027);
+//   - envío gratis si subtotal >= umbral; si el ajuste es null, aplica el umbral vigente de $20.000;
+//     valores inválidos (0, negativo, decimal) se ignoran (D-027);
 //   - retiro en tienda: envío 0.
 
 import type { CategoryId, Product } from "@/lib/data/types";
@@ -36,6 +36,8 @@ export function toCatalogEntry(p: Product): CatalogEntry {
 }
 
 export type DeliveryType = "shipping" | "pickup";
+
+const DEFAULT_FREE_SHIPPING_THRESHOLD = 20_000;
 
 export interface SummaryInput {
   items: readonly { sku: string; qty: number }[];
@@ -76,6 +78,7 @@ export interface Summary {
 }
 
 export function effectiveThreshold(value: number | null): number | null {
+  if (value === null) return DEFAULT_FREE_SHIPPING_THRESHOLD;
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 ? value : null;
 }
 

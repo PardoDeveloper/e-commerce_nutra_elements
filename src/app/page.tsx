@@ -14,6 +14,7 @@ import { JsonLd } from "@/components/store/JsonLd";
 import { SubscriptionBand } from "@/components/store/SubscriptionCta";
 import styles from "@/components/store/store.module.css";
 import { getCategories, getProducts, getPublicSettings } from "@/lib/data";
+import { effectiveThreshold } from "@/lib/checkout/summary";
 import { pickFeatured } from "@/lib/featured";
 import { formatClp } from "@/lib/format";
 import { faqPageNode, graph, organizationNode, pageMetadata, websiteNode } from "@/lib/seo";
@@ -35,12 +36,35 @@ export default async function HomePage() {
     getPublicSettings(),
   ]);
   const featured = pickFeatured(products);
+  const freeShippingThreshold = effectiveThreshold(settings.freeShippingThreshold);
   const counts = new Map<string, number>();
   for (const p of products) if (p.categoryId) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
   const categoryNames = new Map(categories.map((c) => [c.slug as string, c.name]));
 
   return (
     <Container as="div" className={styles.page}>
+      {freeShippingThreshold !== null ? (
+        <div className={styles.freeShippingBanner} role="region" aria-label="Promoción de despacho">
+          <span className={styles.freeShippingIcon} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" focusable="false">
+              <path
+                d="M1 6h13v10H1V6zm13 3h4l3 3v4h-7V9zM6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <p className={styles.freeShippingMessage}>
+            ¡Despacho <strong className={styles.freeShippingBadge}>GRATIS</strong> por compras sobre{" "}
+            <strong className={styles.freeShippingAmount}>{formatClp(freeShippingThreshold)}</strong>!
+          </p>
+          <span className={styles.freeShippingSub}>Toda la RM</span>
+        </div>
+      ) : null}
+
       <JsonLd data={graph(organizationNode(), websiteNode(), faqPageNode())} />
 
       <section className={styles.hero} aria-labelledby="home-titulo">

@@ -31,6 +31,8 @@
   /* Estados (siempre acompañados de texto o ícono, nunca solo color) */
   --color-danger: #b42318;
   --color-danger-soft: #fdecea;
+  --color-promo: #8f211a;
+  --color-promo-accent: #f2d8a0;
   --color-warning-soft: #fff4d6;
   --color-warning-text: #7a4d00;
   --color-focus: #0b57d0;

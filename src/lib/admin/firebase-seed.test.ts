@@ -9,7 +9,7 @@ describe("ajustes iniciales (espejo de validPublicSettings)", () => {
   it("tiene exactamente las claves y valores válidos", () => {
     expect(Object.keys(d).sort()).toEqual(["communes", "freeShippingThreshold", "maxQtyPerItem", "pickup", "shippingFee"]);
     expect(d.shippingFee).toBe(3990);
-    expect(d.freeShippingThreshold).toBeNull();
+    expect(d.freeShippingThreshold).toBe(20000);
     expect(isInt(d.maxQtyPerItem, 1, 100)).toBe(true);
     const communes = d.communes as { code: string; name: string }[];
     expect(communes.length).toBe(52);

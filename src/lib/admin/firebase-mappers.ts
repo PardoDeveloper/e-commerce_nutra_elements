@@ -309,7 +309,7 @@ export const DEFAULT_LIMITS = {
 /** Valores iniciales del contrato (data-model 2.5) mientras los documentos no existen. */
 export const DEFAULT_SETTINGS: AdminSettings = {
   shippingFee: 3990,
-  freeShippingThreshold: null,
+  freeShippingThreshold: 20_000,
   pickup: { enabled: true, address: "Av. Concha y Toro 180, Puente Alto", hours: "Lunes a viernes de 9:00 a 20:00" },
   maxQtyPerItem: 10,
   reservationMinutes: { flow: 30 },
@@ -321,7 +321,8 @@ export function mergeSettings(pub: Doc | null, priv: Doc | null): AdminSettings 
   const minutes = priv && isRecord(priv.reservationMinutes) ? priv.reservationMinutes : null;
   return {
     shippingFee: pub ? int(pub.shippingFee, base.shippingFee) : base.shippingFee,
-    freeShippingThreshold: pub ? (typeof pub.freeShippingThreshold === "number" ? pub.freeShippingThreshold : null) : base.freeShippingThreshold,
+    freeShippingThreshold:
+      pub && typeof pub.freeShippingThreshold === "number" ? pub.freeShippingThreshold : base.freeShippingThreshold,
     pickup: pickup
       ? { enabled: bool(pickup.enabled, true), address: str(pickup.address) ?? "", hours: str(pickup.hours) ?? "" }
       : { ...base.pickup },

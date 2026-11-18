@@ -261,7 +261,7 @@ interface OrderItem {
 // El pedido guarda además `commission: Clp` = Σ items.commission (no depende del precio, del descuento ni del envío).
 ```
 
-Ejemplo (pago con Flow, despacho a domicilio, sin umbral de envío gratis configurado)
+Ejemplo (pago con Flow, despacho a domicilio, subtotal sobre el umbral vigente de envío gratis)
 ```json
 {
   "orderNumber": "NE-000123",
@@ -278,12 +278,12 @@ Ejemplo (pago con Flow, despacho a domicilio, sin umbral de envío gratis config
     { "sku": "2427851", "name": "Vitamina C x 60 cápsulas", "unitPrice": 8990, "discount": null, "unitFinalPrice": 8990, "qty": 1, "lineTotal": 8990 }
   ],
   "subtotal": 28772,
-  "shipping": 3990,
-  "total": 32762,
+  "shipping": 0,
+  "total": 28772,
   "currency": "CLP",
-  "freeShippingApplied": false,
+  "freeShippingApplied": true,
   "accessTokenHash": "<sha256 hex>",
-  "flow": { "commerceOrder": "NE-000123", "token": "<token de Flow>", "flowOrder": 0, "paymentUrl": "<url de Flow>", "attempt": 1, "lastStatus": 2, "lastCheckedAt": "<Timestamp>", "paidAt": "<Timestamp>", "amountPaid": 32762, "paidFlowOrder": 0 },
+  "flow": { "commerceOrder": "NE-000123", "token": "<token de Flow>", "flowOrder": 0, "paymentUrl": "<url de Flow>", "attempt": 1, "lastStatus": 2, "lastCheckedAt": "<Timestamp>", "paidAt": "<Timestamp>", "amountPaid": 28772, "paidFlowOrder": 0 },
   "transfer": null,
   "review": null,
   "refund": null,
@@ -328,7 +328,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 | Campo | Tipo | Oblig. | Validación |
 |---|---|---|---|
 | `shippingFee` | int | sí | 0–100.000. Por defecto **3990** |
-| `freeShippingThreshold` | int \| null | sí | `null` = **no hay envío gratis** (valor inicial, D-datos confirmados). Si es entero: 1–10.000.000. Se compara con `>=` contra el subtotal con descuentos (ver 7.4) |
+| `freeShippingThreshold` | int \| null | sí | Por defecto **20000**. Si es `null`, se aplica el umbral promocional vigente de **20000**. Si es entero: 1–10.000.000. Se compara con `>=` contra el subtotal con descuentos (ver 7.4) |
 | `communes` | array de `{code, name}` | sí | **1 a 400 elementos** (D-027; las reglas validan el tamaño, no recorren cada elemento). Lista de comunas con despacho. `code`: slug sin tildes. Se siembra con las **52 comunas de la Región Metropolitana** (ver 7.5). El servidor valida `communeCode` contra esta lista |
 | `pickup` | map | sí | `{enabled: bool, address: string ≤200, hours: string ≤200}`. Valor inicial: Av. Concha y Toro 180, Puente Alto; lunes a viernes 9:00 a 20:00 (horario confirmado el 2026-10-14) |
 | `maxQtyPerItem` | int | sí | 1–100, por defecto 10 |
@@ -347,7 +347,7 @@ Si el documento no existe, `createOrder` toma `settings/private.orderNumberStart
 // settings/public
 {
   "shippingFee": 3990,
-  "freeShippingThreshold": null,
+  "freeShippingThreshold": 20000,
   "communes": [{ "code": "puente-alto", "name": "Puente Alto" }, { "code": "santiago", "name": "Santiago" }],
   "pickup": { "enabled": true, "address": "Av. Concha y Toro 180, Puente Alto", "hours": "Lunes a viernes de 9:00 a 20:00" },
   "maxQtyPerItem": 10,
@@ -703,7 +703,7 @@ Validaciones al escribir: `percent` entero 1–99; `fixed` entero 1 a `price-1` 
 ### 7.4 Envío
 - Despacho: `shippingFee` (por defecto **3990**) a **todas** las comunas de la lista.
 - Retiro en tienda: **0**.
-- Envío gratis: solo si `freeShippingThreshold` no es `null` y `subtotal >= freeShippingThreshold`. Con `null` **no hay envío gratis** (valor inicial). Si es retiro, ya es 0 (no se marca `freeShippingApplied`).
+- Envío gratis: si `subtotal >= freeShippingThreshold`; cuando el campo es `null`, se aplica el umbral promocional vigente de **20000**. El subtotal incluye descuentos. Si es retiro, el envío es 0 (no se marca `freeShippingApplied`).
 - **El descuento se combina con el envío gratis**: el umbral se compara con el `subtotal` **ya con descuentos** (`Σ unitFinalPrice × qty`), nunca con el precio de lista. Confirmado en D-024: se combina con descuentos y la comparación es con `>=` (un subtotal igual al umbral ya tiene envío gratis).
 - `total = subtotal + shipping`.
 

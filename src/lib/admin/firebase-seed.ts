@@ -9,11 +9,11 @@ type Doc = Record<string, unknown>;
 /** Reserva por defecto (data-model 2.5): Flow 30 min, el único medio de pago (D-044). */
 const RESERVATION_MINUTES = { flow: 30 } as const;
 
-/** settings/public sin `updatedAt`: comunas de la RM, despacho $3.990, umbral vacío, tienda y máximo por producto. */
+/** settings/public sin `updatedAt`: comunas de la RM, despacho $3.990, envío gratis desde $20.000 y tienda. */
 export function buildInitialPublicSettings(): Doc {
   return {
     shippingFee: PUBLIC_DEFAULTS.shippingFee,
-    freeShippingThreshold: null,
+    freeShippingThreshold: PUBLIC_DEFAULTS.freeShippingThreshold,
     communes: PUBLIC_DEFAULTS.communes.map((c) => ({ code: c.code, name: c.name })),
     pickup: { enabled: PUBLIC_DEFAULTS.pickup.enabled, address: PUBLIC_DEFAULTS.pickup.address, hours: PUBLIC_DEFAULTS.pickup.hours },
     maxQtyPerItem: PUBLIC_DEFAULTS.maxQtyPerItem,

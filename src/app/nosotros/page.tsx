@@ -41,10 +41,16 @@ export default async function AboutPage() {
       <header className={styles.pageHead}>
         <h1>Quiénes somos</h1>
         <p className={styles.lead}>
-          En Nutra Elements creemos que el bienestar verdadero nace del equilibrio natural y el cuidado consciente de la salid. Somos una Marca de suplementos alimenticios, comprometida con ofrecer formulas con altos estándares de calidad, seguridad y pureza.
-          <br />
-          Nuestro proposito es acompañarte en tu día a día a través de soluciones confiables, incluyendo nuestras vitaminas y minerales esenciales, diseñadas para potenciar tu vitalidad, complementar tus tratamientos y mejorar tu calidad de vida.
-          <br />
+          En Nutra Elements creemos que el bienestar verdadero nace del equilibrio natural y el cuidado consciente de la
+          salud. Somos una marca de suplementos alimentarios, comprometida con ofrecer fórmulas con altos estándares de
+          calidad, seguridad y pureza.
+        </p>
+        <p className={styles.lead}>
+          Nuestro propósito es acompañarte en tu día a día a través de soluciones confiables, incluyendo nuestras
+          vitaminas y minerales esenciales, diseñadas para potenciar tu vitalidad, complementar tus tratamientos y
+          mejorar tu calidad de vida.
+        </p>
+        <p className={styles.lead}>
           Descubre nuestra línea de suplementos y da el primer paso hacia una vida más saludable.
         </p>
       </header>
@@ -61,7 +67,6 @@ export default async function AboutPage() {
             Nuestros productos son suplementos alimentarios: no reemplazan una alimentación variada y equilibrada. Ante
             cualquier duda sobre su uso, consulta a un profesional de la salud.
           </p>
-        
         </div>
       </section>
 

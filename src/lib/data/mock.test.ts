@@ -53,6 +53,6 @@ describe("capa de datos mock", () => {
     const s = await data.getPublicSettings();
     expect(s.communes).toHaveLength(52);
     expect(s.pickup.address).toContain("Concha y Toro 180");
-    expect(s.freeShippingThreshold).toBeNull();
+    expect(s.freeShippingThreshold).toBe(20000);
   });
 });
